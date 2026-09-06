@@ -1,5 +1,6 @@
 // app/schedule/page.tsx
 
+import { AutoRefresh } from '@/components/auto-refresh';
 import React from 'react';
 import Link from 'next/link';
 import { MatchSchedulePageData, MatchStatus } from '@/types/schedule';
@@ -312,19 +313,18 @@ export default function MatchSchedulePage() {
         </div>
 
         {/* 6. BOTTOM STRIP */}
-        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-[#1A1C2E]/60 px-5 py-3 text-[10px]">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-[#34d399] animate-pulse" />
-            <span className="text-[#75798c]">
-              <span className="text-[#9397ab]">อัพเดทล่าสุด</span> · LAST UPDATED:{' '}
-              <span className="font-bold text-[#34d399] ml-1">{data.lastUpdatedText}</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 text-[#75798c] tracking-wider uppercase">
-            <span>⟳</span>
-            <span>AUTO-REFRESH 30s</span>
-          </div>
-        </div>
+<div className="flex items-center justify-between rounded-lg border border-white/10 bg-[#1A1C2E]/60 px-5 py-3 text-[10px]">
+  <div className="flex items-center gap-2">
+    <span className="h-2 w-2 rounded-full bg-[#34d399] animate-pulse" />
+    <span className="text-[#75798c]">
+      <span className="text-[#9397ab]">อัพเดทล่าสุด</span> · LAST UPDATED:{' '}
+      <span className="font-bold text-[#34d399] ml-1">{data.lastUpdatedText}</span>
+    </span>
+  </div>
+  
+  {/* ตัวนับเวลาถอยหลัง 30 วิ พร้อม Refresh อัตโนมัติ */}
+  <AutoRefresh intervalMs={30000} />
+</div>
       </main>
     </div>
   );
