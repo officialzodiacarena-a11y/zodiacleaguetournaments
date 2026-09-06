@@ -11,7 +11,10 @@ interface Message {
 export default function AVEChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'สวัสดีครับ! ผมคือ AVE ผู้ช่วย AI ประจำ AVELAi มีอะไรให้ผมช่วยเหลือเรื่องคะแนน กฎกติกา หรือทัวร์นาเมนต์ไหมครับ?' }
+    { 
+      role: 'assistant', 
+      content: 'สวัสดีครับ! ผมคือ ZODIAC ORACLE ผู้ช่วย AI ประจำ ZODIAC ARENA มีอะไรให้ผมช่วยเหลือเกี่ยวกับสายการแข่งขัน ตารางแข่ง กติการาศี หรือระบบ ZP ไหมครับ?' 
+    }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -62,7 +65,7 @@ export default function AVEChatbot() {
         <button
           onClick={() => setIsOpen(true)}
           className="bg-[#00D4FF] hover:bg-[#00D4FF]/80 text-black font-black p-4 rounded-full shadow-[0_0_20px_rgba(0,212,255,0.5)] flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer"
-          title="Open AVE Assistant"
+          title="Open ZODIAC ORACLE"
         >
           <Bot className="w-6 h-6" />
         </button>
@@ -78,9 +81,9 @@ export default function AVEChatbot() {
               </div>
               <div>
                 <h3 className="text-white font-bold text-xs tracking-wider flex items-center gap-1.5">
-                  AVE PROTOCOL <Sparkles className="w-3 h-3 text-[#C9A84C]" />
+                  ZODIAC ORACLE <Sparkles className="w-3 h-3 text-[#C9A84C]" />
                 </h3>
-                <span className="text-[9px] text-[#00D4FF]/70 tracking-widest uppercase">PRECISION IS FREEDOM</span>
+                <span className="text-[9px] text-[#00D4FF]/70 tracking-widest uppercase">12 SIGNS • ONE DESTINY</span>
               </div>
             </div>
             <button
@@ -99,10 +102,11 @@ export default function AVEChatbot() {
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-xl p-3 text-xs leading-relaxed font-sans ${msg.role === 'user'
+                  className={`max-w-[85%] rounded-xl p-3 text-xs leading-relaxed font-sans ${
+                    msg.role === 'user'
                       ? 'bg-[#00D4FF] text-slate-950 font-medium rounded-br-xs shadow-md'
                       : 'bg-slate-900 text-zinc-200 border border-slate-800 rounded-bl-xs shadow-inner'
-                    }`}
+                  }`}
                 >
                   {msg.content}
                 </div>
@@ -112,7 +116,7 @@ export default function AVEChatbot() {
               <div className="flex justify-start">
                 <div className="bg-slate-900 border border-slate-800 rounded-xl rounded-bl-xs p-3 text-xs text-[#00D4FF] animate-pulse flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-[#00D4FF] animate-ping" />
-                  AVE กำลังประมวลผลข้อมูล...
+                  ORACLE กำลังประมวลผลดวงดาว...
                 </div>
               </div>
             )}
@@ -132,7 +136,7 @@ export default function AVEChatbot() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="สอบถามระบบ AVELAi ได้ที่นี่..."
+                placeholder="สอบถาม ZODIAC ORACLE ได้ที่นี่..."
                 className="flex-1 bg-slate-900 border border-slate-800 focus:border-[#00D4FF]/60 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-hidden transition-colors"
               />
               <button

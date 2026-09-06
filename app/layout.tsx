@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import AVEChatbot from '@/components/AVEChatbot'
+import ZodiacOracle from '@/components/ZodiacOracle'
 
 export const metadata: Metadata = {
-  title: 'AVELAi – Precision is Freedom',
-  description: 'Esports Arena League powered by AI',
+  title: 'ZODIAC ARENA – 12 Signs. One Destiny.',
+  description: 'VALORANT Esports Tournament Platform powered by AI',
 }
 
 export default function RootLayout({
@@ -16,7 +16,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
-        <AVEChatbot />
+        <ZodiacOracle />
       </body>
     </html>
   )
