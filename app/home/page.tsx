@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { Orbitron, Rajdhani } from 'next/font/google';
 import { createClient } from '@/lib/supabase/server';
 import { JoinCircuitButtons } from '@/components/hub/JoinCircuitButtons';
+import { pickRelevantSeason } from '@/lib/season/pickRelevantSeason';
 
 const orbitron = Orbitron({ subsets: ['latin'], weight: ['700', '900'], variable: '--font-orbitron' });
 const rajdhani = Rajdhani({ subsets: ['latin'], weight: ['500', '600', '700'], variable: '--font-rajdhani' });
@@ -45,20 +46,6 @@ const SEASON_THEME: Record<string, { color: string; months: string }> = {
   FALL: { color: '#E87529', months: 'JUL – SEP' },
   WINTER: { color: '#5BA8D4', months: 'OCT – DEC' },
 };
-
-function pickRelevantSeason(list: SeasonRow[] | undefined): SeasonRow | null {
-  if (!list || list.length === 0) return null;
-  const active = list.find((s) => s.status === 'ACTIVE');
-  if (active) return active;
-  const upcoming = [...list]
-    .filter((s) => s.status === 'UPCOMING')
-    .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0];
-  if (upcoming) return upcoming;
-  const concluded = [...list]
-    .filter((s) => s.status === 'CONCLUDED')
-    .sort((a, b) => new Date(b.ends_at).getTime() - new Date(a.ends_at).getTime())[0];
-  return concluded ?? null;
-}
 
 async function getHubData(): Promise<{ isAuthenticated: boolean; circuitCards: CircuitCardData[] }> {
   const supabase = await createClient();

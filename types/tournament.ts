@@ -2,17 +2,16 @@
 
 export type SeasonSplit = 'SPRING' | 'SUMMER' | 'FALL' | 'WINTER';
 export type TournamentCardStatus = 'OPEN' | 'UPCOMING' | 'CONCLUDED' | 'NOT_YET_OPEN';
-export type TournamentFormat = '5v5 SINGLE ELIM' | '5v5 DOUBLE ELIM' | 'INVITE ONLY';
 
 export interface TournamentItem {
   id: string;
   circuitSeasonText: string;     // e.g. "SUMMER CIRCUIT · 2026"
   name: string;                  // e.g. "SUMMER OPEN I"
   status: TournamentCardStatus;  // "OPEN" | "UPCOMING" | "CONCLUDED" | "NOT_YET_OPEN"
-  format: TournamentFormat;
+  format: string;                // tournaments.format เป็น free text ใน DB จริง
   prizePoolZp: number;           // e.g. 1000
-  prizeTopText: string;          // e.g. "TOP 8" หรือ "TOP 4"
-  dateRangeText: string;         // e.g. "14–16 มิ.ย."
+  prizeTopText: string;          // derive จาก max_teams เช่น "TOP 8"
+  dateRangeText: string;         // e.g. "14–16 มิ.ย." หรือ "TBA"
   yearText: string;              // e.g. "2026"
   registeredTeams: number;       // e.g. 12
   maxTeams: number;              // e.g. 16
@@ -30,8 +29,8 @@ export interface UserZpSummary {
 
 export interface TournamentRegistryPageData {
   activeSeason: SeasonSplit;
-  circuitActiveText: string;     // "CIRCUIT ACTIVE"
-  registrationDeadlineText: string; // "30 มิ.ย."
+  circuitActiveText: string;     // "CIRCUIT ACTIVE" | "ยังไม่มี Season Active"
+  registrationDeadlineText: string; // "30 มิ.ย." หรือ "TBA"
   tournaments: TournamentItem[];
-  userZpSummary: UserZpSummary;
+  userZpSummary?: UserZpSummary;  // undefined ถ้ายังไม่ login หรือทีมยังไม่มีอันดับใน season นี้
 }

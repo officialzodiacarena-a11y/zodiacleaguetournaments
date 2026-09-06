@@ -4,16 +4,13 @@ export type MatchStatus = 'LIVE' | 'COMPLETED' | 'UPCOMING';
 
 export interface ScheduleMatch {
   id: string;
-  timeText: string;             // "14:00", "16:00", "18:00"
-  stageRoundLabel: string;      // "QF", "Round of 8"
-  teamAName: string;            // "STELLAR FORCE"
-  teamBName: string;            // "COSMIC RAGE"
+  timeText: string;             // "14:00", "16:00", "18:00" หรือ "TBA"
+  stageRoundLabel: string;      // จาก tournament_stages.name
+  teamAName: string;            // "STELLAR FORCE" หรือ "TBD"
+  teamBName: string;            // "COSMIC RAGE" หรือ "TBD"
   teamAScore?: number;          // 8
   teamBScore?: number;          // 5
-  scoreText?: string;           // "13 – 7" หรือ "8 – 5"
-  mapInfo?: string;             // "Map 2/3 · Haven"
-  teamASeedText?: string;       // "#2 SEED"
-  teamBSeedText?: string;       // "#5 SEED"
+  scoreText?: string;           // "13 – 7" — คำนวณเฉพาะตอน COMPLETED
   status: MatchStatus;
 }
 
@@ -28,8 +25,8 @@ export interface StandingTeamItem {
 }
 
 export interface MatchSchedulePageData {
-  seasonTitle: string;          // "SUMMER CIRCUIT 2025"
-  liveBannerMatch: ScheduleMatch;
+  seasonTitle: string;          // "SUMMER CIRCUIT 2025" หรือ "ยังไม่มี Season Active"
+  liveBannerMatch?: ScheduleMatch; // undefined ถ้าไม่มีแมตช์ LIVE อยู่ตอนนี้
   todayMatches: ScheduleMatch[];
   standings: StandingTeamItem[];
   lastUpdatedText: string;      // "15:42 น."

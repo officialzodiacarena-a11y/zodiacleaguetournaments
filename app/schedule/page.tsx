@@ -3,61 +3,148 @@
 import { AutoRefresh } from '@/components/auto-refresh';
 import React from 'react';
 import Link from 'next/link';
-import { MatchSchedulePageData, MatchStatus } from '@/types/schedule';
+import { MatchSchedulePageData, MatchStatus, ScheduleMatch, StandingTeamItem } from '@/types/schedule';
 import { setMatchReminderAction } from '@/actions/schedule';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { pickRelevantSeason, SeasonLike } from '@/lib/season/pickRelevantSeason';
 
-// Mock ข้อมูลเริ่มต้นตรงตาม Draft ของอลิสเป๊ะๆ
-const mockScheduleData: MatchSchedulePageData = {
-  seasonTitle: 'SUMMER CIRCUIT 2025',
-  lastUpdatedText: '15:42 น.',
-  liveBannerMatch: {
-    id: 'm_live_01',
-    timeText: '16:00',
-    stageRoundLabel: 'Round of 8',
-    mapInfo: 'Map 2/3 · Haven',
-    teamAName: 'STELLAR FORCE',
-    teamASeedText: '#2 SEED',
-    teamBName: 'COSMIC RAGE',
-    teamBSeedText: '#5 SEED',
-    teamAScore: 8,
-    teamBScore: 5,
-    status: 'LIVE',
-  },
-  todayMatches: [
-    {
-      id: 'm_today_01',
-      timeText: '14:00',
-      stageRoundLabel: 'QF',
-      teamAName: 'ZODIAC APEX',
-      teamBName: 'NOVA STORM',
-      scoreText: '13 – 7',
-      status: 'COMPLETED',
-    },
-    {
-      id: 'm_today_02',
-      timeText: '16:00',
-      stageRoundLabel: 'QF',
-      teamAName: 'STELLAR FORCE',
-      teamBName: 'COSMIC RAGE',
-      status: 'LIVE',
-    },
-    {
-      id: 'm_today_03',
-      timeText: '18:00',
-      stageRoundLabel: 'QF',
-      teamAName: 'PHANTOM GUILD',
-      teamBName: 'IRON WOLVES',
-      status: 'UPCOMING',
-    },
-  ],
-  standings: [
-    { rank: 1, teamName: 'ZODIAC APEX', wins: 64, losses: 41, winRate: 61, zpTotal: 2450, isHighlight: true },
-    { rank: 2, teamName: 'STELLAR FORCE', wins: 58, losses: 39, winRate: 60, zpTotal: 2180 },
-    { rank: 3, teamName: 'NOVA STORM', wins: 51, losses: 42, winRate: 55, zpTotal: 1920 },
-    { rank: 4, teamName: 'COSMIC RAGE', wins: 47, losses: 49, winRate: 49, zpTotal: 1740 },
-    { rank: 5, teamName: 'PHANTOM GUILD', wins: 44, losses: 51, winRate: 46, zpTotal: 1560 },
-  ],
-};
+interface TeamRef {
+  name: string;
+}
+
+interface MatchRow {
+  id: string;
+  stage_id: string;
+  score_a: number | null;
+  score_b: number | null;
+  status: 'UPCOMING' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
+  scheduled_at: string | null;
+  team_a: TeamRef[] | TeamRef | null;
+  team_b: TeamRef[] | TeamRef | null;
+  tournament_stages: { name: string } | { name: string }[] | null;
+}
+
+function one<T>(rel: T[] | T | null): T | null {
+  if (Array.isArray(rel)) return rel[0] ?? null;
+  return rel;
+}
+
+function toMatchStatus(status: MatchRow['status']): MatchStatus {
+  if (status === 'LIVE') return 'LIVE';
+  if (status === 'COMPLETED') return 'COMPLETED';
+  return 'UPCOMING';
+}
+
+async function getScheduleData(): Promise<MatchSchedulePageData> {
+  const supabase = await createClient();
+
+  const { data: game } = await supabase.from('games').select('id').eq('code', 'VAL').maybeSingle();
+
+  const fallback: MatchSchedulePageData = {
+    seasonTitle: 'ยังไม่มี Season Active',
+    todayMatches: [],
+    standings: [],
+    lastUpdatedText: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+  };
+  if (!game) return fallback;
+
+  const { data: circuits } = await supabase.from('circuits').select('id, name').eq('game_id', game.id);
+  const circuitIds = (circuits ?? []).map((c) => c.id);
+  if (circuitIds.length === 0) return fallback;
+
+  const { data: allSeasons } = await supabase
+    .from('seasons')
+    .select('id, circuit_id, name, status, starts_at, ends_at')
+    .in('circuit_id', circuitIds);
+
+  const season = pickRelevantSeason(allSeasons as SeasonLike[] | undefined);
+  if (!season) return fallback;
+
+  const circuit = (circuits ?? []).find((c) => c.id === season.circuit_id);
+  const seasonTitle = `${(circuit?.name ?? '').toUpperCase()} CIRCUIT · ${season.name}`;
+
+  const { data: tournaments } = await supabase.from('tournaments').select('id').eq('season_id', season.id);
+  const tournamentIds = (tournaments ?? []).map((t) => t.id);
+
+  let matches: ScheduleMatch[] = [];
+  let liveBannerMatch: ScheduleMatch | undefined;
+
+  if (tournamentIds.length > 0) {
+    // tournament_stages ไม่มี public-read policy อยู่จริงตอนนี้ (RLS เปิดแต่ไม่มี policy เลย) —
+    // ดู bug note แยก ใช้ service role ชั่วคราวเพื่อให้หน้า schedule ใช้งานได้ก่อน
+    const admin = createAdminClient();
+    const { data: stages } = await admin.from('tournament_stages').select('id, name').in('tournament_id', tournamentIds);
+    const stageIds = (stages ?? []).map((s) => s.id);
+    const stageNameById = new Map((stages ?? []).map((s) => [s.id, s.name]));
+
+    if (stageIds.length > 0) {
+      const { data: matchRows } = await supabase
+        .from('matches')
+        .select(
+          'id, stage_id, score_a, score_b, status, scheduled_at, team_a:teams!matches_team_a_id_fkey(name), team_b:teams!matches_team_b_id_fkey(name)'
+        )
+        .in('stage_id', stageIds)
+        .neq('status', 'CANCELLED')
+        .order('scheduled_at', { ascending: true, nullsFirst: false })
+        .limit(20);
+
+      matches = ((matchRows ?? []) as unknown as MatchRow[]).map((m) => {
+        const teamA = one<TeamRef>(m.team_a);
+        const teamB = one<TeamRef>(m.team_b);
+        const status = toMatchStatus(m.status);
+        return {
+          id: m.id,
+          timeText: m.scheduled_at
+            ? new Date(m.scheduled_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+            : 'TBA',
+          stageRoundLabel: stageNameById.get(m.stage_id) ?? '',
+          teamAName: teamA?.name ?? 'TBD',
+          teamBName: teamB?.name ?? 'TBD',
+          teamAScore: m.score_a ?? undefined,
+          teamBScore: m.score_b ?? undefined,
+          scoreText: status === 'COMPLETED' && m.score_a !== null && m.score_b !== null ? `${m.score_a} – ${m.score_b}` : undefined,
+          status,
+        };
+      });
+
+      liveBannerMatch = matches.find((m) => m.status === 'LIVE');
+    }
+  }
+
+  const { data: standingsRows } = await supabase
+    .from('season_standings')
+    .select('total_zp, wins, losses, teams(name)')
+    .eq('season_id', season.id)
+    .order('total_zp', { ascending: false });
+
+  const standings: StandingTeamItem[] = ((standingsRows ?? []) as unknown as {
+    total_zp: number;
+    wins: number;
+    losses: number;
+    teams: TeamRef[] | TeamRef | null;
+  }[]).map((s, i) => {
+    const team = one<TeamRef>(s.teams);
+    const total = s.wins + s.losses;
+    return {
+      rank: i + 1,
+      teamName: team?.name ?? 'UNKNOWN',
+      wins: s.wins,
+      losses: s.losses,
+      winRate: total > 0 ? Math.round((s.wins / total) * 100) : 0,
+      zpTotal: s.total_zp,
+      isHighlight: i === 0,
+    };
+  });
+
+  return {
+    seasonTitle,
+    liveBannerMatch,
+    todayMatches: matches,
+    standings,
+    lastUpdatedText: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+  };
+}
 
 function renderMatchStatusBadge(status: MatchStatus) {
   if (status === 'COMPLETED') {
@@ -82,8 +169,8 @@ function renderMatchStatusBadge(status: MatchStatus) {
   );
 }
 
-export default function MatchSchedulePage() {
-  const data = mockScheduleData;
+export default async function MatchSchedulePage() {
+  const data = await getScheduleData();
   const live = data.liveBannerMatch;
 
   return (
@@ -97,152 +184,133 @@ export default function MatchSchedulePage() {
           <span className="text-base">ZODIAC ARENA</span>
         </div>
         <div className="hidden md:flex gap-7 text-[13px] font-medium text-[#b2b6ca]">
-          <Link href="#" className="hover:text-[#E8B429] transition-colors">นักกีฬา</Link>
-          <Link href="/teams/team_za_01" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
-          <Link href="/tournaments" className="hover:text-[#E8B429] transition-colors">ลีก</Link>
+          <Link href="/profile" className="hover:text-[#E8B429] transition-colors">นักกีฬา</Link>
+          <Link href="/home" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
+          <Link href="/tournament" className="hover:text-[#E8B429] transition-colors">ลีก</Link>
           <Link href="/schedule" className="text-[#E8B429] font-bold">Rankings</Link>
         </div>
       </nav>
 
       {/* 2. PAGE CONTENT */}
       <main className="max-w-[1100px] mx-auto px-6 md:px-8 pt-10">
-        {/* Header & Tabs */}
         <div className="mb-7">
           <div className="flex items-baseline gap-3 mb-1.5">
             <span className="text-[11px] font-semibold tracking-[0.16em] text-[#E8B429] uppercase">ตารางแข่งขัน</span>
             <span className="text-[#E8B429]/35 text-xs">·</span>
             <span className="text-[11px] font-semibold tracking-[0.16em] text-[#9397ab] uppercase">MATCH SCHEDULE</span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-wider text-white mb-6">
-            SUMMER CIRCUIT <span className="text-[#E8B429]">2025</span>
-          </h1>
-
-          {/* Filter Tabs */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button className="rounded-md bg-[#E8B429] px-4 py-1.5 text-xs font-bold tracking-wider text-[#0D0E1A]">
-              ทั้งหมด
-            </button>
-            <button className="flex items-center gap-1.5 rounded-md border border-[#dc3232]/50 bg-[#dc3232]/15 px-4 py-1.5 text-xs font-semibold tracking-wider text-[#ff6b6b]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#ff5555] animate-pulse" />
-              LIVE
-            </button>
-            <button className="rounded-md border border-[#E8B429]/25 bg-transparent px-4 py-1.5 text-xs font-semibold tracking-wider text-[#cfd3e5] hover:border-[#E8B429]">
-              วันนี้
-            </button>
-            <button className="rounded-md border border-white/10 bg-transparent px-4 py-1.5 text-xs font-semibold tracking-wider text-[#75798c] hover:text-white">
-              ที่ผ่านมา
-            </button>
-          </div>
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-wider text-white mb-6">{data.seasonTitle}</h1>
         </div>
 
         {/* 3. LIVE MATCH BANNER */}
-        <div className="relative mb-6 overflow-hidden rounded-xl border border-[#dc3232]/55 bg-gradient-to-br from-[#1a0f0f] via-[#1A1C2E] to-[#1a1030] p-6 md:p-8 shadow-[0_0_24px_rgba(220,50,50,0.25)]">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2.5 mb-3.5">
-                <span className="flex items-center gap-1.5 text-xs font-bold tracking-widest text-[#ff5555]">
-                  <span className="h-2 w-2 rounded-full bg-[#ff4444] animate-pulse" />
-                  LIVE NOW
-                </span>
-                <span className="text-white/20 text-xs">|</span>
-                <span className="text-xs text-[#9397ab]">{live.stageRoundLabel} · {live.mapInfo}</span>
-              </div>
-
-              <div className="flex items-center gap-5 md:gap-7 flex-wrap">
-                <div>
-                  <div className="text-xl md:text-2xl font-black tracking-wider text-[#E8B429]">{live.teamAName}</div>
-                  <div className="text-[10px] text-[#75798c] tracking-wider mt-0.5">{live.teamASeedText}</div>
+        {live && (
+          <div className="relative mb-6 overflow-hidden rounded-xl border border-[#dc3232]/55 bg-gradient-to-br from-[#1a0f0f] via-[#1A1C2E] to-[#1a1030] p-6 md:p-8 shadow-[0_0_24px_rgba(220,50,50,0.25)]">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2.5 mb-3.5">
+                  <span className="flex items-center gap-1.5 text-xs font-bold tracking-widest text-[#ff5555]">
+                    <span className="h-2 w-2 rounded-full bg-[#ff4444] animate-pulse" />
+                    LIVE NOW
+                  </span>
+                  <span className="text-white/20 text-xs">|</span>
+                  <span className="text-xs text-[#9397ab]">{live.stageRoundLabel}</span>
                 </div>
 
-                <div className="text-center px-2">
-                  <div className="text-3xl md:text-4xl font-black text-white leading-none">
-                    <span className="text-[#E8B429]">{live.teamAScore}</span>
-                    <span className="text-white/25 mx-2 text-2xl">–</span>
-                    <span className="text-[#cfd3e5]">{live.teamBScore}</span>
+                <div className="flex items-center gap-5 md:gap-7 flex-wrap">
+                  <div>
+                    <div className="text-xl md:text-2xl font-black tracking-wider text-[#E8B429]">{live.teamAName}</div>
                   </div>
-                  <div className="text-[9px] font-bold tracking-widest text-[#75798c] uppercase mt-1">SCORE</div>
-                </div>
 
-                <div>
-                  <div className="text-xl md:text-2xl font-black tracking-wider text-[#cfd3e5]">{live.teamBName}</div>
-                  <div className="text-[10px] text-[#75798c] tracking-wider mt-0.5">{live.teamBSeedText}</div>
+                  <div className="text-center px-2">
+                    <div className="text-3xl md:text-4xl font-black text-white leading-none">
+                      <span className="text-[#E8B429]">{live.teamAScore ?? 0}</span>
+                      <span className="text-white/25 mx-2 text-2xl">–</span>
+                      <span className="text-[#cfd3e5]">{live.teamBScore ?? 0}</span>
+                    </div>
+                    <div className="text-[9px] font-bold tracking-widest text-[#75798c] uppercase mt-1">SCORE</div>
+                  </div>
+
+                  <div>
+                    <div className="text-xl md:text-2xl font-black tracking-wider text-[#cfd3e5]">{live.teamBName}</div>
+                  </div>
                 </div>
               </div>
             </div>
-
-            <button className="flex items-center justify-center gap-2 rounded-lg bg-[#cc2828] px-6 py-3 text-sm font-bold tracking-wider text-white shadow-[0_4px_20px_rgba(204,40,40,0.4)] hover:bg-[#b02222] transition-all flex-shrink-0">
-              <span>▶</span>
-              <span>ดูสด / WATCH LIVE</span>
-            </button>
           </div>
-        </div>
+        )}
 
         {/* 4. TODAY'S MATCHES */}
         <div className="mb-9">
           <div className="flex items-center gap-2.5 mb-3.5">
-            <span className="text-[10px] font-bold tracking-widest text-[#E8B429] uppercase">วันนี้</span>
+            <span className="text-[10px] font-bold tracking-widest text-[#E8B429] uppercase">การแข่งขัน</span>
             <span className="text-[#E8B429]/30">·</span>
-            <span className="text-[10px] font-semibold tracking-widest text-[#75798c] uppercase">TODAY&apos;S MATCHES</span>
+            <span className="text-[10px] font-semibold tracking-widest text-[#75798c] uppercase">UPCOMING MATCHES</span>
             <div className="h-[1px] flex-1 bg-gradient-to-r from-[#E8B429]/25 to-transparent" />
           </div>
 
-          <div className="flex flex-col gap-2">
-            {data.todayMatches.map((m) => (
-              <div
-                key={m.id}
-                className={`flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-xl border p-4 transition-all ${
-                  m.status === 'LIVE'
-                    ? 'border-[#dc3232]/45 bg-gradient-to-r from-[#b41e1e]/15 to-[#1A1C2E]'
-                    : 'border-white/10 bg-[#1A1C2E]'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 text-center flex-shrink-0">
-                    <div className="text-base font-extrabold text-[#E8B429] leading-tight">{m.timeText}</div>
-                    <div className="text-[9px] text-[#75798c]">{m.stageRoundLabel}</div>
+          {data.todayMatches.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-[#1A1C2E] p-8 text-center text-sm text-[#75798c]">
+              ยังไม่มีตารางแข่งขันในซีซันนี้
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {data.todayMatches.map((m) => (
+                <div
+                  key={m.id}
+                  className={`flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-xl border p-4 transition-all ${
+                    m.status === 'LIVE'
+                      ? 'border-[#dc3232]/45 bg-gradient-to-r from-[#b41e1e]/15 to-[#1A1C2E]'
+                      : 'border-white/10 bg-[#1A1C2E]'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 text-center flex-shrink-0">
+                      <div className="text-base font-extrabold text-[#E8B429] leading-tight">{m.timeText}</div>
+                      <div className="text-[9px] text-[#75798c]">{m.stageRoundLabel}</div>
+                    </div>
+                    <div className="h-7 w-[1px] bg-white/10 flex-shrink-0" />
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className="text-sm font-bold text-white tracking-wide">{m.teamAName}</span>
+                      <span className="text-xs text-[#75798c]">vs</span>
+                      <span className="text-sm font-bold text-white tracking-wide">{m.teamBName}</span>
+                      {m.scoreText && (
+                        <span className="ml-2 text-xs font-bold text-[#b2b6ca] bg-white/5 px-2 py-0.5 rounded">
+                          {m.scoreText}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="h-7 w-[1px] bg-white/10 flex-shrink-0" />
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <span className="text-sm font-bold text-white tracking-wide">{m.teamAName}</span>
-                    <span className="text-xs text-[#75798c]">vs</span>
-                    <span className="text-sm font-bold text-white tracking-wide">{m.teamBName}</span>
-                    {m.scoreText && (
-                      <span className="ml-2 text-xs font-bold text-[#b2b6ca] bg-white/5 px-2 py-0.5 rounded">
-                        {m.scoreText}
-                      </span>
+
+                  <div className="flex items-center gap-3 self-end md:self-auto flex-shrink-0">
+                    {renderMatchStatusBadge(m.status)}
+                    {m.status === 'COMPLETED' ? (
+                      <button className="rounded-md border border-[#E8B429]/40 bg-transparent px-4 py-1.5 text-xs font-bold text-[#E8B429] hover:bg-[#E8B429]/10">
+                        ดูผล
+                      </button>
+                    ) : m.status === 'LIVE' ? (
+                      <button className="rounded-md bg-[#cc2828] px-4 py-1.5 text-xs font-bold text-white hover:bg-[#b02222]">
+                        ดูสด
+                      </button>
+                    ) : (
+                      <form
+                        action={async () => {
+                          'use server';
+                          await setMatchReminderAction(m.id);
+                        }}
+                      >
+                        <button
+                          type="submit"
+                          className="rounded-md border border-[#9184d9]/40 bg-transparent px-4 py-1.5 text-xs font-bold text-[#9184d9] hover:border-[#9184d9] hover:text-white"
+                        >
+                          ตั้งเตือน / REMIND
+                        </button>
+                      </form>
                     )}
                   </div>
                 </div>
-
-                <div className="flex items-center gap-3 self-end md:self-auto flex-shrink-0">
-                  {renderMatchStatusBadge(m.status)}
-                  {m.status === 'COMPLETED' ? (
-                    <button className="rounded-md border border-[#E8B429]/40 bg-transparent px-4 py-1.5 text-xs font-bold text-[#E8B429] hover:bg-[#E8B429]/10">
-                      ดูผล
-                    </button>
-                  ) : m.status === 'LIVE' ? (
-                    <button className="rounded-md bg-[#cc2828] px-4 py-1.5 text-xs font-bold text-white hover:bg-[#b02222]">
-                      ดูสด
-                    </button>
-                  ) : (
-                    <form
-                      action={async () => {
-                        'use server';
-                        await setMatchReminderAction(m.id);
-                      }}
-                    >
-                      <button
-                        type="submit"
-                        className="rounded-md border border-[#9184d9]/40 bg-transparent px-4 py-1.5 text-xs font-bold text-[#9184d9] hover:border-[#9184d9] hover:text-white"
-                      >
-                        ตั้งเตือน / REMIND
-                      </button>
-                    </form>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 5. STANDINGS TABLE */}
@@ -250,81 +318,84 @@ export default function MatchSchedulePage() {
           <div className="flex items-baseline gap-2.5 border-b border-[#E8B429]/15 p-4 md:px-6">
             <span className="text-[11px] font-bold tracking-wider text-[#E8B429] uppercase">ตารางคะแนน</span>
             <span className="text-[#E8B429]/30">·</span>
-            <h2 className="text-sm font-extrabold tracking-wider text-white uppercase">SUMMER CIRCUIT STANDINGS</h2>
+            <h2 className="text-sm font-extrabold tracking-wider text-white uppercase">STANDINGS</h2>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-[#0D0E1A]/60 text-[9px] font-bold tracking-widest text-[#75798c] uppercase border-b border-white/5">
-                <tr>
-                  <th className="py-2.5 px-6 w-16">อันดับ</th>
-                  <th className="py-2.5 px-4">ทีม</th>
-                  <th className="py-2.5 px-4 text-center w-14">W</th>
-                  <th className="py-2.5 px-4 text-center w-14">L</th>
-                  <th className="py-2.5 px-4 text-center w-16">WR%</th>
-                  <th className="py-2.5 pr-6 pl-4 text-right w-28">ZP</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {data.standings.map((team) => (
-                  <tr
-                    key={team.rank}
-                    className={`transition-colors ${
-                      team.isHighlight
-                        ? 'bg-gradient-to-r from-[#E8B429]/10 via-[#E8B429]/5 to-transparent'
-                        : 'hover:bg-white/[0.02]'
-                    }`}
-                  >
-                    <td className="py-3 px-6">
-                      <div className="flex items-center gap-1.5">
-                        {team.isHighlight && <span className="text-[#E8B429] text-xs">★</span>}
-                        <span className={`font-extrabold ${team.isHighlight ? 'text-[#E8B429]' : 'text-[#75798c]'}`}>
-                          {team.rank}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`flex h-7 w-7 items-center justify-center rounded-md border text-xs font-bold ${
-                            team.isHighlight
-                              ? 'border-[#E8B429]/40 bg-[#E8B429]/15 text-[#E8B429]'
-                              : 'border-white/10 bg-white/5 text-[#9397ab]'
-                          }`}
-                        >
-                          {team.teamName.slice(0, 2)}
-                        </div>
-                        <span className={`font-bold tracking-wide ${team.isHighlight ? 'text-[#E8B429]' : 'text-white'}`}>
-                          {team.teamName}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-center font-bold text-[#4ade80]">{team.wins}</td>
-                    <td className="py-3 px-4 text-center font-bold text-[#75798c]">{team.losses}</td>
-                    <td className="py-3 px-4 text-center font-bold text-[#cfd3e5]">{team.winRate}%</td>
-                    <td className={`py-3 pr-6 pl-4 text-right font-black ${team.isHighlight ? 'text-[#E8B429]' : 'text-[#cfd3e5]'}`}>
-                      {team.zpTotal.toLocaleString()} ZP
-                    </td>
+          {data.standings.length === 0 ? (
+            <div className="p-8 text-center text-sm text-[#75798c]">ยังไม่มีตารางคะแนนในซีซันนี้</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-[#0D0E1A]/60 text-[9px] font-bold tracking-widest text-[#75798c] uppercase border-b border-white/5">
+                  <tr>
+                    <th className="py-2.5 px-6 w-16">อันดับ</th>
+                    <th className="py-2.5 px-4">ทีม</th>
+                    <th className="py-2.5 px-4 text-center w-14">W</th>
+                    <th className="py-2.5 px-4 text-center w-14">L</th>
+                    <th className="py-2.5 px-4 text-center w-16">WR%</th>
+                    <th className="py-2.5 pr-6 pl-4 text-right w-28">ZP</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {data.standings.map((team) => (
+                    <tr
+                      key={team.rank}
+                      className={`transition-colors ${
+                        team.isHighlight
+                          ? 'bg-gradient-to-r from-[#E8B429]/10 via-[#E8B429]/5 to-transparent'
+                          : 'hover:bg-white/[0.02]'
+                      }`}
+                    >
+                      <td className="py-3 px-6">
+                        <div className="flex items-center gap-1.5">
+                          {team.isHighlight && <span className="text-[#E8B429] text-xs">★</span>}
+                          <span className={`font-extrabold ${team.isHighlight ? 'text-[#E8B429]' : 'text-[#75798c]'}`}>
+                            {team.rank}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`flex h-7 w-7 items-center justify-center rounded-md border text-xs font-bold ${
+                              team.isHighlight
+                                ? 'border-[#E8B429]/40 bg-[#E8B429]/15 text-[#E8B429]'
+                                : 'border-white/10 bg-white/5 text-[#9397ab]'
+                            }`}
+                          >
+                            {team.teamName.slice(0, 2)}
+                          </div>
+                          <span className={`font-bold tracking-wide ${team.isHighlight ? 'text-[#E8B429]' : 'text-white'}`}>
+                            {team.teamName}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-center font-bold text-[#4ade80]">{team.wins}</td>
+                      <td className="py-3 px-4 text-center font-bold text-[#75798c]">{team.losses}</td>
+                      <td className="py-3 px-4 text-center font-bold text-[#cfd3e5]">{team.winRate}%</td>
+                      <td className={`py-3 pr-6 pl-4 text-right font-black ${team.isHighlight ? 'text-[#E8B429]' : 'text-[#cfd3e5]'}`}>
+                        {team.zpTotal.toLocaleString()} ZP
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* 6. BOTTOM STRIP */}
-<div className="flex items-center justify-between rounded-lg border border-white/10 bg-[#1A1C2E]/60 px-5 py-3 text-[10px]">
-  <div className="flex items-center gap-2">
-    <span className="h-2 w-2 rounded-full bg-[#34d399] animate-pulse" />
-    <span className="text-[#75798c]">
-      <span className="text-[#9397ab]">อัพเดทล่าสุด</span> · LAST UPDATED:{' '}
-      <span className="font-bold text-[#34d399] ml-1">{data.lastUpdatedText}</span>
-    </span>
-  </div>
-  
-  {/* ตัวนับเวลาถอยหลัง 30 วิ พร้อม Refresh อัตโนมัติ */}
-  <AutoRefresh intervalMs={30000} />
-</div>
+        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-[#1A1C2E]/60 px-5 py-3 text-[10px]">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-[#34d399] animate-pulse" />
+            <span className="text-[#75798c]">
+              <span className="text-[#9397ab]">อัพเดทล่าสุด</span> · LAST UPDATED:{' '}
+              <span className="font-bold text-[#34d399] ml-1">{data.lastUpdatedText}</span>
+            </span>
+          </div>
+
+          <AutoRefresh intervalMs={30000} />
+        </div>
       </main>
     </div>
   );
