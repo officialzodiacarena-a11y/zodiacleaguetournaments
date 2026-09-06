@@ -13,12 +13,12 @@
 // STAGE_NOT_IN_SEEDING, because that name only makes sense under the other
 // reading. Flag this to product/spec owner if the intent was reversed.
 //
-// SINGLE_ELIMINATION (lib/tournament/generateSingleEliminationBracket.ts) and
+// SINGLE_ELIMINATION (lib/tournament/generateSingleEliminationBracket.ts),
 // DOUBLE_ELIMINATION (lib/tournament/generateDoubleEliminationBracket.ts,
-// T2.2-B03 -- exact power-of-2 team counts only, see that file's header) are
-// implemented here. Round Robin/Group Stage (T2.2-B04) doesn't exist yet, so
-// that format is rejected with UNSUPPORTED_STAGE_FORMAT rather than silently
-// mishandled.
+// T2.2-B03 -- exact power-of-2 team counts only, see that file's header) and
+// ROUND_ROBIN/GROUP_STAGE (lib/tournament/generateRoundRobinBracket.ts,
+// T2.2-B04) are implemented here. Anything else is rejected with
+// UNSUPPORTED_STAGE_FORMAT rather than silently mishandled.
 //
 // Grand Final advantage (format_config.grand_final_advantage /
 // advantage_type) is intentionally NOT read or stored here: bracket_nodes
@@ -28,6 +28,14 @@
 // result-recording time (D05), which can read format_config directly off
 // tournament_stages via the Grand Final node's stage_id when it needs it.
 // There is nothing for B03 to persist today.
+//
+// ROUND_ROBIN/GROUP_STAGE needs a DB prereq too: it writes group_label onto
+// tournament_registrations, but the deployed table (Sprint 2.1) doesn't have
+// that column -- see Hub4_DB_API_QA/T2.2-B04-prereq_tournament_registrations_
+// group_label.sql (same pattern as T2.2-A03-prereq for tournament_stages).
+// Run that migration before using this format; if it hasn't run yet, seeding
+// a ROUND_ROBIN/GROUP_STAGE stage fails with a Postgres "column does not
+// exist" error surfaced as BRACKET_GENERATION_FAILED.
 //
 // "Teams are CHECKED_IN" (per spec) is checked against
 // tournament_registrations.status = 'APPROVED' -- the deployed
@@ -41,6 +49,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { planSingleEliminationBracket, type SeededTeam } from '@/lib/tournament/generateSingleEliminationBracket';
 import { planDoubleEliminationBracket, type PlannedDENode } from '@/lib/tournament/generateDoubleEliminationBracket';
+import { planRoundRobinBracket } from '@/lib/tournament/generateRoundRobinBracket';
 
 function bestOfForRound(bestOfConfig: unknown, roundNumber: number, totalRounds: number): number {
   const config = (bestOfConfig ?? {}) as Record<string, unknown>;
@@ -128,7 +137,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const { data: stage } = await supabase
     .from('tournament_stages')
-    .select('id, tournament_id, status, format, teams_in, best_of_config')
+    .select('id, tournament_id, status, format, teams_in, best_of_config, format_config')
     .eq('id', stageId)
     .maybeSingle();
 
@@ -149,12 +158,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  if (stage.format !== 'SINGLE_ELIMINATION' && stage.format !== 'DOUBLE_ELIMINATION') {
+  const SUPPORTED_FORMATS = ['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'GROUP_STAGE'];
+  if (!SUPPORTED_FORMATS.includes(stage.format)) {
     return NextResponse.json(
       {
         error: {
           code: 'UNSUPPORTED_STAGE_FORMAT',
-          message: `ยังไม่รองรับ bracket generator สำหรับ ${stage.format} (มีแค่ SINGLE_ELIMINATION, DOUBLE_ELIMINATION ตอนนี้)`,
+          message: `ยังไม่รองรับ bracket generator สำหรับ ${stage.format} (มีแค่ ${SUPPORTED_FORMATS.join(', ')} ตอนนี้)`,
         },
       },
       { status: 422 }
@@ -216,9 +226,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // call created so a failed generation doesn't leave a half-built bracket
   // behind. Uses admin client since a mid-request RLS/permission hiccup
   // shouldn't block cleanup of rows this same call just wrote.
-  async function cleanupAndFail(insertedIds: string[], err: unknown) {
+  async function cleanupAndFail(insertedIds: string[], err: unknown, groupLabelTeamIds: string[] = []) {
     if (insertedIds.length > 0) {
       await admin.from('bracket_nodes').delete().in('id', insertedIds);
+    }
+    if (groupLabelTeamIds.length > 0) {
+      await admin
+        .from('tournament_registrations')
+        .update({ group_label: null })
+        // Non-null: this closure only ever runs after the `if (!stage)`
+        // guard above already returned, but TS can't see that across the
+        // closure boundary.
+        .eq('tournament_id', stage!.tournament_id)
+        .in('team_id', groupLabelTeamIds);
     }
     const message = err instanceof Error ? err.message : 'failed to generate bracket';
     return NextResponse.json({ error: { code: 'BRACKET_GENERATION_FAILED', message } }, { status: 500 });
@@ -330,40 +350,166 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  // DOUBLE_ELIMINATION (T2.2-B03)
-  let plannedNodes: PlannedDENode[];
-  try {
-    plannedNodes = planDoubleEliminationBracket(seededTeams);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'failed to plan double elimination bracket';
-    return NextResponse.json({ error: { code: 'UNSUPPORTED_TEAM_COUNT_FOR_FORMAT', message } }, { status: 422 });
+  if (stage.format === 'DOUBLE_ELIMINATION') {
+    let plannedNodes: PlannedDENode[];
+    try {
+      plannedNodes = planDoubleEliminationBracket(seededTeams);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'failed to plan double elimination bracket';
+      return NextResponse.json({ error: { code: 'UNSUPPORTED_TEAM_COUNT_FOR_FORMAT', message } }, { status: 422 });
+    }
+
+    const upperTotalRounds = Math.max(...plannedNodes.filter((n) => n.bracket_type === 'UPPER').map((n) => n.round_number));
+    const lowerTotalRounds = Math.max(...plannedNodes.filter((n) => n.bracket_type === 'LOWER').map((n) => n.round_number));
+
+    // Phase 1: insert every node with only its self-contained fields, keyed by
+    // "bracket_type:round:position" so phase 2 can resolve every source_a/b,
+    // winner_to and loser_to link regardless of insert order.
+    const idByRef = new Map<string, string>();
+    const insertedIds: string[] = [];
+    let updatedStage: { id: string; status: string };
+
+    try {
+      for (const node of plannedNodes) {
+        const refKey = `${node.bracket_type}:${node.round_number}:${node.position_in_round}`;
+        const { data: inserted, error } = await supabase
+          .from('bracket_nodes')
+          .insert({
+            stage_id: stageId,
+            bracket_type: node.bracket_type,
+            round_number: node.round_number,
+            position_in_round: node.position_in_round,
+            team_a_id: node.team_a_id,
+            team_b_id: node.team_b_id,
+            is_bye: node.is_bye,
+            status: node.status,
+            best_of: bestOfForDoubleEliminationNode(stage.best_of_config, node, upperTotalRounds, lowerTotalRounds),
+          })
+          .select('id')
+          .single();
+
+        if (error || !inserted) {
+          throw new Error(error?.message ?? 'failed to insert bracket node');
+        }
+        insertedIds.push(inserted.id);
+        idByRef.set(refKey, inserted.id);
+      }
+
+      // Phase 2: every link was already computed explicitly by the planner
+      // (unlike single-elimination, cross-bracket-type links here don't follow
+      // simple position math), so this just resolves refs to the ids from
+      // phase 1.
+      for (const node of plannedNodes) {
+        const nodeId = idByRef.get(`${node.bracket_type}:${node.round_number}:${node.position_in_round}`)!;
+        const patch: Record<string, unknown> = {};
+
+        if (node.source_a) {
+          const ref = node.source_a.ref;
+          patch.source_a_node_id = idByRef.get(`${ref.bracket_type}:${ref.round}:${ref.position}`) ?? null;
+          patch.source_a_outcome = node.source_a.outcome;
+        }
+        if (node.source_b) {
+          const ref = node.source_b.ref;
+          patch.source_b_node_id = idByRef.get(`${ref.bracket_type}:${ref.round}:${ref.position}`) ?? null;
+          patch.source_b_outcome = node.source_b.outcome;
+        }
+        if (node.winner_to) {
+          const ref = node.winner_to.ref;
+          patch.winner_to_node_id = idByRef.get(`${ref.bracket_type}:${ref.round}:${ref.position}`) ?? null;
+          patch.winner_to_slot = node.winner_to.slot;
+        }
+        if (node.loser_to) {
+          const ref = node.loser_to.ref;
+          patch.loser_to_node_id = idByRef.get(`${ref.bracket_type}:${ref.round}:${ref.position}`) ?? null;
+          patch.loser_to_slot = node.loser_to.slot;
+        }
+
+        if (Object.keys(patch).length > 0) {
+          const { error } = await supabase.from('bracket_nodes').update(patch).eq('id', nodeId);
+          if (error) throw new Error(error.message);
+        }
+      }
+
+      updatedStage = await moveStageToSeeding();
+    } catch (err) {
+      return cleanupAndFail(insertedIds, err);
+    }
+
+    return NextResponse.json(
+      {
+        data: {
+          stage_id: stageId,
+          status: updatedStage.status,
+          format: stage.format,
+          upper_rounds: upperTotalRounds,
+          lower_rounds: lowerTotalRounds,
+          node_count: insertedIds.length,
+        },
+      },
+      { status: 201 }
+    );
   }
 
-  const upperTotalRounds = Math.max(...plannedNodes.filter((n) => n.bracket_type === 'UPPER').map((n) => n.round_number));
-  const lowerTotalRounds = Math.max(...plannedNodes.filter((n) => n.bracket_type === 'LOWER').map((n) => n.round_number));
+  // ROUND_ROBIN / GROUP_STAGE (T2.2-B04)
+  const formatConfig = (stage.format_config ?? {}) as Record<string, unknown>;
+  let roundRobinPlan: ReturnType<typeof planRoundRobinBracket>;
+  try {
+    roundRobinPlan = planRoundRobinBracket(seededTeams, {
+      groups: typeof formatConfig.groups === 'number' ? formatConfig.groups : undefined,
+      doubleRound: formatConfig.double_round === true,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'failed to plan round robin schedule';
+    return NextResponse.json({ error: { code: 'INVALID_ROUND_ROBIN_CONFIG', message } }, { status: 422 });
+  }
 
-  // Phase 1: insert every node with only its self-contained fields, keyed by
-  // "bracket_type:round:position" so phase 2 can resolve every source_a/b,
-  // winner_to and loser_to link regardless of insert order.
-  const idByRef = new Map<string, string>();
+  // 'semifinal'/'final' best_of_config tiers don't apply to a round-robin's
+  // internal matchdays (there's no elimination depth), so every match just
+  // uses the flat 'default' tier -- computed once here rather than via
+  // bestOfForRound, which would wrongly treat round 1 as both the first and
+  // the final round for a single-round-count call.
+  const roundRobinBestOfConfig = (stage.best_of_config ?? {}) as Record<string, unknown>;
+  const roundRobinBestOf =
+    typeof roundRobinBestOfConfig.default === 'number' && roundRobinBestOfConfig.default > 0
+      ? roundRobinBestOfConfig.default
+      : 1;
+
   const insertedIds: string[] = [];
+  const groupLabelTeamIds: string[] = [];
   let updatedStage: { id: string; status: string };
 
   try {
-    for (const node of plannedNodes) {
-      const refKey = `${node.bracket_type}:${node.round_number}:${node.position_in_round}`;
+    // Assign group_label per group first -- if this fails partway (e.g. the
+    // prereq migration hasn't run and the column doesn't exist), nothing has
+    // been inserted into bracket_nodes yet, so there's nothing to clean up
+    // beyond the group_label writes this loop itself already made.
+    for (const group of roundRobinPlan.groups) {
+      const { error } = await admin
+        .from('tournament_registrations')
+        .update({ group_label: group.label })
+        .eq('tournament_id', stage.tournament_id)
+        .in('team_id', group.team_ids);
+      if (error) throw new Error(error.message);
+      groupLabelTeamIds.push(...group.team_ids);
+    }
+
+    for (const node of roundRobinPlan.nodes) {
       const { data: inserted, error } = await supabase
         .from('bracket_nodes')
         .insert({
           stage_id: stageId,
-          bracket_type: node.bracket_type,
+          bracket_type: 'MAIN',
           round_number: node.round_number,
           position_in_round: node.position_in_round,
           team_a_id: node.team_a_id,
           team_b_id: node.team_b_id,
-          is_bye: node.is_bye,
-          status: node.status,
-          best_of: bestOfForDoubleEliminationNode(stage.best_of_config, node, upperTotalRounds, lowerTotalRounds),
+          is_bye: false,
+          // Round robin has no bracket graph -- every match's teams are
+          // known up front from the schedule, so every node is READY
+          // immediately, unlike elimination brackets where later rounds
+          // start PENDING until an earlier match resolves.
+          status: 'READY',
+          best_of: roundRobinBestOf,
         })
         .select('id')
         .single();
@@ -372,47 +518,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         throw new Error(error?.message ?? 'failed to insert bracket node');
       }
       insertedIds.push(inserted.id);
-      idByRef.set(refKey, inserted.id);
-    }
-
-    // Phase 2: every link was already computed explicitly by the planner
-    // (unlike single-elimination, cross-bracket-type links here don't follow
-    // simple position math), so this just resolves refs to the ids from
-    // phase 1.
-    for (const node of plannedNodes) {
-      const nodeId = idByRef.get(`${node.bracket_type}:${node.round_number}:${node.position_in_round}`)!;
-      const patch: Record<string, unknown> = {};
-
-      if (node.source_a) {
-        const ref = node.source_a.ref;
-        patch.source_a_node_id = idByRef.get(`${ref.bracket_type}:${ref.round}:${ref.position}`) ?? null;
-        patch.source_a_outcome = node.source_a.outcome;
-      }
-      if (node.source_b) {
-        const ref = node.source_b.ref;
-        patch.source_b_node_id = idByRef.get(`${ref.bracket_type}:${ref.round}:${ref.position}`) ?? null;
-        patch.source_b_outcome = node.source_b.outcome;
-      }
-      if (node.winner_to) {
-        const ref = node.winner_to.ref;
-        patch.winner_to_node_id = idByRef.get(`${ref.bracket_type}:${ref.round}:${ref.position}`) ?? null;
-        patch.winner_to_slot = node.winner_to.slot;
-      }
-      if (node.loser_to) {
-        const ref = node.loser_to.ref;
-        patch.loser_to_node_id = idByRef.get(`${ref.bracket_type}:${ref.round}:${ref.position}`) ?? null;
-        patch.loser_to_slot = node.loser_to.slot;
-      }
-
-      if (Object.keys(patch).length > 0) {
-        const { error } = await supabase.from('bracket_nodes').update(patch).eq('id', nodeId);
-        if (error) throw new Error(error.message);
-      }
     }
 
     updatedStage = await moveStageToSeeding();
   } catch (err) {
-    return cleanupAndFail(insertedIds, err);
+    return cleanupAndFail(insertedIds, err, groupLabelTeamIds);
   }
 
   return NextResponse.json(
@@ -421,8 +531,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         stage_id: stageId,
         status: updatedStage.status,
         format: stage.format,
-        upper_rounds: upperTotalRounds,
-        lower_rounds: lowerTotalRounds,
+        groups: roundRobinPlan.groups.map((g) => ({ label: g.label, team_count: g.team_ids.length })),
         node_count: insertedIds.length,
       },
     },
