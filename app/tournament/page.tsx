@@ -1,454 +1,353 @@
-'use client';
+// app/tournaments/page.tsx
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
-import { PlayerVerticalProfile } from '@/components/profile/PlayerVerticalProfile';
+import { TournamentRegistryPageData, TournamentItem } from '@/types/tournament';
 
-interface HubDataState {
-  seasonOverview: {
-    seasonName: string;
-    totalPrizePoolThb: number;
-    allocation: {
-      daily: { percent: number; poolThb: number };
-      weekly: { percent: number; poolThb: number };
-      monthly: { percent: number; poolThb: number };
-      seasonFinale: { percent: number; poolThb: number };
-    };
-  };
-  userProfile: {
-    userId: string;
-    username: string;
-    avatarUrl?: string;
-    rankTitle: string;
-    subTier: 'PRO_380' | 'FREE';
-    gachaFrameUrl: string | null; // เว้น Slot รอรับจาก Genesis_Gacha
-    tokens: number;
-    tokenRateThb: number;
-    cashBalanceThb: number;
-    dailyTickets: number;
-    isDailyLocked: boolean; // ติด Hard Lockout เพราะ Qualified ชนะ Daily แล้ว
-    refundedTokensCount: number;
-    circuitPoints: number;
-    weeklyRank: number;
-    seasonRank: number;
-    hasWeeklyPass: boolean;
-  };
-  mercenaryArena: {
-    roomCode: string;
-    entryFeeTokens: number;
-    potThb: number;
-    filledSeats: number;
-    maxSeats: number;
-  };
+// Mock ข้อมูลเริ่มต้นตรงตาม Draft ของอลิสเป๊ะๆ
+const mockRegistryData: TournamentRegistryPageData = {
+  activeSeason: 'SUMMER',
+  circuitActiveText: 'CIRCUIT ACTIVE',
+  registrationDeadlineText: '30 มิ.ย.',
+  userZpSummary: {
+    seasonName: 'Summer Circuit',
+    accumulatedZp: 750,
+    rankNumber: 23,
+    nextRankZp: 250,
+    nextRankTarget: 22,
+    progressPercentage: 75,
+  },
+  tournaments: [
+    {
+      id: 'tour_summer_open_1',
+      circuitSeasonText: 'SUMMER CIRCUIT · 2026',
+      name: 'SUMMER OPEN I',
+      status: 'OPEN',
+      format: '5v5 SINGLE ELIM',
+      prizePoolZp: 1000,
+      prizeTopText: 'TOP 8',
+      dateRangeText: '14–16 มิ.ย.',
+      yearText: '2026',
+      registeredTeams: 12,
+      maxTeams: 16,
+      accentTheme: 'gold',
+    },
+    {
+      id: 'tour_summer_open_2',
+      circuitSeasonText: 'SUMMER CIRCUIT · 2026',
+      name: 'SUMMER OPEN II',
+      status: 'UPCOMING',
+      format: '5v5 DOUBLE ELIM',
+      prizePoolZp: 1500,
+      prizeTopText: 'TOP 8',
+      dateRangeText: '21–23 มิ.ย.',
+      yearText: '2026',
+      registeredTeams: 4,
+      maxTeams: 16,
+      accentTheme: 'purple',
+    },
+    {
+      id: 'tour_summer_invitational',
+      circuitSeasonText: 'SUMMER CIRCUIT · 2026',
+      name: 'SUMMER INVITATIONAL',
+      status: 'CONCLUDED',
+      format: '5v5 DOUBLE ELIM',
+      prizePoolZp: 2000,
+      prizeTopText: 'TOP 8',
+      dateRangeText: '1–3 มิ.ย.',
+      yearText: '2026',
+      registeredTeams: 16,
+      maxTeams: 16,
+      accentTheme: 'gray',
+    },
+    {
+      id: 'tour_summer_finals',
+      circuitSeasonText: 'SUMMER CIRCUIT · 2026',
+      name: 'SUMMER FINALS',
+      status: 'NOT_YET_OPEN',
+      format: 'INVITE ONLY',
+      prizePoolZp: 5000,
+      prizeTopText: 'TOP 4',
+      dateRangeText: '28–30 มิ.ย.',
+      yearText: '2026',
+      registeredTeams: 0,
+      maxTeams: 8,
+      accentTheme: 'purple',
+    },
+  ],
+};
+
+function renderStatusBadge(status: TournamentItem['status']) {
+  switch (status) {
+    case 'OPEN':
+      return (
+        <span className="rounded bg-[#4ade80]/15 border border-[#4ade80]/35 px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-[#4ade80]">
+          ● OPEN
+        </span>
+      );
+    case 'UPCOMING':
+      return (
+        <span className="rounded bg-[#60a5fa]/15 border border-[#60a5fa]/35 px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-[#60a5fa]">
+          ◆ UPCOMING
+        </span>
+      );
+    case 'CONCLUDED':
+      return (
+        <span className="rounded bg-[#9397ab]/10 border border-[#9397ab]/25 px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-[#9397ab]">
+          ■ CONCLUDED
+        </span>
+      );
+    case 'NOT_YET_OPEN':
+      return (
+        <span className="rounded bg-[#60a5fa]/15 border border-[#60a5fa]/35 px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-[#60a5fa]">
+          ◆ UPCOMING
+        </span>
+      );
+  }
 }
 
-export default function TournamentHubPage() {
-  const [hubData, setHubData] = useState<HubDataState>({
-    seasonOverview: {
-      seasonName: 'Season Finale 2026',
-      totalPrizePoolThb: 300000.0,
-      allocation: {
-        daily: { percent: 15, poolThb: 45000.0 },
-        weekly: { percent: 25, poolThb: 75000.0 },
-        monthly: { percent: 40, poolThb: 120000.0 },
-        seasonFinale: { percent: 20, poolThb: 60000.0 },
-      },
-    },
-    userProfile: {
-      userId: 'usr_99812',
-      username: 'ShadowKaiser',
-      rankTitle: 'Elite Form Striker',
-      subTier: 'PRO_380',
-      gachaFrameUrl: null, // กำหนดเป็น null ไว้ เมื่อ Gacha เสร็จสามารถใส่ URL กรอบรูปได้ทันที
-      tokens: 6, // ได้รับคืน 6 Tokens จาก Auto Buy-back
-      tokenRateThb: 9.0,
-      cashBalanceThb: 240.0,
-      dailyTickets: 0,
-      isDailyLocked: true, // ผ่านการคัดเลือกแล้ว
-      refundedTokensCount: 6,
-      circuitPoints: 1420,
-      weeklyRank: 142,
-      seasonRank: 88,
-      hasWeeklyPass: true,
-    },
-    mercenaryArena: {
-      roomCode: 'MERC-8841',
-      entryFeeTokens: 1,
-      potThb: 90.0,
-      filledSeats: 7,
-      maxSeats: 10,
-    },
-  });
+function renderFormatBadge(format: TournamentItem['format']) {
+  if (format === 'INVITE ONLY') {
+    return (
+      <span className="rounded bg-[#E8B429]/10 border border-[#E8B429]/20 px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-[#E8B429]">
+        INVITE ONLY
+      </span>
+    );
+  }
+  return (
+    <span className="rounded bg-[#9184d9]/10 border border-[#9184d9]/25 px-2.5 py-0.5 text-[10px] font-semibold tracking-wider text-[#b5abfc]">
+      {format}
+    </span>
+  );
+}
 
-  const [isActionLoading, setIsActionLoading] = useState<boolean>(false);
-
-  const scrollToMercenary = () => {
-    const section = document.getElementById('mercenary-section');
-    section?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const handleJoinMercenary = () => {
-    if (hubData.userProfile.tokens < hubData.mercenaryArena.entryFeeTokens) {
-      alert('ยอด Token ไม่เพียงพอ (ต้องการ 1 Token)');
-      return;
-    }
-
-    setIsActionLoading(true);
-    setTimeout(() => {
-      setHubData((prev) => ({
-        ...prev,
-        userProfile: {
-          ...prev.userProfile,
-          tokens: prev.userProfile.tokens - 1,
-        },
-        mercenaryArena: {
-          ...prev.mercenaryArena,
-          filledSeats: Math.min(prev.mercenaryArena.filledSeats + 1, 10),
-        },
-      }));
-      setIsActionLoading(false);
-    }, 500);
-  };
+export default function TournamentRegistryPage() {
+  const data = mockRegistryData;
+  const seasons: Array<{ label: string; key: typeof data.activeSeason }> = [
+    { label: 'SPRING', key: 'SPRING' },
+    { label: 'SUMMER', key: 'SUMMER' },
+    { label: 'FALL', key: 'FALL' },
+    { label: 'WINTER', key: 'WINTER' },
+  ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-6">
-
-        {/* ===================================================================
-            1. SEASON OVERVIEW BAR (15/25/40/20%)
-        =================================================================== */}
-        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-          <div className="flex flex-col md:flex-row justify-between md:items-center gap-2">
-            <div>
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-400">
-                Championship Prize Allocation
-              </span>
-              <h1 className="text-2xl font-black text-white tracking-wide">{hubData.seasonOverview.seasonName}</h1>
-            </div>
-            <div className="text-left md:text-right">
-              <span className="text-xs text-slate-400">Total Prize Pool</span>
-              <div className="text-2xl font-black text-emerald-400 font-mono">
-                ฿{hubData.seasonOverview.totalPrizePoolThb.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-              </div>
-            </div>
+    <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20">
+      {/* 1. TOP NAV */}
+      <nav className="sticky top-0 z-50 flex h-[60px] items-center justify-between border-b border-[#E8B429]/15 bg-[#0D0E1A]/95 px-6 md:px-10 backdrop-blur-md">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E8B429] text-[#E8B429] font-bold text-xs">
+            ★
           </div>
+          <span className="font-extrabold text-sm tracking-wider text-[#E8B429]">ZODIAC</span>
+          <span className="text-sm font-normal tracking-wide text-[#E8B429]/60">ARENA</span>
+        </div>
+        <div className="hidden md:flex gap-8 text-[13px] font-medium text-[#e9e9ed]/55">
+          <Link href="#" className="hover:text-[#E8B429] transition-colors">นักกีฬา</Link>
+          <Link href="/teams/team_za_01" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
+          <Link href="/tournaments" className="text-[#E8B429] font-semibold border-b-2 border-[#E8B429] pb-0.5">ลีก</Link>
+          <Link href="#" className="hover:text-[#E8B429] transition-colors">Rankings</Link>
+        </div>
+      </nav>
 
-          <div className="space-y-2">
-            <div className="h-3 w-full bg-slate-950 rounded-full overflow-hidden flex border border-slate-800">
-              <div style={{ width: '15%' }} className="bg-emerald-500 h-full" title="Daily: 15%" />
-              <div style={{ width: '25%' }} className="bg-amber-500 h-full" title="Weekly: 25%" />
-              <div style={{ width: '40%' }} className="bg-rose-500 h-full" title="Monthly: 40%" />
-              <div style={{ width: '20%' }} className="bg-purple-600 h-full" title="Season Finale: 20%" />
-            </div>
+      {/* 2. PAGE HEADER */}
+      <div className="max-w-[1200px] mx-auto px-6 md:px-10 pt-12 pb-8">
+        <div className="flex items-center gap-3 mb-2.5">
+          <span className="text-[11px] font-bold tracking-[0.18em] text-[#E8B429]/60 uppercase">ลีก · LEAGUE</span>
+          <div className="h-[1px] w-10 bg-gradient-to-r from-[#E8B429]/50 to-transparent" />
+        </div>
+        <h1 className="text-3xl md:text-5xl font-black tracking-wider leading-tight mb-2.5">
+          <span className="text-white">TOURNAMENT</span>{' '}
+          <span className="bg-gradient-to-r from-[#E8B429] via-[#f5d478] to-[#E8B429] bg-clip-text text-transparent">
+            REGISTRY
+          </span>
+        </h1>
+        <p className="text-sm text-[#e9e9ed]/50 tracking-wide">เลือกรายการแข่งขันที่ต้องการสมัคร</p>
+      </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-slate-400 pt-1 font-mono">
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span>Daily 15% (฿{hubData.seasonOverview.allocation.daily.poolThb.toLocaleString()})</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                <span>Weekly 25% (฿{hubData.seasonOverview.allocation.weekly.poolThb.toLocaleString()})</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-rose-500" />
-                <span>Monthly 40% (฿{hubData.seasonOverview.allocation.monthly.poolThb.toLocaleString()})</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-purple-600" />
-                <span>Season 20% (฿{hubData.seasonOverview.allocation.seasonFinale.poolThb.toLocaleString()})</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ===================================================================
-            2. MAIN HUB INTERACTION ZONE (Vertical Profile + Mercenary Arena)
-        =================================================================== */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-
-          {/* ฝั่งซ้าย: Vertical Profile Card Slot (4 Columns บน Desktop) */}
-          <div className="lg:col-span-4 flex">
-            <PlayerVerticalProfile
-              userId={hubData.userProfile.userId}
-              username={hubData.userProfile.username}
-              rankTitle={hubData.userProfile.rankTitle}
-              subTier={hubData.userProfile.subTier}
-              gachaFrameUrl={hubData.userProfile.gachaFrameUrl}
-              circuitPoints={hubData.userProfile.circuitPoints}
-              tokens={hubData.userProfile.tokens}
-              cashBalanceThb={hubData.userProfile.cashBalanceThb}
-            />
-          </div>
-
-          {/* ฝั่งขวา: Status Summary & Mercenary Arena (8 Columns บน Desktop) */}
-          <div className="lg:col-span-8 flex flex-col justify-between gap-6">
-
-            {/* Status Indicator Bar */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
-                <span className="text-xs font-mono uppercase text-slate-400 font-bold">Cascade Progression</span>
-                <h3 className="text-base font-bold text-white mt-0.5">สถานะการคัดเลือกลีกประจำสัปดาห์</h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold">
-                  {hubData.userProfile.hasWeeklyPass ? '✓ QUALIFIED (WEEKLY PASS ACTIVE)' : 'UNQUALIFIED'}
-                </span>
-              </div>
-            </div>
-
-            {/* FEATURE-4160: Mercenary Arena */}
-            <div
-              id="mercenary-section"
-              className="bg-linear-to-r from-indigo-950/40 via-slate-900 to-slate-900 border border-indigo-800/40 rounded-2xl p-6 shadow-xl flex flex-col justify-between flex-1 scroll-mt-6"
-            >
-              <div>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-mono">
-                        FEATURE-4160
-                      </span>
-                      <span className="text-xs font-semibold text-amber-400">10-Man Winner-Takes-All</span>
-                    </div>
-                    <h2 className="text-xl font-bold mt-1 text-white">Mercenary Arena</h2>
-                    <p className="text-xs text-slate-400 mt-1 max-w-xl">
-                      ลานประลอง Token ด่วนสำหรับผู้เล่นทั่วไปและผู้ชนะ Qualified • ชนะที่ 1 รับ Pot 90฿ Direct Credit โอนเข้า Cash Wallet ทันที
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[10px] text-slate-400 uppercase font-semibold font-mono">Prize Pot</div>
-                    <div className="text-xl font-black text-amber-400 font-mono">฿{hubData.mercenaryArena.potThb.toFixed(2)}</div>
-                  </div>
-                </div>
-
-                {/* Progress Bar Queue */}
-                <div className="mt-6 space-y-1.5">
-                  <div className="flex justify-between text-xs font-semibold font-mono">
-                    <span className="text-slate-400">ห้อง: {hubData.mercenaryArena.roomCode}</span>
-                    <span className="text-indigo-400">
-                      {hubData.mercenaryArena.filledSeats} / {hubData.mercenaryArena.maxSeats} ที่นั่ง
-                    </span>
-                  </div>
-                  <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-                    <div
-                      className="h-full bg-linear-to-r from-indigo-500 to-amber-500 transition-all duration-300"
-                      style={{
-                        width: `${(hubData.mercenaryArena.filledSeats / hubData.mercenaryArena.maxSeats) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-slate-800 flex justify-end">
-                <button
-                  disabled={isActionLoading || hubData.mercenaryArena.filledSeats >= 10}
-                  onClick={handleJoinMercenary}
-                  className="w-full sm:w-auto px-8 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50 font-mono"
-                >
-                  {isActionLoading ? 'กำลังเข้าห้อง...' : 'ลงทะเบียนด่วน (1 Token / 9฿)'}
-                </button>
-              </div>
-            </div>
-
-          </div>
-
+      {/* 3. SEASON SELECTOR */}
+      <div className="max-w-[1200px] mx-auto px-6 md:px-10">
+        <div className="flex items-end border-b border-[#E8B429]/15">
+          {seasons.map((s) => {
+            const isActive = s.key === data.activeSeason;
+            return (
+              <button
+                key={s.key}
+                type="button"
+                className={`relative px-7 py-3 text-[13px] tracking-wider transition-colors ${
+                  isActive
+                    ? 'font-bold text-[#E8B429] border-b-2 border-[#E8B429] -mb-[1px]'
+                    : 'font-medium text-[#e9e9ed]/40 hover:text-[#E8B429]'
+                }`}
+              >
+                {s.label}
+                {isActive && (
+                  <span className="absolute top-2 right-1.5 h-1.5 w-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* ===================================================================
-            3. CASCADE TOURNAMENT 4 TIERS
-        =================================================================== */}
-        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* Status indicator */}
+        <div className="flex items-center gap-2.5 py-3 pb-6 text-[11px]">
+          <span className="inline-flex items-center gap-1.5 font-bold tracking-wider text-[#4ade80] uppercase">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+            {data.circuitActiveText}
+          </span>
+          <span className="text-[#e9e9ed]/25">·</span>
+          <span className="text-[#e9e9ed]/45">
+            ลงทะเบียนได้ถึง <span className="font-semibold text-[#e9e9ed]/70">{data.registrationDeadlineText}</span>
+          </span>
+        </div>
+      </div>
 
-          {/* TIER 1: DAILY ARENA */}
-          <div className={`rounded-2xl border p-5 flex flex-col justify-between ${hubData.userProfile.isDailyLocked
-              ? 'bg-slate-900/90 border-amber-500/30'
-              : 'bg-slate-900 border-slate-800 hover:border-slate-700'
-            }`}>
+      {/* 4. TOURNAMENTS GRID */}
+      <div className="max-w-[1200px] mx-auto px-6 md:px-10 grid grid-cols-1 md:grid-cols-2 gap-5 mb-10">
+        {data.tournaments.map((tour) => {
+          const fillPercentage = (tour.registeredTeams / tour.maxTeams) * 100;
+          const isConcluded = tour.status === 'CONCLUDED';
+          const isNotYetOpen = tour.status === 'NOT_YET_OPEN';
 
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">
-                  TIER 1
-                </span>
-                <span className="text-xs text-amber-400 font-semibold font-mono">15% Pool</span>
+          const topStripeClass =
+            tour.accentTheme === 'gold'
+              ? 'from-[#E8B429] via-[#E8B429]/30 to-transparent'
+              : tour.accentTheme === 'purple'
+              ? 'from-[#9184d9] via-[#9184d9]/30 to-transparent'
+              : 'from-[#9397ab]/50 via-[#9397ab]/10 to-transparent';
+
+          const progressClass =
+            tour.accentTheme === 'gold'
+              ? 'bg-gradient-to-r from-[#E8B429] to-[#f5d478]'
+              : tour.accentTheme === 'purple'
+              ? 'bg-gradient-to-r from-[#9184d9] to-[#b5abfc]'
+              : 'bg-[#9397ab]/35';
+
+          return (
+            <div
+              key={tour.id}
+              className={`relative overflow-hidden rounded-xl border bg-[#1A1C2E] p-6 transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(232,180,41,0.12)] ${
+                isConcluded ? 'border-white/10 opacity-75' : 'border-[#E8B429]/20'
+              }`}
+            >
+              {/* Card Top Accent Line */}
+              <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${topStripeClass}`} />
+
+              {/* Title & Badges */}
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div>
+                  <div className="text-[10px] font-bold tracking-widest text-[#E8B429]/60 uppercase mb-1.5">
+                    {tour.circuitSeasonText}
+                  </div>
+                  <h2 className="text-xl font-extrabold tracking-wide text-white">{tour.name}</h2>
+                </div>
+                <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                  {renderStatusBadge(tour.status)}
+                  {renderFormatBadge(tour.format)}
+                </div>
               </div>
 
-              <h3 className="font-bold text-base text-white">Daily Arena</h3>
-              <div className="text-xs text-slate-400 mt-1">Form Score 1-20 & KP Scoring</div>
+              {/* Prize & Date Box */}
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                <div className="rounded-lg border border-[#E8B429]/15 bg-[#E8B429]/5 p-3">
+                  <div className="text-[10px] tracking-wider text-[#e9e9ed]/40 mb-1">PRIZE POOL</div>
+                  <div className="text-lg font-extrabold text-[#E8B429] tracking-wide">
+                    ZP {tour.prizePoolZp.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-[#e9e9ed]/40 mt-0.5">{tour.prizeTopText}</div>
+                </div>
 
-              <div className="mt-4 space-y-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 font-mono">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Prize Pool:</span>
-                  <span className="font-bold text-emerald-400">
-                    ฿{hubData.seasonOverview.allocation.daily.poolThb.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">ผู้เข้าร่วม:</span>
-                  <span className="font-semibold text-slate-300">1,240 คน</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">สถานะผู้เล่น:</span>
-                  <span className={`font-semibold ${hubData.userProfile.isDailyLocked ? 'text-amber-400' : 'text-emerald-400'}`}>
-                    {hubData.userProfile.isDailyLocked ? 'Qualified (Locked)' : 'พร้อมลงแข่ง'}
-                  </span>
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <div className="text-[10px] tracking-wider text-[#e9e9ed]/40 mb-1">DATE</div>
+                  <div className="text-sm font-bold text-[#e9e9ed]">{tour.dateRangeText}</div>
+                  <div className="text-[10px] text-[#e9e9ed]/40 mt-0.5">{tour.yearText}</div>
                 </div>
               </div>
 
-              {hubData.userProfile.isDailyLocked && (
-                <p className="text-[11px] text-amber-400/90 mt-3 leading-relaxed">
-                  ✓ ได้รับ Weekly Pass แล้ว ระบบซื้อตั๋วคืนอัตโนมัติ <strong>+{hubData.userProfile.refundedTokensCount} Tokens ({hubData.userProfile.refundedTokensCount * 9}฿)</strong> เข้า Wallet เรียบร้อย
-                </p>
-              )}
-            </div>
+              {/* Registered Count */}
+              <div className="flex items-center justify-between text-xs mb-2">
+                <span className="text-[#e9e9ed]/60">Teams Registered</span>
+                <div className="font-bold">
+                  <span className="text-white">{tour.registeredTeams}</span>
+                  <span className="text-[#e9e9ed]/30 mx-1">/</span>
+                  <span className="text-[#e9e9ed]/50">{tour.maxTeams} TEAMS</span>
+                </div>
+              </div>
 
-            <div className="mt-5">
-              {hubData.userProfile.isDailyLocked ? (
+              {/* Progress Bar */}
+              <div className="h-1 w-full overflow-hidden rounded bg-white/10 mb-5">
+                <div className={`h-full ${progressClass}`} style={{ width: `${fillPercentage}%` }} />
+              </div>
+
+              {/* Action Button */}
+              {isConcluded ? (
                 <button
-                  onClick={scrollToMercenary}
-                  className="w-full py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-400 font-bold text-xs transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] font-mono"
+                  type="button"
+                  className="w-full rounded-lg border border-white/20 bg-transparent py-2.5 text-xs font-bold tracking-wider text-[#e9e9ed]/60 hover:border-[#9184d9] hover:text-[#9184d9] transition-colors"
                 >
-                  <span>🔒 QUALIFIED (LOCKED)</span>
-                  <span className="text-[10px] text-slate-400 font-normal">→ ไป Mercenary</span>
+                  ดูผล / VIEW RESULTS
+                </button>
+              ) : isNotYetOpen ? (
+                <button
+                  type="button"
+                  disabled
+                  className="w-full rounded-lg border border-white/10 bg-transparent py-2.5 text-xs font-bold tracking-wider text-[#e9e9ed]/40 cursor-not-allowed"
+                >
+                  ยังไม่เปิดรับ / NOT YET OPEN
                 </button>
               ) : (
                 <Link
-                  href="/tournament/daily"
-                  className="w-full inline-flex items-center justify-center py-2.5 rounded-xl bg-slate-100 hover:bg-white text-slate-950 font-bold text-xs transition-all shadow-md active:scale-[0.98] font-mono"
+                  href={`/tournaments/${tour.id}/register`}
+                  className="block w-full text-center rounded-lg bg-[#E8B429] py-2.5 text-xs font-black tracking-wider text-[#0D0E1A] hover:bg-[#f0c040] hover:shadow-[0_0_20px_rgba(232,180,41,0.4)] transition-all"
                 >
-                  ENTER DAILY ARENA
+                  สมัครแข่ง / REGISTER
                 </Link>
               )}
             </div>
-          </div>
+          );
+        })}
+      </div>
 
-          {/* TIER 2: WEEKLY */}
-          <div className="rounded-2xl border p-5 flex flex-col justify-between bg-slate-900 border-slate-800 hover:border-slate-700 shadow-lg">
+      {/* 5. ZP SUMMARY STRIP */}
+      <div className="max-w-[1200px] mx-auto px-6 md:px-10">
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#E8B429]/20 bg-gradient-to-r from-[#E8B429]/10 via-[#9184d9]/10 to-transparent p-5 md:p-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E8B429]/30 bg-[#E8B429]/15 text-lg text-[#E8B429]">
+              🏆
+            </div>
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono">
-                  TIER 2
+              <div className="text-[11px] text-[#e9e9ed]/45 tracking-wider mb-0.5">
+                ZP ที่คุณสะสมใน {data.userZpSummary.seasonName}
+              </div>
+              <div className="flex items-baseline gap-2.5">
+                <span className="text-2xl font-black text-[#E8B429]">
+                  {data.userZpSummary.accumulatedZp}{' '}
+                  <span className="text-sm font-semibold">ZP</span>
                 </span>
-                <span className="text-xs text-amber-400 font-semibold font-mono">25% Pool</span>
+                <span className="text-[#e9e9ed]/35">·</span>
+                <span className="text-xs text-[#e9e9ed]/60">
+                  อันดับ <span className="font-bold text-[#9184d9]">#{data.userZpSummary.rankNumber}</span>
+                </span>
               </div>
-
-              <h3 className="font-bold text-base text-white">Weekly Tournament</h3>
-              <div className="text-xs text-slate-400 mt-1">Swiss System Pairings</div>
-
-              <div className="mt-4 space-y-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 font-mono">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Prize Pool:</span>
-                  <span className="font-bold text-emerald-400">
-                    ฿{hubData.seasonOverview.allocation.weekly.poolThb.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">ผู้เข้าร่วม:</span>
-                  <span className="font-semibold text-slate-300">256 คน</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">เริ่มใน:</span>
-                  <span className="font-semibold text-slate-300">5 วัน 12 ชม.</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5">
-              <Link
-                href="/tournament/weekly"
-                className="w-full inline-flex items-center justify-center py-2.5 rounded-xl bg-slate-100 hover:bg-white text-slate-950 font-bold text-xs transition-all shadow-md active:scale-[0.98] font-mono"
-              >
-                ENTER WEEKLY
-              </Link>
             </div>
           </div>
 
-          {/* TIER 3: MONTHLY */}
-          <div className="rounded-2xl border p-5 flex flex-col justify-between bg-slate-900 border-slate-800 hover:border-slate-700 shadow-lg">
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-mono">
-                  TIER 3
-                </span>
-                <span className="text-xs text-amber-400 font-semibold font-mono">40% Pool</span>
-              </div>
-
-              <h3 className="font-bold text-base text-white">Monthly Championship</h3>
-              <div className="text-xs text-slate-400 mt-1">Top Rankers Cutoff</div>
-
-              <div className="mt-4 space-y-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 font-mono">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Prize Pool:</span>
-                  <span className="font-bold text-emerald-400">
-                    ฿{hubData.seasonOverview.allocation.monthly.poolThb.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">ผู้เข้าร่วม:</span>
-                  <span className="font-semibold text-slate-300">64 คน</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">เริ่มใน:</span>
-                  <span className="font-semibold text-slate-300">18 วัน</span>
-                </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-[10px] text-[#e9e9ed]/35 tracking-wider mb-0.5">TO NEXT RANK</div>
+              <div className="text-xs font-semibold text-[#e9e9ed]/70">
+                {data.userZpSummary.nextRankZp} ZP <span className="text-[#e9e9ed]/30 font-normal">to</span> #{data.userZpSummary.nextRankTarget}
               </div>
             </div>
-
-            <div className="mt-5">
-              <Link
-                href="/tournament/monthly"
-                className="w-full inline-flex items-center justify-center py-2.5 rounded-xl bg-slate-100 hover:bg-white text-slate-950 font-bold text-xs transition-all shadow-md active:scale-[0.98] font-mono"
-              >
-                ENTER MONTHLY
-              </Link>
+            <div className="w-20">
+              <div className="h-1.5 w-full overflow-hidden rounded bg-white/10">
+                <div
+                  className="h-full bg-gradient-to-r from-[#E8B429] to-[#f5d478]"
+                  style={{ width: `${data.userZpSummary.progressPercentage}%` }}
+                />
+              </div>
             </div>
           </div>
-
-          {/* TIER 4: SEASON FINALE (PHASE 4.3) */}
-          <div className="rounded-2xl border p-5 flex flex-col justify-between bg-slate-950/60 border-slate-800/60 opacity-60">
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-950/40 text-purple-400 border border-purple-800/40 font-mono">
-                  PHASE 4.3
-                </span>
-                <span className="text-xs text-amber-400 font-semibold font-mono">20% Grand Pool</span>
-              </div>
-
-              <h3 className="font-bold text-base text-white">TOURNAMENT OF THE YEAR</h3>
-              <div className="text-xs text-slate-400 mt-1">Season Finale Leaderboard</div>
-
-              <div className="mt-4 space-y-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 font-mono">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Prize Pool:</span>
-                  <span className="font-bold text-emerald-400">
-                    ฿{hubData.seasonOverview.allocation.seasonFinale.poolThb.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">ผู้เข้าร่วม:</span>
-                  <span className="font-semibold text-slate-300">-</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">สถานะ:</span>
-                  <span className="font-semibold text-purple-400">Coming Phase 4.3</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5">
-              <button
-                disabled
-                className="w-full py-2.5 rounded-xl bg-slate-800/50 text-slate-500 font-bold text-xs cursor-not-allowed border border-slate-800 font-mono"
-              >
-                Coming Phase 4.3
-              </button>
-            </div>
-          </div>
-
-        </section>
-
+        </div>
       </div>
     </div>
   );
