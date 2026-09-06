@@ -408,7 +408,7 @@ export default async function TournamentRegistrationPage({
             <form
               action={async () => {
                 'use server';
-                await submitRegistrationAction(tournamentId, data.teamId, data.entryFeeAp);
+                await submitRegistrationAction(tournamentId, data.teamId);
               }}
             >
               <button

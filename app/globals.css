@@ -98,3 +98,37 @@ body {
 .card-sway-3 { animation: leafSway3 6.0s ease-in-out infinite 1.0s; }
 .card-sway-4 { animation: leafSway4 7.8s ease-in-out infinite 1.5s; }
 .card-sway-5 { animation: leafSway5 6.8s ease-in-out infinite 0.8s; }
+
+/* ===== Zodiac Arena — Season Hub (app/home) ===== */
+@keyframes zaPulseLive {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(232,41,41,0.5); }
+  50% { opacity: 0.4; box-shadow: 0 0 2px rgba(232,41,41,0.25); }
+}
+@keyframes zaPulseGlowGold {
+  0%, 100% { box-shadow: 0 0 40px rgba(232,180,41,0.19), 0 0 80px rgba(232,180,41,0.08), inset 0 0 40px rgba(232,180,41,0.03); }
+  50% { box-shadow: 0 0 60px rgba(232,180,41,0.27), 0 0 120px rgba(232,180,41,0.15), inset 0 0 60px rgba(232,180,41,0.07); }
+}
+@keyframes zaRotateSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes zaFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes zaShimmerText {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes zaCardEnter {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-za-pulse-live { animation: zaPulseLive 1.2s ease-in-out infinite; }
+.animate-za-pulse-glow-gold { animation: zaPulseGlowGold 3s ease-in-out infinite; }
+.animate-za-rotate-slow { animation: zaRotateSlow 12s linear infinite; }
+.animate-za-rotate-slower { animation: zaRotateSlow 20s linear infinite; }
+.animate-za-float { animation: zaFloat 3.5s ease-in-out infinite; }
+.animate-za-shimmer-text { background-size: 200% auto; animation: zaShimmerText 4s linear infinite; }
+.animate-za-card-enter { animation: zaCardEnter 0.6s ease both; }
