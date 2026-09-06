@@ -14,7 +14,7 @@ export interface PayoutResult {
 }
 
 /**
- * คำนวณส่วนแบ่งรางวัลตาม AVELAi Tiered Prize Matrix:
+ * คำนวณส่วนแบ่งรางวัลตาม ZODIAC LEAGUE Tiered Prize Matrix:
  * - Rank 1 (Champion): 40% (1 คน)
  * - Rank 2 (Runner-up): 25% (1 คน)
  * - Rank 3 - 4 (Top 4): 20% แบ่งเท่ากันคนละ 10% (0.10)

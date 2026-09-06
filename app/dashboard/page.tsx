@@ -15,7 +15,7 @@ export default function DashboardPage() {
     let isMounted = true;
     const timer = setTimeout(() => {
       if (typeof window !== 'undefined' && isMounted) {
-        const savedScope = localStorage.getItem('avela_tournament_scope') as TournamentScope;
+        const savedScope = localStorage.getItem('zodiac_tournament_scope') as TournamentScope;
         if (savedScope && ['weekly', 'monthly'].includes(savedScope)) {
           setScope(savedScope);
         }
@@ -32,7 +32,7 @@ export default function DashboardPage() {
   const handleScopeChange = (newScope: TournamentScope) => {
     setScope(newScope);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('avela_tournament_scope', newScope);
+      localStorage.setItem('zodiac_tournament_scope', newScope);
     }
   };
 

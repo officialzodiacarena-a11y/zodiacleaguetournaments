@@ -16,9 +16,9 @@ export default function Navbar() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link href="/dashboard" className="font-extrabold text-white tracking-tight">
-          AVEL<span style={{ color: '#C9A84C' }}>A</span>i
-        </Link>
+        <Link href="/dashboard" className="font-black text-white tracking-widest text-base">
+  ZODIAC <span className="text-[#C9A84C]">ARENA</span>
+</Link>
         <div className="flex items-center gap-1">
           {links.map((link) => (
             <Link

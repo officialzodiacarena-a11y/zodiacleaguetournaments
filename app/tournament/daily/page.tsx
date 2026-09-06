@@ -225,7 +225,7 @@ export default function DailyArenaPage() {
                                         src="/images/gacha/genesis-avatar.png"
                                         alt="Genesis Pilot"
                                         onError={(e) => {
-                                            (e.target as HTMLImageElement).src = 'https://api.dicebear.com/7.x/bottts/svg?seed=AVELAiPilot';
+                                            (e.target as HTMLImageElement).src = 'https://api.dicebear.com/7.x/bottts/svg?seed=ZODIACPilot';
                                         }}
                                         className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition-transform duration-300"
                                     />

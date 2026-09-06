@@ -74,7 +74,7 @@ function updateDataTree() {
 
     const comments = extractExistingComments(content);
 
-    let newTree = 'avelai/\n';
+    let newTree = 'zodiac/\n';
     TARGET_DIRS.forEach(dir => {
         const fullPath = path.resolve(process.cwd(), dir);
         if (fs.existsSync(fullPath)) {

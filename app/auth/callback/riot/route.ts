@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   if (isMock) {
     // ข้อมูลจำลองสำหรับเทสต์ระบบ
-    puuid = 'mock-puuid-avelai-test-12345';
+    puuid = 'mock-puuid-zodiac-test-12345';
   } else {
     // โหมด Production: แลก Token กับ Riot
     const tokenRes = await fetch('https://auth.riotgames.com/token', {
