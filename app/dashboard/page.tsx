@@ -136,7 +136,7 @@ export default function DashboardPage() {
         <div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[#00D4FF] animate-pulse" />
-            <span className="text-[#00D4FF] text-xs tracking-widest uppercase font-bold">AVELAi TOURNAMENT NETWORK</span>
+            <span className="text-[#00D4FF] text-xs tracking-widest uppercase font-bold">ZODIAC TOURNAMENT NETWORK</span>
           </div>
           <h1 className="text-2xl md:text-3xl font-black tracking-wider text-white mt-1 uppercase">
             {scope === 'weekly' ? 'WEEKLY LEAGUE MATRIX' : 'MONTHLY WAR ROOM (NOC)'}

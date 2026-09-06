@@ -7,7 +7,7 @@
 ## 📁 1. Project Directory Architecture (Next.js App Router)
 
 ```text
-avelai/
+Zodiac/
 ├── app/
 │   ├── admin/
 │   │   └── store/

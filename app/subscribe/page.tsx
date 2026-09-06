@@ -127,7 +127,7 @@ export default function SubscribePage() {
       </div>
 
       <p className="mt-10 text-xs text-gray-600 font-mono text-center">
-        75% of all revenue returns to the community Prize Pool — AVELAi PRECISION IS FREEDOM
+        75% of all revenue returns to the community Prize Pool — ZODIAC PRECISION IS FREEDOM
       </p>
     </main>
   )

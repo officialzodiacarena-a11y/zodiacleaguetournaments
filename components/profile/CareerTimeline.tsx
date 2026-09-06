@@ -24,7 +24,7 @@ export function CareerTimeline({ records }: CareerTimelineProps) {
         {
             id: 'rec-01',
             tournamentType: 'MONTHLY_FINALS',
-            title: 'AVELAi Season 01 Grand Championship',
+            title: 'ZODIAC ARENA Season 01 Summer Championship',
             date: '2026-08-15',
             placement: 'CHAMPION (1st Place)',
             medalTier: 'GOLD',
@@ -122,7 +122,7 @@ export function CareerTimeline({ records }: CareerTimelineProps) {
                         TOURNAMENT CAREER TIMELINE
                     </h2>
                     <p className="text-xs text-gray-400 mt-0.5">
-                        ประวัติการแข่งขัน เกียรติประวัติ และเหรียญรางวัลในระบบ AVELAi Circuit
+                        ประวัติการแข่งขัน เกียรติประวัติ และเหรียญรางวัลในระบบ ZODIAC Circuit
                     </p>
                 </div>
 

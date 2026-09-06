@@ -145,7 +145,7 @@ export default function ProfilePage() {
 
                 {/* Header bar */}
                 <div className="relative z-20 flex items-center justify-between px-4 pt-4 pb-2">
-                    <span className="font-mono text-[10px] text-[#00D4FF]/60 tracking-[0.25em]">AVELAI // ESPORTS PASSPORT</span>
+                    <span className="font-mono text-[10px] text-[#00D4FF]/60 tracking-[0.25em]">ZODIAC // ESPORTS PASSPORT</span>
                     {/* 4-State LED */}
                     <div className="flex items-center gap-2">
                         <div className={`w-2 h-2 rounded-full ${led.dot} ${led.ring} ${led.pulse ? 'animate-pulse' : ''}`} />
@@ -283,7 +283,7 @@ export default function ProfilePage() {
                 <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4">
                     <div className="flex items-center justify-between">
                         <span className="font-mono text-[8px] text-zinc-700 tracking-widest">PRECISION IS FREEDOM</span>
-                        <span className="font-mono text-[8px] text-zinc-700">AVELAi © 2026</span>
+                        <span className="font-mono text-[8px] text-zinc-700">ZODIAC © 2026</span>
                     </div>
                 </div>
 
