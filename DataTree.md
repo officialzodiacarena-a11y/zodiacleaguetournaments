@@ -1,13 +1,13 @@
 # 🌳 Zpdoac Arena Master Data Tree & Schema Map (V1.06)
 
-> 💎 **Last Updated:** เวลา 00:52:55 อาทิตย์ 06/09/2026
+> 💎 **Last Updated:** เวลา 00:42:45 จันทร์ 07/09/2026
 
 ีวิธีใช้ = node update-tree.mjs
 
 ## 📁 1. Project Directory Architecture (Next.js App Router)
 
 ```text
-Zodiac/
+zodiac/
 ├── app/
 │   ├── admin/
 │   │   └── store/
@@ -27,16 +27,37 @@ Zodiac/
 │   │   │       └── TierBadge.tsx
 │   │   ├── matches/
 │   │   └── v1/
+│   │       ├── bracket-nodes/
+│   │       │   └── [id]/
+│   │       │       ├── void/
+│   │       │       │   └── route.ts
+│   │       │       └── route.ts
 │   │       ├── daily/
 │   │       │   ├── matchmake/
 │   │       │   │   └── route.ts
 │   │       │   └── settle-winner/
 │   │       │       └── route.ts
+│   │       ├── matches/
+│   │       │   ├── [id]/
+│   │       │   │   ├── ready/
+│   │       │   │   │   └── route.ts
+│   │       │   │   └── schedule/
+│   │       │   │       └── route.ts
+│   │       │   └── route.ts
 │   │       ├── mercenary/
 │   │       │   └── join/
 │   │       │       └── route.ts
 │   │       ├── rewards/
 │   │       │   └── redeem/
+│   │       │       └── route.ts
+│   │       ├── stages/
+│   │       │   └── [id]/
+│   │       │       ├── bracket/
+│   │       │       │   └── route.ts
+│   │       │       ├── seed/
+│   │       │       │   └── route.ts
+│   │       │       ├── status/
+│   │       │       │   └── route.ts
 │   │       │       └── route.ts
 │   │       ├── tournament/
 │   │       │   ├── bracket/
@@ -59,6 +80,18 @@ Zodiac/
 │   │       │       │   └── route.ts
 │   │       │       └── generate-pairing/
 │   │       │           └── route.ts
+│   │       ├── tournaments/
+│   │       │   └── [id]/
+│   │       │       ├── matches/
+│   │       │       │   ├── [id]/
+│   │       │       │   │   ├── ready/
+│   │       │       │   │   │   └── route.ts
+│   │       │       │   │   └── schedule/
+│   │       │       │   │       └── route.ts
+│   │       │       │   └── route.ts
+│   │       │       ├── stages/
+│   │       │       │   └── route.ts
+│   │       │       └── route.ts
 │   │       └── wallet/
 │   │           └── cashout/
 │   │               └── route.ts
@@ -72,6 +105,8 @@ Zodiac/
 │   │   └── signout/
 │   │       └── route.ts
 │   ├── dashboard/
+│   │   └── page.tsx
+│   ├── home/
 │   │   └── page.tsx
 │   ├── leaderboard/
 │   │   └── page.tsx
@@ -90,10 +125,14 @@ Zodiac/
 │   │   │   └── page.tsx
 │   │   └── page.tsx
 │   ├── schedule/
+│   │   └── page.tsx
 │   ├── status/
 │   │   └── page.tsx
 │   ├── subscribe/
 │   │   └── page.tsx
+│   ├── teams/
+│   │   └── [teamId]/
+│   │       └── page.tsx
 │   ├── tournament/
 │   │   ├── daily/
 │   │   │   ├── lobby/
@@ -102,6 +141,11 @@ Zodiac/
 │   │   │   └── page.tsx
 │   │   ├── monthly/
 │   │   │   └── page.tsx
+│   │   ├── [tournamentId]/
+│   │   │   ├── bracket/
+│   │   │   │   └── page.tsx
+│   │   │   └── register/
+│   │   │       └── page.tsx
 │   │   ├── weekly/
 │   │   │   └── page.tsx
 │   │   └── page.tsx
@@ -117,22 +161,22 @@ Zodiac/
 │   │   └── ticketService.ts
 │   ├── matchmaking/
 │   │   └── dailyArenaTierEngine.ts
+│   ├── season/
+│   │   └── pickRelevantSeason.ts
 │   ├── supabase/
+│   │   ├── admin.ts
 │   │   ├── client.ts
 │   │   └── server.ts
+│   ├── team/
+│   │   └── rosterEligibility.ts
 │   └── tournament/
 │       ├── bracketEngine.ts
 │       ├── circuitPoints.ts
+│       ├── generateDoubleEliminationBracket.ts
+│       ├── generateRoundRobinBracket.ts
+│       ├── generateSingleEliminationBracket.ts
 │       ├── leaderboardService.ts
 │       ├── monthlyDoubleElim.ts
 │       ├── prizeCalculator.ts
 │       └── swissPairing.ts
-├── src/
-│   ├── components/
-│   │   └── profile/
-│   │       ├── MatchHistoryFeed.tsx
-│   │       └── PlayerVerticalProfile.tsx
-│   └── types/
-│       ├── database.types.ts
-│       └── valorant.ts
 ```
