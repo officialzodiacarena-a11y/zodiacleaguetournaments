@@ -64,7 +64,7 @@ export async function POST(
     .eq('player_id', player.id)
     .eq('status', 'ACTIVE')
     .in('team_id', [match.team_a_id, match.team_b_id])
-    .in('role', ['CAPTAIN', 'MANAGER']);
+    .in('role', ['CAPTAIN', 'MANAGER', 'OWNER']);
 
   if (!memberships || memberships.length === 0) {
     return NextResponse.json(
@@ -138,6 +138,20 @@ export async function POST(
       },
     });
   }
+
+  // 8. บรอดแคสต์สัญญาณไปที่แชนแนลเรียลไทม์เพื่อซิงค์หน้าจอ Overlay ทันที
+  await adminSupabase.channel(`match-realtime-${matchId}`).send({
+    type: 'broadcast',
+    event: 'team_ready_checkin',
+    payload: {
+      match_id: matchId,
+      team_id: userTeamId,
+      team_tag: isTeamA ? 'TEAM_A' : 'TEAM_B',
+      both_ready: teamAReady && teamBReady,
+      next_status: nextStatus,
+      forfeit_deadline_at: updatePayload.forfeit_deadline_at || match.forfeit_deadline_at,
+    },
+  });
 
   return NextResponse.json(updatedMatch);
 }

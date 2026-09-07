@@ -31,6 +31,26 @@ export async function POST(
     .eq('user_id', user.id)
     .single();
 
+  if (!player) {
+    return NextResponse.json({ error: 'Player profile not found' }, { status: 404 });
+  }
+
+  // 2.1 ตรวจสอบสิทธิ์ผู้พิจารณาชี้ขาดคะแนน (RBAC) — เฉพาะกรรมการ/แอดมินเท่านั้น
+  const { data: userRole, error: roleError } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('player_id', player.id)
+    .is('revoked_at', null)
+    .single();
+
+  const allowedRoles = ['REFEREE', 'ADMIN', 'SUPER_ADMIN'];
+  if (roleError || !userRole || !allowedRoles.includes(userRole.role)) {
+    return NextResponse.json(
+      { error: 'FORBIDDEN_ROLE: สิทธิ์ในการตัดสินชี้ขาดคะแนนจำกัดเฉพาะกรรมการหรือแอดมินระบบเท่านั้น' },
+      { status: 403 }
+    );
+  }
+
   const body = await request.json();
   const {
     winner_team_id,
@@ -58,11 +78,28 @@ export async function POST(
     return NextResponse.json({ error: 'Match not found' }, { status: 404 });
   }
 
-  if (match.status !== 'AWAITING_RESULT' && match.status !== 'LIVE') {
+  if (match.status !== 'AWAITING_RESULT') {
     return NextResponse.json(
       { error: 'MATCH_NOT_AWAITING_RESULT: Match is not awaiting result' },
       { status: 422 }
     );
+  }
+
+  // 3.1 กันการยิงซ้ำด้วย Idempotency-Key เดิม (คืนผลลัพธ์เดิมโดยไม่ประมวลผลซ้ำ)
+  const { data: duplicateTransition } = await supabase
+    .from('match_state_transitions')
+    .select('id, state_snapshot')
+    .eq('match_id', matchId)
+    .contains('state_snapshot', { idempotency_key: idempotencyKey })
+    .maybeSingle();
+
+  if (duplicateTransition) {
+    const { data: alreadyFinalized } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('id', matchId)
+      .single();
+    return NextResponse.json(alreadyFinalized);
   }
 
   // 4. ตรวจสอบ Consistency กับ Best-of
