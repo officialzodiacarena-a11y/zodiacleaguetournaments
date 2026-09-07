@@ -23,6 +23,11 @@ export interface TeamMetadata {
   logo_url: string | null;
 }
 
+export interface MatchFormatConfig {
+  lobby_code?: string;
+  [key: string]: unknown;
+}
+
 export interface MatchData {
   id: string;
   tournament_id: string;
@@ -35,7 +40,7 @@ export interface MatchData {
   rounds_won_b: number;
   team_a_id: string | null;
   team_b_id: string | null;
-  lobby_code?: string | null;
+  format_config?: MatchFormatConfig;
   team_a: TeamMetadata | null;
   team_b: TeamMetadata | null;
 }
@@ -51,6 +56,20 @@ export interface StreamTelemetry {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon";
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+const ALLOWED_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
+  SCHEDULED: ["READY_CHECK", "CANCELLED"],
+  READY_CHECK: ["VETO", "CANCELLED", "FORFEITED", "WALKOVER"],
+  VETO: ["LIVE", "CANCELLED"],
+  LIVE: ["PAUSED", "AWAITING_RESULT", "DISPUTED"],
+  PAUSED: ["LIVE", "DISPUTED", "CANCELLED"],
+  AWAITING_RESULT: ["COMPLETED", "DISPUTED"],
+  DISPUTED: ["LIVE", "AWAITING_RESULT", "COMPLETED", "CANCELLED"],
+  COMPLETED: [],
+  FORFEITED: [],
+  WALKOVER: [],
+  CANCELLED: [],
+};
 
 export default function SpectatorHUDControlPanel({
   params,
@@ -81,9 +100,9 @@ export default function SpectatorHUDControlPanel({
   useEffect(() => {
     let isMounted = true;
 
-    const loadInitialData = async () => {
+    // 1. ตรวจสอบสิทธิ์แบบ Single Run เมื่อ Mount
+    const initializeAuth = async () => {
       try {
-        // 1. ตรวจสอบสิทธิ์ผู้ใช้งาน
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) {
           if (isMounted) {
@@ -113,12 +132,21 @@ export default function SpectatorHUDControlPanel({
           setUserRole(roleData.role);
           setAuthorized(true);
         }
+      } catch {
+        if (isMounted) {
+          setAuthorized(false);
+          setLoading(false);
+        }
+      }
+    };
 
-        // 2. ดึงข้อมูลแมตช์
+    // 2. แยกฟังก์ชัน Polling เฉพาะ Match & Telemetry Data
+    const pollTelemetryAndMatch = async () => {
+      try {
         const { data: matchData, error: matchError } = await supabase
           .from("matches")
           .select(`
-            id, tournament_id, stage_id, status, best_of, score_a, score_b, rounds_won_a, rounds_won_b, team_a_id, team_b_id, lobby_code,
+            id, tournament_id, stage_id, status, best_of, score_a, score_b, rounds_won_a, rounds_won_b, team_a_id, team_b_id, format_config,
             team_a:team_a_id ( id, name, tag, logo_url ),
             team_b:team_b_id ( id, name, tag, logo_url )
           `)
@@ -141,13 +169,12 @@ export default function SpectatorHUDControlPanel({
             rounds_won_b: matchData.rounds_won_b,
             team_a_id: matchData.team_a_id,
             team_b_id: matchData.team_b_id,
-            lobby_code: matchData.lobby_code,
+            format_config: matchData.format_config || {},
             team_a: teamAObj || null,
             team_b: teamBObj || null,
           });
         }
 
-        // 3. ดึงข้อมูล Telemetry ของสตรีม
         const { data: streamData } = await supabase
           .from("streams")
           .select("id")
@@ -172,15 +199,20 @@ export default function SpectatorHUDControlPanel({
           }
         }
       } catch {
-        // เงียบไว้เพื่อเสถียรภาพ
+        // Fallback resilience
       } finally {
         if (isMounted) setLoading(false);
       }
     };
 
-    loadInitialData();
+    const runInit = async () => {
+      await initializeAuth();
+      await pollTelemetryAndMatch();
+    };
 
-    // 4. เชื่อมต่อ Realtime Broadcast Channel
+    runInit();
+
+    // 3. Realtime Channel
     const channelName = `match-realtime-${matchId}`;
     const channel = supabase.channel(channelName);
 
@@ -190,7 +222,8 @@ export default function SpectatorHUDControlPanel({
       }
     });
 
-    const intervalId = setInterval(loadInitialData, 5000);
+    // Polling Interval เฉพาะข้อมูล Match & Telemetry ทุก 5 วินาที
+    const intervalId = setInterval(pollTelemetryAndMatch, 5000);
 
     return () => {
       isMounted = false;
@@ -244,6 +277,17 @@ export default function SpectatorHUDControlPanel({
   };
 
   const updateMatchDatabaseStatus = async (targetStatus: MatchStatus) => {
+    if (!match) return;
+
+    const allowed = ALLOWED_TRANSITIONS[match.status] || [];
+    if (!allowed.includes(targetStatus)) {
+      setFeedback({
+        type: "error",
+        msg: `State Violation: ไม่สามารถเปลี่ยนจาก [ ${match.status} ] ไปเป็น [ ${targetStatus} ] โดยตรงได้`,
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from("matches")
@@ -262,19 +306,26 @@ export default function SpectatorHUDControlPanel({
     }
   };
 
+  // Safe JSONB Merge Update (format_config -> lobby_code)
   const updateLobbyRoomCode = async () => {
-    if (!lobbyCodeInput.trim()) return;
+    if (!lobbyCodeInput.trim() || !match) return;
+
+    const updatedConfig = {
+      ...(match.format_config || {}),
+      lobby_code: lobbyCodeInput,
+    };
+
     try {
       const { error } = await supabase
         .from("matches")
-        .update({ lobby_code: lobbyCodeInput })
+        .update({ format_config: updatedConfig })
         .eq("id", matchId);
 
       if (error) {
         setFeedback({ type: "error", msg: `บันทึกรหัสห้องแข่งล้มเหลว: ${error.message}` });
       } else {
-        setFeedback({ type: "info", msg: `อัปเดตรหัสห้องแข่งเป็น [ ${lobbyCodeInput} ] สำเร็จ` });
-        setMatch((prev) => (prev ? { ...prev, lobby_code: lobbyCodeInput } : null));
+        setFeedback({ type: "info", msg: `อัปเดตรหัสห้องแข่งลง format_config เป็น [ ${lobbyCodeInput} ] สำเร็จ` });
+        setMatch((prev) => (prev ? { ...prev, format_config: updatedConfig } : null));
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "การประมวลผลเครือข่ายล้มเหลว";
@@ -304,11 +355,12 @@ export default function SpectatorHUDControlPanel({
     );
   }
 
+  const currentLobbyCode = (match?.format_config?.lobby_code as string) || "ZA-KEY-99";
+
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white font-sans p-6 relative">
       <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-[#00D4FF]/30 to-transparent" />
 
-      {/* HEADER BAR */}
       <header className="flex justify-between items-center border-b border-white/5 pb-4 mb-6">
         <div>
           <span className="font-mono text-[9px] px-2 py-0.5 border border-[#C9A84C]/30 bg-[#C9A84C]/10 text-[#C9A84C] font-black rounded uppercase">
@@ -324,7 +376,6 @@ export default function SpectatorHUDControlPanel({
         </div>
       </header>
 
-      {/* FEEDBACK STATUS BAR */}
       {feedback && (
         <div
           onClick={() => setFeedback(null)}
@@ -339,7 +390,6 @@ export default function SpectatorHUDControlPanel({
         </div>
       )}
 
-      {/* MAIN CONTROL GRID */}
       <div className="grid grid-cols-12 gap-6">
         {/* PANEL A: TELEMETRY & ROOM CONFIG */}
         <section className="col-span-12 lg:col-span-4 space-y-6">
@@ -390,14 +440,14 @@ export default function SpectatorHUDControlPanel({
             <div className="space-y-4">
               <div>
                 <label className="block font-mono text-[10px] text-gray-500 uppercase mb-1.5">
-                  Lobby Room Code (Valorant Room Code)
+                  Lobby Room Code (JSONB format_config)
                 </label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={lobbyCodeInput}
                     onChange={(e) => setLobbyCodeInput(e.target.value.toUpperCase())}
-                    placeholder={match?.lobby_code || "ZA-KEY-99"}
+                    placeholder={currentLobbyCode}
                     className="flex-1 bg-black/60 border border-white/10 rounded px-3 py-1.5 font-mono text-xs focus:outline-none focus:border-[#00D4FF] uppercase"
                   />
                   <button
@@ -499,7 +549,7 @@ export default function SpectatorHUDControlPanel({
                 ⚠️ Match State Machine
               </h2>
               <p className="font-mono text-[10px] text-gray-500 mb-4 leading-relaxed uppercase">
-                * สิทธิ์การใช้งานปุ่มจำกัดเฉพาะ Referee / Producer / Admin เท่านั้น
+                * ระบบบังคับ Transition Lock ตามกฎ State Machine (ห้ามข้ามขั้นตอน)
               </p>
 
               <div className="space-y-2.5">
@@ -519,9 +569,8 @@ export default function SpectatorHUDControlPanel({
                   </button>
                 ) : (
                   <button
-                    onClick={() => updateMatchDatabaseStatus("LIVE")}
-                    className="w-full py-2.5 bg-neutral-800/50 border border-white/5 text-gray-500 cursor-not-allowed rounded font-mono text-xs transition"
                     disabled
+                    className="w-full py-2.5 bg-neutral-800/50 border border-white/5 text-gray-500 cursor-not-allowed rounded font-mono text-xs transition"
                   >
                     Match Pause Locked
                   </button>
@@ -529,14 +578,24 @@ export default function SpectatorHUDControlPanel({
 
                 <button
                   onClick={() => updateMatchDatabaseStatus("AWAITING_RESULT")}
-                  className="w-full py-2 bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 rounded font-mono text-[11px] font-bold transition uppercase"
+                  disabled={match?.status !== "LIVE" && match?.status !== "PAUSED"}
+                  className={`w-full py-2 rounded font-mono text-[11px] font-bold transition uppercase border ${
+                    match?.status === "LIVE" || match?.status === "PAUSED"
+                      ? "bg-sky-500/10 border-sky-500/30 text-sky-400 hover:bg-sky-500/20"
+                      : "bg-neutral-800/30 border-white/5 text-gray-600 cursor-not-allowed"
+                  }`}
                 >
                   🏁 Set Awaiting Result
                 </button>
 
                 <button
                   onClick={() => updateMatchDatabaseStatus("COMPLETED")}
-                  className="w-full py-2 bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25 rounded font-mono text-[11px] font-bold transition uppercase"
+                  disabled={match?.status !== "AWAITING_RESULT"}
+                  className={`w-full py-2 rounded font-mono text-[11px] font-bold transition uppercase border ${
+                    match?.status === "AWAITING_RESULT"
+                      ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25"
+                      : "bg-neutral-800/30 border-white/5 text-gray-600 cursor-not-allowed"
+                  }`}
                 >
                   🏆 Complete Series
                 </button>
