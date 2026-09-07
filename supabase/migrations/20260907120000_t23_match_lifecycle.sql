@@ -14,10 +14,12 @@
 --           outcome = 'WALKOVER' + referee notification (NOT the DISPUTED /
 --           ADMIN_REFERRAL path floated in the C02 stress-test doc — that is
 --           explicitly deferred to Sprint 2.4).
---   Fix 3 — System bot player seeded so lobby system messages have a valid
---           sender_id FK (see NOTE before the INSERT below — public.players
---           .user_id is NOT NULL in production; this needs a matching
---           auth.users row, which this migration does not create).
+--   Fix 3 — Revised: no system bot player. public.players.user_id is NOT
+--           NULL and 1:1 with auth.users in production, so seeding a fake
+--           player row is not viable without first creating a matching
+--           auth.users row (out of scope for a migration file). Instead,
+--           match_lobby_messages.sender_id is made nullable and every
+--           system-message insert below uses sender_id = NULL.
 --   Fix 4 — lobby_code is read from matches.format_config->>'lobby_code'
 --           (JSONB), not a flat column. matches.format_config does not exist
 --           yet in production, so it is added by this migration.
@@ -348,6 +350,10 @@ CREATE TABLE IF NOT EXISTS public.match_lobby_messages (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Fix 3 (revised): no system bot player exists, so system-authored rows
+-- (is_system = TRUE) carry sender_id = NULL instead of a fake FK target.
+ALTER TABLE public.match_lobby_messages ALTER COLUMN sender_id DROP NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_lobby_messages_match ON public.match_lobby_messages (match_id, created_at DESC);
 
 ALTER TABLE public.match_lobby_messages ENABLE ROW LEVEL SECURITY;
@@ -407,23 +413,9 @@ CREATE POLICY "lobby_messages_no_update" ON public.match_lobby_messages FOR UPDA
 DROP POLICY IF EXISTS "lobby_messages_no_delete" ON public.match_lobby_messages;
 CREATE POLICY "lobby_messages_no_delete" ON public.match_lobby_messages FOR DELETE USING (false);
 
--- Fix 3: system bot player so lobby system messages have a valid sender_id.
---
--- NOTE (production caveat — please read before running this migration):
--- public.players.user_id is NOT NULL and is a 1:1 mirror of an auth.users
--- row. This INSERT can only succeed once a matching auth.users row with id
--- '00000000-0000-0000-0000-000000000001' exists (e.g. created once via the
--- Supabase Admin API / dashboard as a service account with no login). If that
--- row does not exist yet, run that step first, then this migration.
-INSERT INTO public.players (id, user_id, athlete_id, display_name, status)
-VALUES (
-    '00000000-0000-0000-0000-000000000001',
-    '00000000-0000-0000-0000-000000000001',
-    'SYSTEM-BOT-001',
-    '[SYSTEM]',
-    'ACTIVE'
-)
-ON CONFLICT (id) DO NOTHING;
+-- Fix 3 (revised): no system bot player is seeded — see the note above the
+-- CREATE TABLE for public.match_lobby_messages. sender_id is NULL for every
+-- is_system = TRUE row inserted by the trigger below.
 
 CREATE OR REPLACE FUNCTION public.log_lobby_system_message()
 RETURNS TRIGGER
@@ -434,30 +426,29 @@ AS $$
 DECLARE
     v_msg           TEXT;
     v_team_name     TEXT;
-    SYSTEM_SENDER   CONSTANT UUID := '00000000-0000-0000-0000-000000000001';
 BEGIN
     IF TG_TABLE_NAME = 'matches' AND TG_OP = 'UPDATE' THEN
 
         IF OLD.team_a_ready_at IS NULL AND NEW.team_a_ready_at IS NOT NULL THEN
             SELECT name INTO v_team_name FROM public.teams WHERE id = NEW.team_a_id;
             INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
-            VALUES (NEW.id, SYSTEM_SENDER, 'SYSTEM', '[SYSTEM] สโมสร ' || COALESCE(v_team_name, 'TEAM_A') || ' กดยืนยันความพร้อมแข่งขันแล้ว ✅', TRUE);
+            VALUES (NEW.id, NULL, 'SYSTEM', '[SYSTEM] สโมสร ' || COALESCE(v_team_name, 'TEAM_A') || ' กดยืนยันความพร้อมแข่งขันแล้ว ✅', TRUE);
         END IF;
 
         IF OLD.team_b_ready_at IS NULL AND NEW.team_b_ready_at IS NOT NULL THEN
             SELECT name INTO v_team_name FROM public.teams WHERE id = NEW.team_b_id;
             INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
-            VALUES (NEW.id, SYSTEM_SENDER, 'SYSTEM', '[SYSTEM] สโมสร ' || COALESCE(v_team_name, 'TEAM_B') || ' กดยืนยันความพร้อมแข่งขันแล้ว ✅', TRUE);
+            VALUES (NEW.id, NULL, 'SYSTEM', '[SYSTEM] สโมสร ' || COALESCE(v_team_name, 'TEAM_B') || ' กดยืนยันความพร้อมแข่งขันแล้ว ✅', TRUE);
         END IF;
 
         IF OLD.status != 'VETO' AND NEW.status = 'VETO' THEN
             INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
-            VALUES (NEW.id, SYSTEM_SENDER, 'SYSTEM', '[SYSTEM] เริ่มต้นขั้นตอนดราฟต์เลือกแผนที่แข่ง (Map Veto Phase Active)', TRUE);
+            VALUES (NEW.id, NULL, 'SYSTEM', '[SYSTEM] เริ่มต้นขั้นตอนดราฟต์เลือกแผนที่แข่ง (Map Veto Phase Active)', TRUE);
         END IF;
 
         IF OLD.status != 'LIVE' AND NEW.status = 'LIVE' THEN
             INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
-            VALUES (NEW.id, SYSTEM_SENDER, 'SYSTEM', '[SYSTEM] สัญญาณภาพพร้อมรบแล้ว! การแข่งขันนัดประวัติศาสตร์เริ่มต้นอย่างเป็นทางการ ⚔️', TRUE);
+            VALUES (NEW.id, NULL, 'SYSTEM', '[SYSTEM] สัญญาณภาพพร้อมรบแล้ว! การแข่งขันนัดประวัติศาสตร์เริ่มต้นอย่างเป็นทางการ ⚔️', TRUE);
         END IF;
 
         -- Fix 4: lobby_code lives in format_config JSONB, not a flat column.
@@ -466,7 +457,7 @@ BEGIN
             INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
             VALUES (
                 NEW.id,
-                SYSTEM_SENDER,
+                NULL,
                 'SYSTEM',
                 '[SYSTEM] ผู้ตัดสินได้กรอกรหัสพาสเวิร์ดล็อบบี้: ' || NEW.format_config->>'lobby_code',
                 TRUE
@@ -482,7 +473,7 @@ BEGIN
             END IF;
 
             INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
-            VALUES (NEW.id, SYSTEM_SENDER, 'SYSTEM', v_msg, TRUE);
+            VALUES (NEW.id, NULL, 'SYSTEM', v_msg, TRUE);
         END IF;
 
     END IF;
