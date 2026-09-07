@@ -1,6 +1,6 @@
 # 🌳 Zpdoac Arena Master Data Tree & Schema Map (V1.06)
 
-> 💎 **Last Updated:** เวลา 00:42:45 จันทร์ 07/09/2026
+> 💎 **Last Updated:** เวลา 01:52:55 จันทร์ 07/09/2026
 
 ีวิธีใช้ = node update-tree.mjs
 
@@ -19,13 +19,17 @@ zodiac/
 │   │   ├── ave/
 │   │   │   └── chat/
 │   │   │       └── route.ts
+│   │   ├── cron/
+│   │   │   ├── match-reminders/
+│   │   │   │   └── route.ts
+│   │   │   └── veto-autopick/
+│   │   │       └── route.ts
 │   │   ├── health/
 │   │   │   └── route.ts
 │   │   ├── integrity/
 │   │   │   └── classify/
 │   │   │       ├── route.ts
 │   │   │       └── TierBadge.tsx
-│   │   ├── matches/
 │   │   └── v1/
 │   │       ├── bracket-nodes/
 │   │       │   └── [id]/
@@ -38,12 +42,23 @@ zodiac/
 │   │       │   └── settle-winner/
 │   │       │       └── route.ts
 │   │       ├── matches/
-│   │       │   ├── [id]/
-│   │       │   │   ├── ready/
-│   │       │   │   │   └── route.ts
-│   │       │   │   └── schedule/
-│   │       │   │       └── route.ts
-│   │       │   └── route.ts
+│   │       │   └── [id]/
+│   │       │       ├── games/
+│   │       │       │   ├── [game_number]/
+│   │       │       │   │   ├── participants/
+│   │       │       │   │   │   └── route.ts
+│   │       │       │   │   └── route.ts
+│   │       │       │   └── route.ts
+│   │       │       ├── ready/
+│   │       │       │   └── route.ts
+│   │       │       ├── result/
+│   │       │       │   └── route.ts
+│   │       │       ├── schedule/
+│   │       │       │   └── route.ts
+│   │       │       └── veto/
+│   │       │           ├── action/
+│   │       │           │   └── route.ts
+│   │       │           └── route.ts
 │   │       ├── mercenary/
 │   │       │   └── join/
 │   │       │       └── route.ts
@@ -83,11 +98,6 @@ zodiac/
 │   │       ├── tournaments/
 │   │       │   └── [id]/
 │   │       │       ├── matches/
-│   │       │       │   ├── [id]/
-│   │       │       │   │   ├── ready/
-│   │       │       │   │   │   └── route.ts
-│   │       │       │   │   └── schedule/
-│   │       │       │   │       └── route.ts
 │   │       │       │   └── route.ts
 │   │       │       ├── stages/
 │   │       │       │   └── route.ts
