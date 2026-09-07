@@ -13,6 +13,7 @@ export async function POST(
     const idempotencyKey = req.headers.get('idempotency-key') || req.headers.get('Idempotency-Key');
     const supabase = await createClient();
 
+    // 1. Validation: Idempotency Key
     if (!idempotencyKey) {
       return NextResponse.json(
         { error: { code: 'MISSING_IDEMPOTENCY_KEY', message: 'ต้องแนบ Idempotency-Key header มาด้วย' } },
@@ -20,6 +21,7 @@ export async function POST(
       );
     }
 
+    // 2. Auth & Player Profile Check
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json(
@@ -41,6 +43,7 @@ export async function POST(
       );
     }
 
+    // 3. Permission Gate: Role Verification
     const { data: userRole, error: roleError } = await supabase
       .from('user_roles')
       .select('role')
@@ -56,6 +59,7 @@ export async function POST(
       );
     }
 
+    // 4. Payload Parsing & Schema Validation
     let body: unknown;
     try {
       body = await req.json();
@@ -73,12 +77,22 @@ export async function POST(
         { status: 400 }
       );
     }
-    const { disputeId, winnerTeamId, scoreA, scoreB, roundsWonA, roundsWonB, resolutionNotes, penalty } = parseResult.data;
+
+    const {
+      disputeId,
+      winnerTeamId,
+      scoreA,
+      scoreB,
+      roundsWonA,
+      roundsWonB,
+      resolutionNotes,
+      penalty
+    } = parseResult.data;
 
     const adminSupabase = createAdminClient();
     const nowISO = new Date().toISOString();
 
-    // Idempotency check
+    // 5. Idempotency Check
     const { data: dup } = await supabase
       .from('match_state_transitions')
       .select('id')
@@ -88,10 +102,20 @@ export async function POST(
 
     if (dup) {
       const { data: matchState } = await supabase.from('matches').select('*').eq('id', matchId).single();
-      return NextResponse.json({ success: true, message: 'Already processed (Idempotency Locked)', data: matchState });
+      return NextResponse.json({
+        success: true,
+        message: 'Already processed (Idempotency Locked)',
+        data: matchState
+      });
     }
 
-    const { data: match } = await supabase.from('matches').select('status').eq('id', matchId).single();
+    // 6. Match Status Verification
+    const { data: match } = await supabase
+      .from('matches')
+      .select('status')
+      .eq('id', matchId)
+      .single();
+
     if (!match || match.status !== 'DISPUTED') {
       return NextResponse.json(
         { error: { code: 'MATCH_NOT_DISPUTED', message: 'แมตช์นี้ไม่ได้อยู่ในสถานะข้อพิพาทที่รอการชี้ขาด' } },
@@ -99,31 +123,59 @@ export async function POST(
       );
     }
 
-    // Resolve dispute
+    // 7. Update Disputes (ERD Table 2.16 - dispute_status_type: RESOLVED)
     const { error: disputeErr } = await adminSupabase
       .from('disputes')
-      .update({ status: 'RESOLVED', resolved_by: player.id, resolved_at: nowISO, resolution: resolutionNotes })
+      .update({
+        status: 'RESOLVED',
+        resolved_by: player.id,
+        resolved_at: nowISO,
+        resolution: resolutionNotes,
+        updated_at: nowISO,
+      })
       .eq('id', disputeId);
+
     if (disputeErr) throw new Error(`Dispute resolve failed: ${disputeErr.message}`);
 
-    // Penalties
+    // 8. Record Match Decision & Penalties (ERD Table 2.23 - match_decisions)
     if (penalty?.penaltyType) {
-      const { error: penaltyErr } = await adminSupabase.from('penalties').insert({
-        player_id: penalty.penalizedPlayerId ?? null,
-        team_id: penalty.penalizedTeamId ?? null,
-        match_id: matchId,
-        dispute_id: disputeId,
-        type: penalty.penaltyType,
+      const penaltyEffects = {
+        penalized_player_id: penalty.penalizedPlayerId ?? null,
+        penalized_team_id: penalty.penalizedTeamId ?? null,
+        penalty_type: penalty.penaltyType,
         ap_fine_amount: penalty.apFineAmount ?? 0,
         zp_deduction_amount: penalty.zpDeductionAmount ?? 0,
-        notes: penalty.notes ?? 'ลงโทษวินัยจากการตรวจสอบคดี',
+        suspension_days: penalty.suspensionDays ?? 0,
         suspended_until: penalty.suspensionDays
           ? new Date(Date.now() + penalty.suspensionDays * 86400000).toISOString()
           : null,
-        created_by: player.id,
-      });
-      if (penaltyErr) throw new Error(`Penalty failed: ${penaltyErr.message}`);
+      };
 
+      const { error: decisionErr } = await adminSupabase
+        .from('match_decisions')
+        .insert({
+          match_id: matchId,
+          dispute_id: disputeId,
+          decision_type: 'PENALTY',
+          decided_by: player.id,
+          reason: penalty.notes ?? resolutionNotes,
+          effects: penaltyEffects,
+          created_at: nowISO,
+        });
+
+      if (decisionErr) throw new Error(`Decision recording failed: ${decisionErr.message}`);
+
+      // Call RPC for AP fine deduction if applicable
+      if (penalty.penalizedPlayerId && (penalty.apFineAmount ?? 0) > 0) {
+        const { error: fineErr } = await adminSupabase.rpc('deduct_player_ap_fine', {
+          p_player_id: penalty.penalizedPlayerId,
+          p_amount: penalty.apFineAmount,
+          p_reason: `Dispute Penalty: ${penalty.notes ?? resolutionNotes}`,
+        });
+        if (fineErr) console.error('AP fine RPC warning:', fineErr.message);
+      }
+
+      // Update Athlete Status if suspended/banned
       if (penalty.penalizedPlayerId && ['ATHLETE_SUSPENSION', 'ATHLETE_BAN'].includes(penalty.penaltyType)) {
         await adminSupabase
           .from('players')
@@ -139,7 +191,7 @@ export async function POST(
       }
     }
 
-    // Finalize match
+    // 9. Finalize Match State
     const { data: updatedMatch, error: matchErr } = await adminSupabase
       .from('matches')
       .update({
@@ -158,13 +210,15 @@ export async function POST(
       .eq('id', matchId)
       .select()
       .single();
+
     if (matchErr) throw new Error(`Match finalize failed: ${matchErr.message}`);
 
-    // Bracket advance — explicit RPC call, must never roll back a resolved dispute
+    // 10. Advance Bracket Node (RPC Call)
     const { error: bracketErr } = await adminSupabase.rpc('advance_bracket_node', {
       p_match_id: matchId,
       p_winner_team_id: winnerTeamId,
     });
+
     if (bracketErr) {
       await adminSupabase.from('audit_logs').insert({
         actor_id: player.id,
@@ -176,7 +230,7 @@ export async function POST(
       });
     }
 
-    // State transition log
+    // 11. Log State Transition & Audit Log
     await adminSupabase.from('match_state_transitions').insert({
       match_id: matchId,
       from_status: 'DISPUTED',
@@ -184,10 +238,14 @@ export async function POST(
       trigger_source: 'ADMIN',
       actor_id: player.id,
       reason: 'Dispute resolved by Referee Overwrite.',
-      state_snapshot: { winner_team_id: winnerTeamId, score_a: scoreA, score_b: scoreB, idempotency_key: idempotencyKey },
+      state_snapshot: {
+        winner_team_id: winnerTeamId,
+        score_a: scoreA,
+        score_b: scoreB,
+        idempotency_key: idempotencyKey,
+      },
     });
 
-    // Audit log
     await adminSupabase.from('audit_logs').insert({
       actor_id: player.id,
       action: 'UPDATE',
@@ -197,7 +255,7 @@ export async function POST(
       after_data: { winner_team_id: winnerTeamId, score_a: scoreA, score_b: scoreB },
     });
 
-    // Realtime broadcast
+    // 12. Realtime Broadcast
     await adminSupabase.channel(`match-realtime-${matchId}`).send({
       type: 'broadcast',
       event: 'match_completed',
@@ -205,10 +263,9 @@ export async function POST(
     });
 
     return NextResponse.json(
-      { success: true, message: 'ชี้ขาดข้อพิพาท บันทึกโทษ และเดินสาย Bracket เรียบร้อย', data: updatedMatch },
+      { success: true, message: 'ชี้ขาดข้อพิพาท บันทึกคำตัดสิน และเดินสาย Bracket เรียบร้อย', data: updatedMatch },
       { status: 200 }
     );
-
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     return NextResponse.json({ error: { code: 'SERVER_ERROR', message } }, { status: 500 });
