@@ -1,6 +1,6 @@
 # 🌳 Zpdoac Arena Master Data Tree & Schema Map (V1.06)
 
-> 💎 **Last Updated:** เวลา 01:52:55 จันทร์ 07/09/2026
+> 💎 **Last Updated:** เวลา 21:23:04 จันทร์ 07/09/2026
 
 ีวิธีใช้ = node update-tree.mjs
 
@@ -22,7 +22,9 @@ zodiac/
 │   │   ├── cron/
 │   │   │   ├── match-reminders/
 │   │   │   │   └── route.ts
-│   │   │   └── veto-autopick/
+│   │   │   ├── veto-autopick/
+│   │   │   │   └── route.ts
+│   │   │   └── walkover/
 │   │   │       └── route.ts
 │   │   ├── health/
 │   │   │   └── route.ts
@@ -49,11 +51,21 @@ zodiac/
 │   │       │       │   │   │   └── route.ts
 │   │       │       │   │   └── route.ts
 │   │       │       │   └── route.ts
+│   │       │       ├── lobby/
+│   │       │       │   ├── messages/
+│   │       │       │   │   └── route.ts
+│   │       │       │   └── route.ts
 │   │       │       ├── ready/
+│   │       │       │   └── route.ts
+│   │       │       ├── replays/
+│   │       │       │   └── route.ts
+│   │       │       ├── report/
 │   │       │       │   └── route.ts
 │   │       │       ├── result/
 │   │       │       │   └── route.ts
 │   │       │       ├── schedule/
+│   │       │       │   └── route.ts
+│   │       │       ├── status/
 │   │       │       │   └── route.ts
 │   │       │       └── veto/
 │   │       │           ├── action/
@@ -62,6 +74,10 @@ zodiac/
 │   │       ├── mercenary/
 │   │       │   └── join/
 │   │       │       └── route.ts
+│   │       ├── players/
+│   │       │   └── [id]/
+│   │       │       └── replays/
+│   │       │           └── route.ts
 │   │       ├── rewards/
 │   │       │   └── redeem/
 │   │       │       └── route.ts
@@ -124,18 +140,31 @@ zodiac/
 │   ├── login/
 │   │   └── page.tsx
 │   ├── matches/
+│   │   ├── [id]/
+│   │   │   └── lobby/
+│   │   │       └── page.tsx
 │   │   └── page.tsx
 │   ├── match-history/
 │   │   └── page.tsx
 │   ├── match-result/
 │   │   └── [matchid]/
 │   │       └── page.tsx
+│   ├── overlay/
+│   │   └── match/
+│   │       └── [id]/
+│   │           ├── mvp/
+│   │           │   └── route.ts
+│   │           └── page.tsx
 │   ├── profile/
 │   │   ├── [userId]/
 │   │   │   └── page.tsx
 │   │   └── page.tsx
 │   ├── schedule/
 │   │   └── page.tsx
+│   ├── spectator/
+│   │   └── control/
+│   │       └── [match_id]/
+│   │           └── page.tsx
 │   ├── status/
 │   │   └── page.tsx
 │   ├── subscribe/

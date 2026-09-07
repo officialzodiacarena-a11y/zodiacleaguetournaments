@@ -82,79 +82,6 @@ export interface MVPlayerStats {
   agent_played: string;
 }
 
-// 🟢 สวิตช์เปิด/ปิด MOCK สำหรับเทสสตรีมสด (ปรับเป็น false เมื่อระบบ Bot จริงพร้อม)
-const USE_MOCK = true;
-
-// 🟢 ชุดข้อมูลจำลอง (สามารถปรับ status เป็น "LIVE", "VETO", หรือ "AWAITING_RESULT" เพื่อดูแต่ละฉากได้)
-const MOCK_MATCH: MatchData = {
-  id: "test-match-01",
-  tournament_id: "zodiac-season-1",
-  stage_id: "playoffs",
-  status: "LIVE", // ลองสลับเป็น "VETO" หรือ "AWAITING_RESULT" ได้ตามต้องการเทส
-  best_of: 3,
-  score_a: 1,
-  score_b: 0,
-  rounds_won_a: 11,
-  rounds_won_b: 9,
-  team_a_id: "team-zdc-01",
-  team_b_id: "team-tln-02",
-  team_a_ready_at: new Date().toISOString(),
-  team_b_ready_at: new Date().toISOString(),
-  lobby_code: "ZDC-LIVE-88",
-  team_a: { id: "team-zdc-01", name: "ZODIAC FIRE", tag: "ZDC", logo_url: "/branding/logo-icon.svg" },
-  team_b: { id: "team-tln-02", name: "TALON ESPORTS", tag: "TLN", logo_url: null },
-};
-
-const MOCK_GAMES: MatchGame[] = [
-  {
-    id: "g1",
-    match_id: "test-match-01",
-    game_number: 1,
-    map_name: "ASCENT",
-    score_a: 13,
-    score_b: 9,
-    winner_team_id: "team-zdc-01",
-    team_a_side_start: "DEF",
-    team_b_side_start: "ATK",
-    status: "COMPLETED",
-  },
-  {
-    id: "g2",
-    match_id: "test-match-01",
-    game_number: 2,
-    map_name: "BIND",
-    score_a: 11,
-    score_b: 9,
-    winner_team_id: null,
-    team_a_side_start: "ATK",
-    team_b_side_start: "DEF",
-    status: "LIVE",
-  },
-];
-
-const MOCK_VETOES: MapVeto[] = [
-  { id: "v1", match_id: "test-match-01", step_order: 1, action: "BAN", team_id: "team-zdc-01", map_name: "HAVEN", side_choice: null, was_auto: false },
-  { id: "v2", match_id: "test-match-01", step_order: 2, action: "BAN", team_id: "team-tln-02", map_name: "SUNSET", side_choice: null, was_auto: false },
-  { id: "v3", match_id: "test-match-01", step_order: 3, action: "PICK", team_id: "team-zdc-01", map_name: "ASCENT", side_choice: "DEF", was_auto: false },
-  { id: "v4", match_id: "test-match-01", step_order: 4, action: "PICK", team_id: "team-tln-02", map_name: "BIND", side_choice: "ATK", was_auto: false },
-  { id: "v5", match_id: "test-match-01", step_order: 5, action: "BAN", team_id: "team-zdc-01", map_name: "LOTUS", side_choice: null, was_auto: false },
-  { id: "v6", match_id: "test-match-01", step_order: 6, action: "BAN", team_id: "team-tln-02", map_name: "ICEBOX", side_choice: null, was_auto: false },
-  { id: "v7", match_id: "test-match-01", step_order: 7, action: "DECIDER", team_id: null, map_name: "ABYSS", side_choice: null, was_auto: false },
-];
-
-const MOCK_MVP: MVPlayerStats = {
-  id: "mvp-01",
-  display_name: "Besuto",
-  team_tag: "ZDC",
-  kills: 24,
-  deaths: 11,
-  assists: 7,
-  acs: 285,
-  adr: 172.4,
-  headshot_pct: 38,
-  agent_played: "JETT",
-};
-
 const STUB_TEAMS: Record<string, TeamMetadata> = {
   "team-zdc-01": { id: "team-zdc-01", name: "ZODIAC FIRE", tag: "ZDC", logo_url: "/branding/logo-icon.svg" },
   "team-tln-02": { id: "team-tln-02", name: "TALON ESPORTS", tag: "TLN", logo_url: null },
@@ -169,19 +96,17 @@ export default function MatchBroadcastOverlay({
 }: {
   params: Promise<{ id: string }> | { id: string };
 }) {
-  const resolvedParams = "then" in params ? use(params) : params;
+  const resolvedParams = 'then' in params ? use(params) : params;
   const matchId = resolvedParams.id;
 
-  const [match, setMatch] = useState<MatchData | null>(USE_MOCK ? MOCK_MATCH : null);
-  const [games, setGames] = useState<MatchGame[]>(USE_MOCK ? MOCK_GAMES : []);
-  const [vetoes, setVetoes] = useState<MapVeto[]>(USE_MOCK ? MOCK_VETOES : []);
-  const [mvp, setMvp] = useState<MVPlayerStats | null>(USE_MOCK ? MOCK_MVP : null);
-  const [loading, setLoading] = useState<boolean>(!USE_MOCK);
+  const [match, setMatch] = useState<MatchData | null>(null);
+  const [games, setGames] = useState<MatchGame[]>([]);
+  const [vetoes, setVetoes] = useState<MapVeto[]>([]);
+  const [mvp, setMvp] = useState<MVPlayerStats | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (USE_MOCK) return; // ข้าม Network fetch ตอนใช้ Mock
-
     let isMounted = true;
 
     const fetchInitialData = async () => {
