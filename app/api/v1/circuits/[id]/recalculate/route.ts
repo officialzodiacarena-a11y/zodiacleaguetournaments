@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 interface SeasonRow {
   id: string;
-  season_split_type: 'SPRING' | 'SUMMER' | 'FALL' | 'WINTER';
+  split: 'SPRING' | 'SUMMER' | 'FALL' | 'WINTER';
 }
 
 interface SeasonStandingRow {
@@ -183,7 +183,7 @@ export async function POST(
     // 2. Get all seasons for this circuit
     const { data: seasons, error: seasonsError } = await adminSupabase
       .from('seasons')
-      .select('id, season_split_type')
+      .select('id, split')
       .eq('circuit_id', circuitId);
 
     if (seasonsError || !seasons || seasons.length === 0) {
@@ -197,7 +197,7 @@ export async function POST(
     const seasonIds = seasonList.map((s) => s.id);
     const seasonSplitMap: Record<string, 'SPRING' | 'SUMMER' | 'FALL' | 'WINTER'> = {};
     for (const s of seasonList) {
-      seasonSplitMap[s.id] = s.season_split_type;
+      seasonSplitMap[s.id] = s.split;
     }
 
     // 3. Get season_standings for all seasons in parallel with existing circuit_standings
@@ -323,7 +323,7 @@ export async function POST(
       const { data: matchData } = await adminSupabase
         .from('matches')
         .select('team_a_id, team_b_id, winner_team_id')
-        .in('team_a_id', allTeamIds)
+        .or(`team_a_id.in.(${allTeamIds.join(',')}),team_b_id.in.(${allTeamIds.join(',')})`)
         .eq('status', 'COMPLETED');
 
       h2hMap = buildH2HMap((matchData ?? []) as MatchRow[], teamIdSet);
