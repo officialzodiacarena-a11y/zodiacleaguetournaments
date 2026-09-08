@@ -1,0 +1,2 @@
+# บังคับให้จัดการเป็นไฟล์ Text ใช้ Line Ending แบบ LF เสมอ และซ่อน Diff บน GitHub (ป้องกันไฟล์ Auto-generated รกตา)
+database.types.ts text eol=lf linguist-generated=true
