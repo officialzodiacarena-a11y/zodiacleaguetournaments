@@ -27,7 +27,7 @@ export async function GET(req: Request) {
 
     const { data: player, error: playerError } = await supabase
       .from('players')
-      .select('id')
+      .select('id, ap_balance')
       .eq('user_id', user.id)
       .single();
 
@@ -35,22 +35,6 @@ export async function GET(req: Request) {
       return NextResponse.json(
         { error: { code: 'PROFILE_NOT_FOUND', message: 'ไม่พบประวัติโปรไฟล์ของคุณในระบบลีก' } },
         { status: 404 }
-      );
-    }
-
-    // Balance = ยอดล่าสุดใน ap_ledger (เขียนโดย move_ap / claim_watch_reward ทุกครั้ง)
-    const { data: latestLedgerRow, error: balanceError } = await supabase
-      .from('ap_ledger')
-      .select('balance_after')
-      .eq('player_id', player.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (balanceError) {
-      return NextResponse.json(
-        { error: { code: 'QUERY_FAILED', message: balanceError.message } },
-        { status: 500 }
       );
     }
 
@@ -83,7 +67,7 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({
-      balance: latestLedgerRow?.balance_after ?? 0,
+      balance: player.ap_balance,
       daily_earned_today: dailyLimit?.ap_earned ?? 0,
       daily_cap: dailyLimit?.daily_cap ?? 100,
       ledger: ledgerRows ?? [],
