@@ -136,15 +136,32 @@ export async function POST(
     }
 
     // 7. ใช้ Admin Client อัปเดต Match Status เป็น DISPUTED & บันทึก Audit State Transition
+    // Fix (2026-09-09): เดิมไม่เช็ค error ที่คืนจาก UPDATE เลย — ถ้า DB trigger
+    // (trg_validate_match_transition) ปฏิเสธการเปลี่ยนสถานะ, dispute จะถูกบันทึก
+    // ไว้แล้วแต่แมตช์ยังไม่ถูกล็อกเป็น DISPUTED จริง ต้อง rollback dispute row ทิ้ง
+    // และแจ้ง error กลับไปแทนที่จะรายงานสำเร็จลวง ๆ
     const adminSupabase = createAdminClient();
 
-    await adminSupabase
+    const { error: matchUpdateErr } = await adminSupabase
       .from('matches')
       .update({
         status: 'DISPUTED',
         updated_at: new Date().toISOString(),
       })
       .eq('id', matchId);
+
+    if (matchUpdateErr) {
+      await adminSupabase.from('disputes').delete().eq('id', dispute.id);
+      return NextResponse.json(
+        {
+          error: {
+            code: 'MATCH_TRANSITION_FAILED',
+            message: `ไม่สามารถล็อกสถานะแมตช์เป็น DISPUTED ได้: ${matchUpdateErr.message}`,
+          },
+        },
+        { status: 409 }
+      );
+    }
 
     await adminSupabase.from('match_state_transitions').insert({
       match_id: matchId,

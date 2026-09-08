@@ -5,7 +5,6 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Sparkles, X, ArrowRight } from 'lucide-react';
 
 const SPRING_CHAMPIONS = {
   teamName: 'ZODIAC APEX',
@@ -20,19 +19,18 @@ const SPRING_CHAMPIONS = {
 };
 
 export default function LoginPage() {
-  const [loading, setLoading] = useState<'google' | 'riot' | null>(null);
+  const [loading, setLoading] = useState<'google' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isRiotModalOpen, setIsRiotModalOpen] = useState(false);
-
-  // States สำหรับฟอร์มกรอก Riot ID
-  const [riotId, setRiotId] = useState('');
-  const [tagline, setTagline] = useState('');
-  const [region, setRegion] = useState('ap');
 
   const router = useRouter();
   const supabase = createClient();
 
-  // 1. Google OAuth ผ่าน Supabase
+  // Google OAuth ผ่าน Supabase — ทางเดียวที่ล็อกอินเข้าระบบได้จริง
+  // Fix (2026-09-09): เดิมมีปุ่ม "LOGIN WITH RIOT ID" ที่ปลอมทั้งหมด (setTimeout
+  // จำลอง delay + เขียน session ลง localStorage เท่านั้น ไม่แตะ DB จริงเลย) ตัดออก
+  // เพราะการผูก Riot ID จริงมีระบบ Manual Athlete Verification (T4.0) อยู่แล้วที่
+  // /profile ผ่าน GameAccountModal.tsx ซึ่งเขียนลงตาราง game_accounts จริง —
+  // ผู้ใช้ต้อง login ผ่าน Google ก่อน แล้วค่อยไปผูก Riot ID ที่หน้าโปรไฟล์
   async function handleGoogleLogin() {
     setLoading('google');
     setError(null);
@@ -45,46 +43,6 @@ export default function LoginPage() {
       setLoading(null);
     }
   }
-
-  // 2. ล็อกอินด้วย Riot ID โดยตรง
-  const handleManualRiotSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    const cleanId = riotId.trim();
-    const cleanTag = tagline.replace(/#/g, '').trim().toUpperCase();
-
-    if (!cleanId || !cleanTag) {
-      setError('กรุณากรอก Riot ID และ Tagline ให้ครบถ้วน');
-      return;
-    }
-
-    setLoading('riot');
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const athleteSession = {
-        riotId: cleanId,
-        tagline: cleanTag,
-        fullRiotId: `${cleanId}#${cleanTag}`,
-        region,
-        role: 'Duelist',
-        rank: 'Ascendant 2',
-        zp: 1250,
-        ap: 450,
-        authenticatedVia: 'MANUAL_RIOT_ID',
-      };
-
-      localStorage.setItem('zodiac_user', JSON.stringify(athleteSession));
-      setIsRiotModalOpen(false);
-      router.push('/dashboard');
-    } catch {
-      setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
-    } finally {
-      setLoading(null);
-    }
-  };
 
   return (
     <main className="min-h-screen bg-[#050508] text-white flex flex-col items-center justify-center p-3 lg:p-6 font-mono relative overflow-x-hidden selection:bg-amber-500 selection:text-black">
@@ -336,16 +294,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* ปุ่มเปิด Riot ID Modal */}
-            <button
-              onClick={() => setIsRiotModalOpen(true)}
-              disabled={loading !== null}
-              className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 px-3 text-[11px] font-bold tracking-wider text-white bg-rose-600 hover:bg-rose-500 transition-colors disabled:opacity-50 cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.5)]"
-            >
-              <RiotIcon />
-              <span>LOGIN WITH RIOT ID</span>
-            </button>
-
             {/* ปุ่ม Google Auth ผ่าน Supabase */}
             <button
               onClick={handleGoogleLogin}
@@ -435,96 +383,6 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* MODAL: สำหรับกรอก Riot ID */}
-      {isRiotModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md bg-[#0f141f] border border-gray-800 rounded-2xl p-6 shadow-2xl">
-            <button
-              onClick={() => setIsRiotModalOpen(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="text-center mb-5">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold uppercase tracking-wider mb-2">
-                <Sparkles className="w-3.5 h-3.5" />
-                Riot Identity Direct Sync
-              </div>
-              <h3 className="text-xl font-black uppercase text-white">
-                ระบุข้อมูล RIOT ID
-              </h3>
-              <p className="text-xs text-gray-400 mt-1">
-                กรอก Player Name และ Tagline เพื่อเข้าสู่สนามแข่ง
-              </p>
-            </div>
-
-            <form onSubmit={handleManualRiotSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-                  Riot ID & Tagline
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="PlayerName"
-                    value={riotId}
-                    onChange={(e) => setRiotId(e.target.value)}
-                    className="flex-1 bg-[#182030] border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
-                    autoComplete="off"
-                  />
-                  <div className="w-28 relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
-                      #
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="TH1"
-                      maxLength={5}
-                      value={tagline}
-                      onChange={(e) => setTagline(e.target.value.replace(/#/g, '').toUpperCase())}
-                      className="w-full bg-[#182030] border border-gray-700 rounded-xl pl-7 pr-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500 uppercase"
-                      autoComplete="off"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-                  Region Server
-                </label>
-                <select
-                  value={region}
-                  onChange={(e) => setRegion(e.target.value)}
-                  className="w-full bg-[#182030] border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500 cursor-pointer"
-                >
-                  <option value="ap">Asia-Pacific (AP)</option>
-                  <option value="na">North America (NA)</option>
-                  <option value="eu">Europe (EU)</option>
-                  <option value="kr">Korea (KR)</option>
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading === 'riot'}
-                className="w-full mt-2 bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-600/30 disabled:opacity-50"
-              >
-                {loading === 'riot' ? (
-                  <Spinner />
-                ) : (
-                  <>
-                    <span>ยืนยันเข้าสู่สนามแข่ง</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Footer */}
       <footer className="relative z-10 text-center text-xs text-zinc-400">
         การเข้าสู่ระบบถือว่ายอมรับ{' '}
@@ -544,14 +402,6 @@ function CrownIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]">
       <path d="M2 19h20v2H2v-2zM2 5l5 3.5L12 3l5 5.5L22 5v12H2V5z" />
-    </svg>
-  );
-}
-
-function RiotIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-white">
-      <path d="M12.02 2L2 6.64v10.72L12.02 22l10.02-4.64V6.64L12.02 2zm6.75 14.12l-6.75 3.12-6.75-3.12V7.88l6.75-3.12 6.75 3.12v8.24z" />
     </svg>
   );
 }

@@ -17,10 +17,24 @@ export async function GET(
       );
     }
 
+    const { data: player, error: playerError } = await supabase
+      .from('players')
+      .select('id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (playerError || !player) {
+      return NextResponse.json(
+        { error: { code: 'PROFILE_NOT_FOUND', message: 'ไม่พบประวัติโปรไฟล์ของคุณในระบบลีก' } },
+        { status: 404 }
+      );
+    }
+
     const { data: intent, error } = await supabase
       .from('payment_intents')
       .select('*, crypto_payments(token_symbol, to_address, amount_token, confirmations, required_confirms, is_confirmed, tx_hash)')
       .eq('id', intentId)
+      .eq('player_id', player.id)
       .maybeSingle();
 
     if (error) {

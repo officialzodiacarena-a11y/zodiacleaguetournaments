@@ -1,107 +1,101 @@
-import React from 'react';
-import type { TournamentBracketPageData } from '@/types/bracket';
+import { notFound } from 'next/navigation';
+import type { TournamentBracketPageData, BracketMatchNode, BracketTeamParticipant } from '@/types/bracket';
 import { TournamentBracketView } from '@/components/tournament-bracket-view';
+import { createClient } from '@/lib/supabase/server';
 
 interface PageProps {
   params: Promise<{ tournamentId: string }>;
 }
 
-// Mock ข้อมูลเริ่มต้นตรงตาม Double Elimination 12 Teams SSOT
-const mockBracketData: TournamentBracketPageData = {
-  tournamentId: 'tour_summer_open_1',
-  tournamentName: 'SUMMER OPEN I',
-  subMetaText: '14–16 มิ.ย. 2026 · 5v5 DOUBLE ELIMINATION · 12 TEAMS',
-  prizeZpText: '10,000 ZP + 1,000 CP',
-  matches: [
-    {
-      id: 'UB_R1_M1',
-      stageId: 'stage_de12_01',
-      matchNumber: 1,
-      bracketType: 'UPPER',
-      roundNumber: 1,
-      positionInRound: 1,
-      bestOf: 3,
-      status: 'COMPLETED',
-      scoreA: 2,
-      scoreB: 0,
-      teamA: { id: 'team_za_01', name: 'ZODIAC APEX', tag: 'ZA', seed: 1 },
-      teamB: { id: 'team_ns_08', name: 'NOVA STORM', tag: 'NS', seed: 8 },
-      winnerTeamId: 'team_za_01',
-    },
-    {
-      id: 'UB_R1_M2',
-      stageId: 'stage_de12_01',
-      matchNumber: 2,
-      bracketType: 'UPPER',
-      roundNumber: 1,
-      positionInRound: 2,
-      bestOf: 3,
-      status: 'LIVE',
-      scoreA: 1,
-      scoreB: 1,
-      teamA: { id: 'team_sf_04', name: 'STELLAR FORCE', tag: 'SF', seed: 4 },
-      teamB: { id: 'team_cv_05', name: 'CELESTIAL VEIL', tag: 'CV', seed: 5 },
-    },
-    {
-      id: 'UB_R1_M3',
-      stageId: 'stage_de12_01',
-      matchNumber: 3,
-      bracketType: 'UPPER',
-      roundNumber: 1,
-      positionInRound: 3,
-      bestOf: 3,
-      status: 'READY',
-      scoreA: 0,
-      scoreB: 0,
-      teamA: { id: 'team_ir_03', name: 'IRON ARIES', tag: 'IR', seed: 3 },
-      teamB: { id: 'team_sb_06', name: 'SOLAR BLAZE', tag: 'SB', seed: 6 },
-    },
-    {
-      id: 'UB_R1_M4',
-      stageId: 'stage_de12_01',
-      matchNumber: 4,
-      bracketType: 'UPPER',
-      roundNumber: 1,
-      positionInRound: 4,
-      bestOf: 3,
-      status: 'READY',
-      scoreA: 0,
-      scoreB: 0,
-      teamA: { id: 'team_dw_02', name: 'DARK WAVE', tag: 'DW', seed: 2 },
-      teamB: { id: 'team_ph_07', name: 'PHANTOM VEGA', tag: 'PH', seed: 7 },
-    },
-    {
-      id: 'LB_R1_M1',
-      stageId: 'stage_de12_01',
-      matchNumber: 5,
-      bracketType: 'LOWER',
-      roundNumber: 1,
-      positionInRound: 1,
-      bestOf: 3,
-      status: 'PENDING',
-      scoreA: 0,
-      scoreB: 0,
-      teamA: { id: 'team_ns_08', name: 'NOVA STORM', tag: 'NS', seed: 8 },
-      teamB: undefined,
-    },
-  ],
-  mvpPlayer: {
-    playerId: 'p_vip_01',
-    displayName: 'VIPER_99',
-    gameName: 'Viper',
-    tagLine: 'TH1',
-    acs: 312,
-    kd: '2.40',
-  },
-};
+interface TeamInfo {
+  id: string;
+  name: string;
+  tag: string;
+  logo_url: string | null;
+}
 
+// ดึงข้อมูลจริงจาก tournament_stages + bracket_nodes + teams (แทน mockBracketData เดิม)
+// หมายเหตุ: bracket_nodes ยังไม่มีคอลัมน์ score_a/score_b/winner_team_id จริงในระบบ
+// (matches ไม่มี bracket_node_id ให้ join ย้อนกลับ — ดูคอมเมนต์ใน
+// app/api/v1/stages/[id]/bracket/route.ts) จึงตั้งใจไม่ใส่ scoreA/scoreB/winnerTeamId
+// แทนการใส่ค่า mock/0 หลอก ๆ
 export default async function TournamentBracketPage({ params }: PageProps) {
   const { tournamentId } = await params;
+  const supabase = await createClient();
+
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('id, name, type, start_at')
+    .eq('id', tournamentId)
+    .maybeSingle();
+
+  if (!tournament) notFound();
+
+  const { data: stages } = await supabase
+    .from('tournament_stages')
+    .select('id, name, format, stage_order, teams_in')
+    .eq('tournament_id', tournamentId)
+    .order('stage_order', { ascending: false });
+
+  const stage = stages?.[0] ?? null;
+
+  let matches: BracketMatchNode[] = [];
+
+  if (stage) {
+    const { data: nodes } = await supabase
+      .from('bracket_nodes')
+      .select(
+        'id, bracket_type, round_number, position_in_round, label, team_a_id, team_b_id, status, is_bye, best_of'
+      )
+      .eq('stage_id', stage.id)
+      .order('bracket_type', { ascending: true })
+      .order('round_number', { ascending: true })
+      .order('position_in_round', { ascending: true });
+
+    const teamIds = Array.from(
+      new Set((nodes ?? []).flatMap((n) => [n.team_a_id, n.team_b_id]).filter((id): id is string => id !== null))
+    );
+
+    const teamById = new Map<string, TeamInfo>();
+    if (teamIds.length > 0) {
+      const { data: teams } = await supabase.from('teams').select('id, name, tag, logo_url').in('id', teamIds);
+      for (const t of teams ?? []) teamById.set(t.id, t as TeamInfo);
+    }
+
+    const toParticipant = (id: string | null): BracketTeamParticipant | undefined => {
+      if (!id) return undefined;
+      const t = teamById.get(id);
+      if (!t) return undefined;
+      return { id: t.id, name: t.name, tag: t.tag, logoUrl: t.logo_url };
+    };
+
+    matches = (nodes ?? []).map((n, idx) => ({
+      id: n.id,
+      stageId: stage.id,
+      matchNumber: idx + 1,
+      bracketType: n.bracket_type as BracketMatchNode['bracketType'],
+      roundNumber: n.round_number,
+      positionInRound: n.position_in_round,
+      label: n.label ?? undefined,
+      bestOf: n.best_of,
+      status: n.status,
+      teamA: toParticipant(n.team_a_id),
+      teamB: toParticipant(n.team_b_id),
+    }));
+  }
+
+  const teamCount = stage?.teams_in ? `${stage.teams_in} TEAMS` : `${matches.length > 0 ? new Set(matches.flatMap((m) => [m.teamA?.id, m.teamB?.id]).filter(Boolean)).size : 0} TEAMS`;
+  const dateText = tournament.start_at
+    ? new Date(tournament.start_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
+    : 'TBA';
+  const formatText = stage?.format ? `${stage.format.replace(/_/g, ' ')}` : tournament.type;
 
   const data: TournamentBracketPageData = {
-    ...mockBracketData,
-    tournamentId: tournamentId || mockBracketData.tournamentId,
-    tournamentName: tournamentId ? `${mockBracketData.tournamentName}` : mockBracketData.tournamentName,
+    tournamentId: tournament.id,
+    tournamentName: tournament.name,
+    subMetaText: `${dateText} · ${formatText} · ${teamCount}`,
+    prizeZpText: '—',
+    matches,
   };
 
   return <TournamentBracketView data={data} />;

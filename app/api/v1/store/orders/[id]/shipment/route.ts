@@ -18,6 +18,37 @@ export async function GET(
       );
     }
 
+    const { data: player, error: playerError } = await supabase
+      .from('players')
+      .select('id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (playerError || !player) {
+      return NextResponse.json(
+        { error: { code: 'PROFILE_NOT_FOUND', message: 'ไม่พบประวัติโปรไฟล์ของคุณในระบบลีก' } },
+        { status: 404 }
+      );
+    }
+
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('id', orderId)
+      .eq('player_id', player.id)
+      .maybeSingle();
+
+    if (orderError) {
+      return NextResponse.json({ error: { code: 'QUERY_FAILED', message: orderError.message } }, { status: 500 });
+    }
+
+    if (!order) {
+      return NextResponse.json(
+        { error: { code: 'ORDER_NOT_FOUND', message: 'ไม่พบคำสั่งซื้อนี้' } },
+        { status: 404 }
+      );
+    }
+
     const { data: shipment, error } = await supabase
       .from('shipments')
       .select('id, order_id, tracking_number, carrier, status, shipped_at, created_at')

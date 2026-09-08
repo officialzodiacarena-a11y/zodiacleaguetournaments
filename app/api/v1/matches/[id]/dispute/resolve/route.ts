@@ -166,13 +166,25 @@ export async function POST(
       if (decisionErr) throw new Error(`Decision recording failed: ${decisionErr.message}`);
 
       // Call RPC for AP fine deduction if applicable
+      // Fix (2026-09-09): deduct_player_ap_fine() ไม่มีอยู่จริงในระบบ (RPC error
+      // ถูกกลืนเงียบ ๆ ด้วย console.error โดยไม่ block คำขอ) — เปลี่ยนไปเรียก
+      // move_ap() ตรง ๆ ด้วยเหตุผล PENALTY_FINE (จำนวนติดลบ = หักคะแนน) แทน
+      // และ throw จริงเมื่อล้มเหลว ไม่กลืน error เงียบ ๆ อีกต่อไป
       if (penalty.penalizedPlayerId && (penalty.apFineAmount ?? 0) > 0) {
-        const { error: fineErr } = await adminSupabase.rpc('deduct_player_ap_fine', {
+        const { data: fineResult, error: fineErr } = await adminSupabase.rpc('move_ap', {
           p_player_id: penalty.penalizedPlayerId,
-          p_amount: penalty.apFineAmount,
-          p_reason: `Dispute Penalty: ${penalty.notes ?? resolutionNotes}`,
+          p_amount: -Math.abs(penalty.apFineAmount ?? 0),
+          p_reason: 'PENALTY_FINE',
+          p_idempotency_key: `dispute-fine-${disputeId}`,
+          p_reference_type: 'dispute',
+          p_reference_id: disputeId,
         });
-        if (fineErr) console.error('AP fine RPC warning:', fineErr.message);
+
+        if (fineErr || !(fineResult as { success?: boolean } | null)?.success) {
+          throw new Error(
+            `AP fine deduction failed: ${fineErr?.message ?? (fineResult as { error?: string } | null)?.error ?? 'unknown error'}`
+          );
+        }
       }
 
       // Update Athlete Status if suspended/banned

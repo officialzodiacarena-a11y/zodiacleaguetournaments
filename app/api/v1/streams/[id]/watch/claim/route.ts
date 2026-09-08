@@ -62,6 +62,7 @@ export async function POST(
 
     const { data: rpcResult, error: rpcError } = await adminSupabase.rpc('claim_watch_reward', {
       p_session_id: session.id,
+      p_idempotency_key: idempotencyKey,
     });
 
     if (rpcError) {

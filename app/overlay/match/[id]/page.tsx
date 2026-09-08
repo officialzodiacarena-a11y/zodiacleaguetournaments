@@ -82,11 +82,6 @@ export interface MVPlayerStats {
   agent_played: string;
 }
 
-const STUB_TEAMS: Record<string, TeamMetadata> = {
-  "team-zdc-01": { id: "team-zdc-01", name: "ZODIAC FIRE", tag: "ZDC", logo_url: "/branding/logo-icon.svg" },
-  "team-tln-02": { id: "team-tln-02", name: "TALON ESPORTS", tag: "TLN", logo_url: null },
-};
-
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon";
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -131,10 +126,16 @@ export default function MatchBroadcastOverlay({
         const teamAData = Array.isArray(matchData.team_a) ? matchData.team_a[0] : matchData.team_a;
         const teamBData = Array.isArray(matchData.team_b) ? matchData.team_b[0] : matchData.team_b;
 
+        // Fix (2026-09-09): เดิมมี STUB_TEAMS fallback แอบโชว์ชื่อทีมปลอมบนสตรีมสด
+        // เมื่อ query ทีมว่างเปล่า — เปลี่ยนเป็น error state จริงแทน ไม่โชว์ข้อมูลลวง
+        if (!teamAData || !teamBData) {
+          throw new Error('ไม่พบข้อมูลทีมของแมตช์นี้ในระบบ (team_a/team_b ว่างเปล่า)');
+        }
+
         const refinedMatch: MatchData = {
           ...matchData,
-          team_a: teamAData || STUB_TEAMS["team-zdc-01"],
-          team_b: teamBData || STUB_TEAMS["team-tln-02"],
+          team_a: teamAData,
+          team_b: teamBData,
         };
 
         setMatch(refinedMatch);

@@ -12,7 +12,7 @@ function bangkokDateString(date: Date): string {
 // (การ lazy-create จริง ๆ เกิดตอน claim_watch_reward() ทำงาน)
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
