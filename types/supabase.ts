@@ -154,6 +154,7 @@ export type Database = {
           label: string | null
           loser_to_node_id: string | null
           loser_to_slot: string | null
+          match_id: string | null
           position_in_round: number
           reset_from_node_id: string | null
           round_number: number
@@ -179,6 +180,7 @@ export type Database = {
           label?: string | null
           loser_to_node_id?: string | null
           loser_to_slot?: string | null
+          match_id?: string | null
           position_in_round: number
           reset_from_node_id?: string | null
           round_number: number
@@ -204,6 +206,7 @@ export type Database = {
           label?: string | null
           loser_to_node_id?: string | null
           loser_to_slot?: string | null
+          match_id?: string | null
           position_in_round?: number
           reset_from_node_id?: string | null
           round_number?: number
@@ -221,6 +224,13 @@ export type Database = {
           winner_to_slot?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "bracket_nodes_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bracket_nodes_loser_to_node_id_fkey"
             columns: ["loser_to_node_id"]
@@ -307,6 +317,125 @@ export type Database = {
             columns: ["game_id"]
             isOneToOne: false
             referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      circuit_standings: {
+        Row: {
+          circuit_id: string
+          team_id: string
+          spring_zp: number
+          summer_zp: number
+          fall_zp: number
+          winter_zp: number
+          bonus_zp: number
+          penalty_zp: number
+          total_zp: number
+          counted_zp: number
+          rank: number | null
+          tiebreaker_applied: Json | null
+          is_finals_qualified: boolean
+          finals_seed: number | null
+          qualified_at: string | null
+          last_calculated_at: string
+        }
+        Insert: {
+          circuit_id: string
+          team_id: string
+          spring_zp?: number
+          summer_zp?: number
+          fall_zp?: number
+          winter_zp?: number
+          bonus_zp?: number
+          penalty_zp?: number
+          total_zp?: number
+          counted_zp?: number
+          rank?: number | null
+          tiebreaker_applied?: Json | null
+          is_finals_qualified?: boolean
+          finals_seed?: number | null
+          qualified_at?: string | null
+          last_calculated_at?: string
+        }
+        Update: {
+          circuit_id?: string
+          team_id?: string
+          spring_zp?: number
+          summer_zp?: number
+          fall_zp?: number
+          winter_zp?: number
+          bonus_zp?: number
+          penalty_zp?: number
+          total_zp?: number
+          counted_zp?: number
+          rank?: number | null
+          tiebreaker_applied?: Json | null
+          is_finals_qualified?: boolean
+          finals_seed?: number | null
+          qualified_at?: string | null
+          last_calculated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "circuit_standings_circuit_id_fkey"
+            columns: ["circuit_id"]
+            isOneToOne: false
+            referencedRelation: "circuits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "circuit_standings_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hall_of_fame: {
+        Row: {
+          id: string
+          year: number
+          team_id: string
+          team_name: string
+          zodiac_sign: string
+          total_zp: number
+          roster_snapshot: Json
+          finals_seed: number
+          achievements: string[]
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          year: number
+          team_id: string
+          team_name: string
+          zodiac_sign: string
+          total_zp: number
+          roster_snapshot?: Json
+          finals_seed: number
+          achievements?: string[]
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          year?: number
+          team_id?: string
+          team_name?: string
+          zodiac_sign?: string
+          total_zp?: number
+          roster_snapshot?: Json
+          finals_seed?: number
+          achievements?: string[]
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hall_of_fame_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -2082,6 +2211,7 @@ export type Database = {
           created_at: string | null
           entry_fee_ap: number
           format: string
+          format_config: Json
           id: string
           max_teams: number
           name: string
@@ -2096,6 +2226,7 @@ export type Database = {
           created_at?: string | null
           entry_fee_ap?: number
           format: string
+          format_config?: Json
           id?: string
           max_teams?: number
           name: string
@@ -2110,6 +2241,7 @@ export type Database = {
           created_at?: string | null
           entry_fee_ap?: number
           format?: string
+          format_config?: Json
           id?: string
           max_teams?: number
           name?: string
