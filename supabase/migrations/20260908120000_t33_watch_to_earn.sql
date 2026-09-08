@@ -26,27 +26,19 @@ CREATE TABLE IF NOT EXISTS public.streams (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title             TEXT NOT NULL,
     match_id          UUID REFERENCES public.matches(id) ON DELETE SET NULL,
-    status            TEXT NOT NULL DEFAULT 'SCHEDULED',
     is_earn_eligible  BOOLEAN NOT NULL DEFAULT false,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- type ใช้ ENUM stream_type_type ที่มีอยู่แล้วใน DB (ไม่ใช่ TEXT + CHECK)
+-- type/status ใช้ ENUM stream_type_type / stream_status_type ที่มีอยู่แล้วใน DB (ไม่ใช่ TEXT + CHECK)
 ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS type stream_type_type;
+ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS status stream_status_type NOT NULL DEFAULT 'SCHEDULED';
 ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS tournament_id UUID REFERENCES public.tournaments(id) ON DELETE SET NULL;
 ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS earning_rule_id UUID REFERENCES public.ap_earning_rules(id) ON DELETE SET NULL;
 ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS ap_budget_total NUMERIC(10,2);
 ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS ap_budget_spent NUMERIC(10,2) NOT NULL DEFAULT 0;
 ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS stream_url TEXT;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'streams_status_check') THEN
-        ALTER TABLE public.streams
-            ADD CONSTRAINT streams_status_check CHECK (status IN ('SCHEDULED', 'LIVE', 'ENDED', 'CANCELLED'));
-    END IF;
-END $$;
 
 CREATE INDEX IF NOT EXISTS idx_streams_status ON public.streams (status);
 CREATE INDEX IF NOT EXISTS idx_streams_tournament ON public.streams (tournament_id);
