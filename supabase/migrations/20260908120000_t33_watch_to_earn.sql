@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS public.streams (
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'OFFICIAL';
+-- type ใช้ ENUM stream_type_type ที่มีอยู่แล้วใน DB (ไม่ใช่ TEXT + CHECK)
+ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS type stream_type_type;
 ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS tournament_id UUID REFERENCES public.tournaments(id) ON DELETE SET NULL;
 ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS earning_rule_id UUID REFERENCES public.ap_earning_rules(id) ON DELETE SET NULL;
 ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS ap_budget_total NUMERIC(10,2);
@@ -41,10 +42,6 @@ ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS stream_url TEXT;
 
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'streams_type_check') THEN
-        ALTER TABLE public.streams
-            ADD CONSTRAINT streams_type_check CHECK (type IN ('OFFICIAL', 'COMMUNITY', 'VOD'));
-    END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'streams_status_check') THEN
         ALTER TABLE public.streams
             ADD CONSTRAINT streams_status_check CHECK (status IN ('SCHEDULED', 'LIVE', 'ENDED', 'CANCELLED'));

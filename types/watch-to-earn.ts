@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-export const StreamTypeEnum = z.enum(['OFFICIAL', 'COMMUNITY', 'VOD']);
+// ต้องตรงกับ ENUM stream_type_type ที่มีอยู่แล้วใน DB
+export const StreamTypeEnum = z.enum(['LIVE_MATCH', 'VOD', 'HIGHLIGHT', 'CREATOR', 'OFFICIAL']);
 export const StreamStatusEnum = z.enum(['SCHEDULED', 'LIVE', 'ENDED', 'CANCELLED']);
 
 export const CreateStreamSchema = z.object({
