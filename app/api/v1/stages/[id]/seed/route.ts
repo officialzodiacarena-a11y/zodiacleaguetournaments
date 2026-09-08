@@ -1,49 +1,3 @@
-// POST /api/v1/stages/:id/seed
-// T2.2-A05 — validate teams, generate the bracket, move the stage into SEEDING.
-//
-// Spec ambiguity, resolved explicitly (flagging this, not hiding it): the
-// business rules in Sprint2.2_Spec.md 2.2.B say this call requires the stage
-// to already be status = SEEDING ("422 STAGE_NOT_IN_SEEDING"), but the task
-// table for T2.2-A05 itself says this endpoint's own job is to "set stage
-// status -> SEEDING". Those two can't both be true. This implementation
-// follows the task description: precondition is PENDING, and a successful
-// call is what moves the stage to SEEDING (matching the documented
-// PENDING -> SEEDING -> ACTIVE -> COMPLETED flow from 2.2.A). The error code
-// for the precondition failure is STAGE_NOT_PENDING, not the spec's
-// STAGE_NOT_IN_SEEDING, because that name only makes sense under the other
-// reading. Flag this to product/spec owner if the intent was reversed.
-//
-// SINGLE_ELIMINATION (lib/tournament/generateSingleEliminationBracket.ts),
-// DOUBLE_ELIMINATION (lib/tournament/generateDoubleEliminationBracket.ts,
-// T2.2-B03 -- exact power-of-2 team counts only, see that file's header) and
-// ROUND_ROBIN/GROUP_STAGE (lib/tournament/generateRoundRobinBracket.ts,
-// T2.2-B04) are implemented here. Anything else is rejected with
-// UNSUPPORTED_STAGE_FORMAT rather than silently mishandled.
-//
-// Grand Final advantage (format_config.grand_final_advantage /
-// advantage_type) is intentionally NOT read or stored here: bracket_nodes
-// has no column to hold it (see ERD_Draft.md 2.7 / migration_block2_
-// sprint2.2.sql -- no format_config field on this table), and per T2.2-B03's
-// own scope, the bracket-reset node it would affect is only ever created at
-// result-recording time (D05), which can read format_config directly off
-// tournament_stages via the Grand Final node's stage_id when it needs it.
-// There is nothing for B03 to persist today.
-//
-// ROUND_ROBIN/GROUP_STAGE needs a DB prereq too: it writes group_label onto
-// tournament_registrations, but the deployed table (Sprint 2.1) doesn't have
-// that column -- see Hub4_DB_API_QA/T2.2-B04-prereq_tournament_registrations_
-// group_label.sql (same pattern as T2.2-A03-prereq for tournament_stages).
-// Run that migration before using this format; if it hasn't run yet, seeding
-// a ROUND_ROBIN/GROUP_STAGE stage fails with a Postgres "column does not
-// exist" error surfaced as BRACKET_GENERATION_FAILED.
-//
-// "Teams are CHECKED_IN" (per spec) is checked against
-// tournament_registrations.status = 'APPROVED' -- the deployed
-// tournament_registrations enum (PENDING/ELIGIBLE/APPROVED/REJECTED, from
-// Sprint 2.1) has no CHECKED_IN value at all, and no Sprint 2.2 task adds a
-// check-in step, so there is nothing else it could mean yet. APPROVED is the
-// closest existing signal for "this team is confirmed for the tournament."
-
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -62,9 +16,6 @@ function bestOfForRound(bestOfConfig: unknown, roundNumber: number, totalRounds:
   return pick('default') ?? 1;
 }
 
-// Grand Final always gets the 'final' tier; an Upper/Lower Final is a step
-// below that (it only decides who reaches Grand Final), so it gets
-// 'semifinal' the same way single-elimination's second-to-last round does.
 function bestOfForDoubleEliminationNode(
   bestOfConfig: unknown,
   node: PlannedDENode,
@@ -86,13 +37,17 @@ function bestOfForDoubleEliminationNode(
   return pick('default') ?? 1;
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id: stageId } = await params;
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id: stageId } = await context.params;
   const supabase = await createClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
   if (!user) {
     return NextResponse.json(
       { error: { code: 'UNAUTHENTICATED', message: 'กรุณาเข้าสู่ระบบก่อน' } },
@@ -102,15 +57,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   let body: Record<string, unknown>;
   try {
-    body = await request.json();
+    body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return NextResponse.json({ error: { code: 'VALIDATION_ERROR', message: 'invalid JSON body' } }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: 'VALIDATION_ERROR', message: 'invalid JSON body' } },
+      { status: 400 }
+    );
   }
 
   const rawSeededTeams = body.seeded_teams;
   if (!Array.isArray(rawSeededTeams) || rawSeededTeams.length < 2) {
     return NextResponse.json(
-      { error: { code: 'VALIDATION_ERROR', message: 'seeded_teams must be an array of at least 2 { team_id, seed }' } },
+      {
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'seeded_teams must be an array of at least 2 { team_id, seed }',
+        },
+      },
       { status: 400 }
     );
   }
@@ -119,9 +82,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const seenSeeds = new Set<number>();
   for (const entry of rawSeededTeams) {
     const e = entry as Record<string, unknown>;
-    if (typeof e.team_id !== 'string' || typeof e.seed !== 'number' || !Number.isInteger(e.seed) || e.seed <= 0) {
+    if (
+      typeof e.team_id !== 'string' ||
+      typeof e.seed !== 'number' ||
+      !Number.isInteger(e.seed) ||
+      e.seed <= 0
+    ) {
       return NextResponse.json(
-        { error: { code: 'VALIDATION_ERROR', message: 'each seeded_teams entry needs a string team_id and a positive integer seed' } },
+        {
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'each seeded_teams entry needs a string team_id and a positive integer seed',
+          },
+        },
         { status: 400 }
       );
     }
@@ -142,7 +115,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .maybeSingle();
 
   if (!stage) {
-    return NextResponse.json({ error: { code: 'STAGE_NOT_FOUND', message: 'ไม่พบ stage นี้' } }, { status: 404 });
+    return NextResponse.json(
+      { error: { code: 'STAGE_NOT_FOUND', message: 'ไม่พบ stage นี้' } },
+      { status: 404 }
+    );
   }
 
   if (stage.status !== 'PENDING') {
@@ -187,6 +163,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .from('bracket_nodes')
     .select('id', { count: 'exact', head: true })
     .eq('stage_id', stageId);
+
   if (existingNodeCount && existingNodeCount > 0) {
     return NextResponse.json(
       { error: { code: 'BRACKET_ALREADY_GENERATED', message: 'Bracket ของ stage นี้ถูก generate ไปแล้ว' } },
@@ -194,10 +171,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  // tournament_registrations RLS only lets a caller read their OWN team's
-  // registration (registrations_team_read) -- an Org Admin checking every
-  // competing team's approval status is a legitimate cross-team read that
-  // policy doesn't cover, so this specific lookup needs the admin client.
   const teamIds = seededTeams.map((t) => t.team_id);
   const admin = createAdminClient();
   const { data: approvedRegs } = await admin
@@ -222,22 +195,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  // Compensating cleanup shared by both formats -- delete everything this
-  // call created so a failed generation doesn't leave a half-built bracket
-  // behind. Uses admin client since a mid-request RLS/permission hiccup
-  // shouldn't block cleanup of rows this same call just wrote.
   async function cleanupAndFail(insertedIds: string[], err: unknown, groupLabelTeamIds: string[] = []) {
     if (insertedIds.length > 0) {
       await admin.from('bracket_nodes').delete().in('id', insertedIds);
     }
-    if (groupLabelTeamIds.length > 0) {
+    if (groupLabelTeamIds.length > 0 && stage) {
       await admin
         .from('tournament_registrations')
         .update({ group_label: null })
-        // Non-null: this closure only ever runs after the `if (!stage)`
-        // guard above already returned, but TS can't see that across the
-        // closure boundary.
-        .eq('tournament_id', stage!.tournament_id)
+        .eq('tournament_id', stage.tournament_id)
         .in('team_id', groupLabelTeamIds);
     }
     const message = err instanceof Error ? err.message : 'failed to generate bracket';
@@ -251,6 +217,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .eq('id', stageId)
       .select('id, status')
       .single();
+
     if (stageUpdateError || !stageUpdateData) {
       throw new Error(stageUpdateError?.message ?? 'failed to move stage into SEEDING');
     }
@@ -261,9 +228,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const rounds = planSingleEliminationBracket(seededTeams);
     const totalRounds = rounds.length;
 
-    // Phase 1: insert every node with only its self-contained fields, keep
-    // track of (round,position) -> id so phase 2 can wire cross-round links
-    // in either direction regardless of insert order.
     const idByRoundPosition = new Map<string, string>();
     const insertedIds: string[] = [];
     let updatedStage: { id: string; status: string };
@@ -295,8 +259,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
       }
 
-      // Phase 2: wire winner_to_node_id/slot (child -> parent) and
-      // source_a/b_node_id (parent -> child) now that every id is known.
       for (const round of rounds) {
         for (const node of round) {
           const nodeId = idByRoundPosition.get(`${node.round_number}-${node.position_in_round}`)!;
@@ -327,10 +289,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
       }
 
-      // Flip the stage to SEEDING as part of the same attempt -- if this fails,
-      // the compensating cleanup must still run, otherwise the bracket rows
-      // would be committed while the stage stays PENDING, and a retry would
-      // immediately hit BRACKET_ALREADY_GENERATED with no way out.
       updatedStage = await moveStageToSeeding();
     } catch (err) {
       return cleanupAndFail(insertedIds, err);
@@ -362,9 +320,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const upperTotalRounds = Math.max(...plannedNodes.filter((n) => n.bracket_type === 'UPPER').map((n) => n.round_number));
     const lowerTotalRounds = Math.max(...plannedNodes.filter((n) => n.bracket_type === 'LOWER').map((n) => n.round_number));
 
-    // Phase 1: insert every node with only its self-contained fields, keyed by
-    // "bracket_type:round:position" so phase 2 can resolve every source_a/b,
-    // winner_to and loser_to link regardless of insert order.
     const idByRef = new Map<string, string>();
     const insertedIds: string[] = [];
     let updatedStage: { id: string; status: string };
@@ -395,10 +350,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         idByRef.set(refKey, inserted.id);
       }
 
-      // Phase 2: every link was already computed explicitly by the planner
-      // (unlike single-elimination, cross-bracket-type links here don't follow
-      // simple position math), so this just resolves refs to the ids from
-      // phase 1.
       for (const node of plannedNodes) {
         const nodeId = idByRef.get(`${node.bracket_type}:${node.round_number}:${node.position_in_round}`)!;
         const patch: Record<string, unknown> = {};
@@ -450,7 +401,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  // ROUND_ROBIN / GROUP_STAGE (T2.2-B04)
   const formatConfig = (stage.format_config ?? {}) as Record<string, unknown>;
   let roundRobinPlan: ReturnType<typeof planRoundRobinBracket>;
   try {
@@ -463,11 +413,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: { code: 'INVALID_ROUND_ROBIN_CONFIG', message } }, { status: 422 });
   }
 
-  // 'semifinal'/'final' best_of_config tiers don't apply to a round-robin's
-  // internal matchdays (there's no elimination depth), so every match just
-  // uses the flat 'default' tier -- computed once here rather than via
-  // bestOfForRound, which would wrongly treat round 1 as both the first and
-  // the final round for a single-round-count call.
   const roundRobinBestOfConfig = (stage.best_of_config ?? {}) as Record<string, unknown>;
   const roundRobinBestOf =
     typeof roundRobinBestOfConfig.default === 'number' && roundRobinBestOfConfig.default > 0
@@ -479,10 +424,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let updatedStage: { id: string; status: string };
 
   try {
-    // Assign group_label per group first -- if this fails partway (e.g. the
-    // prereq migration hasn't run and the column doesn't exist), nothing has
-    // been inserted into bracket_nodes yet, so there's nothing to clean up
-    // beyond the group_label writes this loop itself already made.
     for (const group of roundRobinPlan.groups) {
       const { error } = await admin
         .from('tournament_registrations')
@@ -504,10 +445,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           team_a_id: node.team_a_id,
           team_b_id: node.team_b_id,
           is_bye: false,
-          // Round robin has no bracket graph -- every match's teams are
-          // known up front from the schedule, so every node is READY
-          // immediately, unlike elimination brackets where later rounds
-          // start PENDING until an earlier match resolves.
           status: 'READY',
           best_of: roundRobinBestOf,
         })

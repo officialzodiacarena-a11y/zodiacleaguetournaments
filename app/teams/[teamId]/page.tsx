@@ -1,18 +1,27 @@
-// app/teams/[teamId]/page.tsx
-
 import React from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { TeamProfileData, PlayerSlot, TeamRoleType } from '@/types/team';
+import type { TeamProfileData, PlayerSlot, TeamRoleType } from '@/types/team';
 import { lockRosterAction } from '@/actions/team';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+interface PageProps {
+  params: Promise<{ teamId: string }>;
+}
+
+interface GameAccountRow {
+  verification_status: string;
+  game_id: string;
+  game_name: string | null;
+  tag_line: string | null;
+}
+
 interface PlayerJoinRow {
+  id: string;
   display_name: string;
   real_name: string | null;
   slug: string | null;
-  id: string;
-  game_accounts: { verification_status: string; game_id: string }[] | { verification_status: string; game_id: string } | null;
+  game_accounts?: GameAccountRow[] | GameAccountRow | null;
 }
 
 interface MemberRow {
@@ -20,7 +29,7 @@ interface MemberRow {
   role: TeamRoleType;
   jersey_number: number | null;
   player_id: string;
-  players: PlayerJoinRow[] | PlayerJoinRow | null;
+  players?: PlayerJoinRow[] | PlayerJoinRow | null;
 }
 
 function initialsFromName(name: string): string {
@@ -39,19 +48,14 @@ function formatZp(n: number): string {
   return String(n);
 }
 
-function one<T>(rel: T[] | T | null): T | null {
+function one<T>(rel: T[] | T | null | undefined): T | null {
   if (Array.isArray(rel)) return rel[0] ?? null;
-  return rel;
+  return rel ?? null;
 }
 
-async function getTeamProfileData(teamIdParam: string): Promise<TeamProfileData | null> {
-  // ใช้ service role เพราะ Team Profile ต้องเป็นหน้า public (ดูโปรไฟล์ทีม + roster ได้โดยไม่ต้อง login)
-  // แต่ RLS ปัจจุบันของ players / team_members / organizations / game_accounts ไม่มี (หรือยัง verify
-  // ไม่ได้ว่ามี) public-read policy ที่ใช้งานได้จริง — ดู bug note ที่ส่งแยกให้ทีม DB
+async function getTeamProfileData(teamIdParam: string): Promise<(TeamProfileData & { requiredCount: number }) | null> {
   const supabase = createAdminClient();
 
-  // teamId ในเส้นทางอาจเป็น UUID จริง หรือ slug ก็ได้ — เทียบกับ id เฉพาะตอนที่รูปแบบเป็น UUID
-  // เท่านั้น เพราะ Postgres จะพยายาม cast ทุกฝั่งของ .or() เป็น UUID ทันทีถ้า id.eq. ปรากฏอยู่
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(teamIdParam);
   const teamQuery = supabase
     .from('teams')
@@ -69,9 +73,7 @@ async function getTeamProfileData(teamIdParam: string): Promise<TeamProfileData 
   const [{ data: members }, { count: tournamentsEntered }, { data: circuits }] = await Promise.all([
     supabase
       .from('team_members')
-      .select(
-        'id, role, jersey_number, player_id, players!team_members_player_id_fkey(id, display_name, real_name, slug, game_accounts!game_accounts_player_id_fkey(verification_status, game_id))'
-      )
+      .select('id, role, jersey_number, player_id, players(id, display_name, real_name, slug, game_accounts(verification_status, game_id, game_name, tag_line))')
       .eq('team_id', team.id)
       .eq('status', 'ACTIVE'),
     supabase.from('tournament_registrations').select('id', { count: 'exact', head: true }).eq('team_id', team.id),
@@ -106,16 +108,20 @@ async function getTeamProfileData(teamIdParam: string): Promise<TeamProfileData 
       const gameAccounts = Array.isArray(player.game_accounts)
         ? player.game_accounts
         : player.game_accounts
-          ? [player.game_accounts]
-          : [];
-      const isVerified = gameAccounts.some(
-        (ga) => ga.game_id === team.game_id && ga.verification_status === 'VERIFIED'
-      );
+        ? [player.game_accounts]
+        : [];
+      const matchingAccount = gameAccounts.find((ga) => ga.game_id === team.game_id);
+      const isVerified = matchingAccount?.verification_status === 'VERIFIED';
+      const riotId =
+        matchingAccount?.game_name && matchingAccount?.tag_line
+          ? `${matchingAccount.game_name}#${matchingAccount.tag_line}`
+          : 'ยังไม่ผูก Riot ID';
 
       const displayName = player.real_name ?? player.display_name;
       const slot: PlayerSlot = {
         id: m.id,
         userId: player.id,
+        riotId,
         handle: player.display_name,
         fullNameTh: displayName,
         initials: initialsFromName(player.display_name),
@@ -160,7 +166,7 @@ async function getTeamProfileData(teamIdParam: string): Promise<TeamProfileData 
     substitutes,
   };
 
-  return { ...data, requiredCount } as TeamProfileData & { requiredCount: number };
+  return { ...data, requiredCount };
 }
 
 const roleStyles: Record<TeamRoleType, { stripe: string; badge: string; text: string }> = {
@@ -196,11 +202,7 @@ const roleStyles: Record<TeamRoleType, { stripe: string; badge: string; text: st
   },
 };
 
-export default async function TeamProfilePage({
-  params,
-}: {
-  params: Promise<{ teamId: string }>;
-}) {
+export default async function TeamProfilePage({ params }: PageProps) {
   const { teamId } = await params;
   const result = await getTeamProfileData(teamId);
 
@@ -208,10 +210,15 @@ export default async function TeamProfilePage({
     notFound();
   }
 
-  const { requiredCount, ...data } = result as TeamProfileData & { requiredCount: number };
+  const { requiredCount, ...data } = result;
+
+  async function handleLockRoster() {
+    'use server';
+    await lockRosterAction(data.id);
+  }
 
   return (
-    <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20">
+    <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 select-none">
       {/* 1. TOP NAV */}
       <nav className="sticky top-0 z-50 flex h-[60px] items-center justify-between border-b border-[#E8B429]/20 bg-[#0D0E1A]/95 px-6 md:px-12 backdrop-blur-md">
         <div className="flex items-center gap-2.5 font-bold tracking-[2px] text-[#E8B429]">
@@ -253,7 +260,7 @@ export default async function TeamProfilePage({
                     {data.tag}
                   </span>
                 </div>
-                <h1 className="text-3xl md:text-5xl font-extrabold tracking-wider bg-gradient-to-r from-white via-white to-[#E8B429] bg-clip-text text-transparent mb-3.5">
+                <h1 className="text-3xl md:text-5xl font-extrabold tracking-wider bg-gradient-to-r from-white via-white to-[#E8B429] bg-clip-text text-transparent mb-3.5 font-mono">
                   {data.name}
                 </h1>
                 <div className="flex items-center gap-4 text-xs">
@@ -297,7 +304,7 @@ export default async function TeamProfilePage({
             <span className="text-xs font-bold tracking-[3px] text-[#b2b6ca] uppercase">นักกีฬาหลัก · STARTING ROSTER</span>
             <div className="h-[1px] w-10 bg-gradient-to-r from-[#E8B429] to-transparent" />
           </div>
-          <span className="text-[11px] text-[#75798c] tracking-wider">
+          <span className="text-[11px] text-[#75798c] tracking-wider font-mono">
             {data.startingRoster.length} / {requiredCount} SLOTS FILLED
           </span>
         </div>
@@ -310,7 +317,7 @@ export default async function TeamProfilePage({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-5">
             {data.startingRoster.map((player) => {
-              const role = roleStyles[player.role];
+              const role = roleStyles[player.role] || roleStyles.PLAYER;
               return (
                 <div
                   key={player.id}
@@ -335,8 +342,8 @@ export default async function TeamProfilePage({
                         {role.text}
                       </span>
                     </div>
-                    <div className="text-base font-bold text-white tracking-wide">{player.handle}</div>
-                    <div className="text-[11px] text-[#9397ab] mb-2.5">{player.fullNameTh}</div>
+                    <div className="text-base font-bold text-white tracking-wide truncate">{player.handle}</div>
+                    <div className="text-[11px] text-[#9397ab] mb-2.5 truncate">{player.fullNameTh}</div>
                     <div className="flex items-center justify-between border-t border-white/5 pt-2 text-center">
                       <div>
                         <div className="text-sm font-bold text-[#cfd3e5]">
@@ -391,21 +398,16 @@ export default async function TeamProfilePage({
         <div className="flex flex-wrap items-center gap-3 mb-9">
           <button
             type="button"
-            className="flex items-center gap-2 rounded-lg border border-[#E8B429] bg-transparent px-5 py-2 text-xs font-bold tracking-wider text-[#E8B429] hover:bg-[#E8B429]/15 hover:shadow-[0_0_16px_rgba(232,180,41,0.25)] transition-all"
+            className="flex items-center gap-2 rounded-lg border border-[#E8B429] bg-transparent px-5 py-2 text-xs font-bold tracking-wider text-[#E8B429] hover:bg-[#E8B429]/15 hover:shadow-[0_0_16px_rgba(232,180,41,0.25)] transition-all cursor-pointer"
           >
             + เชิญผู้เล่น / INVITE PLAYER
           </button>
 
-          <form
-            action={async () => {
-              'use server';
-              await lockRosterAction(data.id);
-            }}
-          >
+          <form action={handleLockRoster}>
             <button
               type="submit"
               disabled={data.rosterStatus === 'LOCKED'}
-              className="flex items-center gap-2 rounded-lg bg-[#E8B429] px-5 py-2 text-xs font-bold tracking-wider text-[#0D0E1A] hover:shadow-[0_0_20px_rgba(232,180,41,0.4)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 rounded-lg bg-[#E8B429] px-5 py-2 text-xs font-bold tracking-wider text-[#0D0E1A] hover:shadow-[0_0_20px_rgba(232,180,41,0.4)] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               🔒 ล็อก Roster / LOCK ROSTER
             </button>
@@ -431,28 +433,28 @@ export default async function TeamProfilePage({
           </div>
           <div className="relative grid grid-cols-2 md:grid-cols-4 overflow-hidden rounded-xl border border-[#E8B429]/25 bg-[#1A1C2E]">
             <div className="p-6 text-center border-b md:border-b-0 md:border-r border-white/5">
-              <div className="text-3xl font-extrabold bg-gradient-to-b from-white to-[#E8B429] bg-clip-text text-transparent mb-1">
+              <div className="text-3xl font-extrabold bg-gradient-to-b from-white to-[#E8B429] bg-clip-text text-transparent mb-1 font-mono">
                 {data.stats.tournamentsEntered}
               </div>
               <div className="text-[10px] font-semibold text-[#9397ab] uppercase">Tournaments Entered</div>
               <div className="text-[10px] text-[#75798c]">ALL TIME</div>
             </div>
             <div className="p-6 text-center border-b md:border-b-0 md:border-r border-white/5">
-              <div className="text-3xl font-extrabold bg-gradient-to-b from-white to-[#E8B429] bg-clip-text text-transparent mb-1">
+              <div className="text-3xl font-extrabold bg-gradient-to-b from-white to-[#E8B429] bg-clip-text text-transparent mb-1 font-mono">
                 {data.stats.wins}
               </div>
               <div className="text-[10px] font-semibold text-[#9397ab] uppercase">Total Wins</div>
               <div className="text-[10px] text-[#75798c]">ALL MATCHES</div>
             </div>
             <div className="p-6 text-center border-r border-white/5">
-              <div className="text-3xl font-extrabold bg-gradient-to-b from-white to-[#E8B429] bg-clip-text text-transparent mb-1">
+              <div className="text-3xl font-extrabold bg-gradient-to-b from-white to-[#E8B429] bg-clip-text text-transparent mb-1 font-mono">
                 {data.stats.zpEarned}
               </div>
               <div className="text-[10px] font-semibold text-[#9397ab] uppercase">ZP Earned</div>
               <div className="text-[10px] text-[#75798c]">ZODIAC POINTS</div>
             </div>
             <div className="p-6 text-center">
-              <div className="text-3xl font-extrabold bg-gradient-to-b from-white to-[#E8B429] bg-clip-text text-transparent mb-1">
+              <div className="text-3xl font-extrabold bg-gradient-to-b from-white to-[#E8B429] bg-clip-text text-transparent mb-1 font-mono">
                 {data.stats.winRate}%
               </div>
               <div className="text-[10px] font-semibold text-[#9397ab] uppercase">Win Rate Overall</div>

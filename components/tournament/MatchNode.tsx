@@ -32,8 +32,8 @@ export const MatchNode: React.FC<MatchNodeProps> = ({
     return 'border-white/5 bg-[#121422]/70 opacity-60';
   };
 
-  const isTeamAWinner = isCompleted && Boolean(node.teamA?.isWinner);
-  const isTeamBWinner = isCompleted && Boolean(node.teamB?.isWinner);
+  const isTeamAWinner = isCompleted && Boolean(node.winnerTeamId) && node.winnerTeamId === node.teamA?.id;
+  const isTeamBWinner = isCompleted && Boolean(node.winnerTeamId) && node.winnerTeamId === node.teamB?.id;
 
   return (
     <div
@@ -76,13 +76,13 @@ export const MatchNode: React.FC<MatchNodeProps> = ({
               {node.teamA?.name ?? (node.teamA ? 'Loading...' : 'TBD')}
             </span>
           </div>
-          {node.teamA?.score !== undefined && node.teamA?.score !== null && (
+          {node.scoreA !== undefined && node.scoreA !== null && (
             <span
               className={`font-mono text-xs font-black ${
                 isTeamAWinner ? 'text-[#E8B429]' : 'text-[#75798c]'
               }`}
             >
-              {node.teamA.score}
+              {node.scoreA}
             </span>
           )}
         </div>
@@ -100,13 +100,13 @@ export const MatchNode: React.FC<MatchNodeProps> = ({
               {node.teamB?.name ?? (node.teamB ? 'Loading...' : 'TBD')}
             </span>
           </div>
-          {node.teamB?.score !== undefined && node.teamB?.score !== null && (
+          {node.scoreB !== undefined && node.scoreB !== null && (
             <span
               className={`font-mono text-xs font-black ${
                 isTeamBWinner ? 'text-[#E8B429]' : 'text-[#75798c]'
               }`}
             >
-              {node.teamB.score}
+              {node.scoreB}
             </span>
           )}
         </div>

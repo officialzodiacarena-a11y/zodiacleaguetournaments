@@ -65,6 +65,16 @@ export interface PlannedDENode {
 
 export function planDoubleEliminationBracket(teams: SeededTeam[]): PlannedDENode[] {
   const teamCount = teams.length;
+
+  // 12 teams is a common non-power-of-2 field size (byes = bracketSize/2
+  // exactly, the one case the SCOPE LIMITATION below can still handle
+  // cleanly) -- planned separately below rather than folded into the
+  // power-of-2 loop, since its lower-bracket shape doesn't follow the
+  // uniform round-doubling pattern the general algorithm relies on.
+  if (teamCount === 12) {
+    return planDoubleElimination12(teams);
+  }
+
   const bracketSize = nextPowerOfTwo(teamCount);
   if (teamCount < 4 || bracketSize !== teamCount) {
     throw new Error(
@@ -210,6 +220,173 @@ export function planDoubleEliminationBracket(teams: SeededTeam[]): PlannedDENode
 
   // Lower Final winner -> Grand Final slot B.
   link(get('LOWER', lowerRounds, 1), get('GRAND_FINAL', 1, 1), 'WINNER', 'B');
+
+  return Array.from(nodes.values());
+}
+
+// ── 12-team double elimination ──────────────────────────────────────────
+//
+// 12 doesn't fit the power-of-2 loop above: seeds 1-4 bye straight into
+// Upper Round 2 (standard for this field size), so Upper Round 1 is only
+// an 8-team bracket among seeds 5-12. That means only 4 losers enter the
+// lower bracket after Upper R1, then another 4 after Upper R2 -- 2 + 4 = 6
+// entrants feeding a round that can't split into even pairs the way the
+// generic power-of-2 algorithm assumes.
+//
+// Round-by-round shape (verified against the standard total-match count
+// for double elimination, 2*N-2 = 22 matches for N=12: 11 upper + 10 lower
+// + 1 grand final):
+//   UPPER R1 (4 matches): seeds 5-12, standard "top seeds meet last" pairing
+//   UPPER R2 (4 matches): seeds 1-4 (bye) vs UPPER R1 winners
+//   UPPER R3 (2 matches): semifinals
+//   UPPER R4 (1 match):   upper final
+//   LOWER R1 (2 matches): the 4 UPPER R1 losers
+//   LOWER R2 (3 matches): 2 LOWER R1 winners each meet one UPPER R2 loser;
+//                         the remaining 2 UPPER R2 losers play each other
+//   LOWER R3 (1 match):   the two "met a fresh dropout" LOWER R2 winners
+//                         play each other; the winner of the "two dropouts"
+//                         LOWER R2 match instead skips straight to LOWER R4
+//                         (an unavoidable bye once the field stops being a
+//                         clean power of 2 -- see the SCOPE LIMITATION
+//                         comment above)
+//   LOWER R4 (2 matches): the two LOWER R3-stage winners each meet one of
+//                         the 2 UPPER R3 (semifinal) losers
+//   LOWER R5 (1 match):   lower semifinal
+//   LOWER R6 (1 match):   lower final, vs the UPPER R4 (upper final) loser
+//   GRAND FINAL (1 match): UPPER R4 winner vs LOWER R6 winner
+function planDoubleElimination12(teams: SeededTeam[]): PlannedDENode[] {
+  if (teams.length !== 12) {
+    throw new Error(`planDoubleElimination12 requires exactly 12 teams (got ${teams.length})`);
+  }
+
+  const teamBySeed = new Map(teams.map((t) => [t.seed, t.team_id]));
+  for (let seed = 1; seed <= 12; seed++) {
+    if (!teamBySeed.has(seed)) {
+      throw new Error(`double elimination 12-team bracket requires seeds 1-12; missing seed ${seed}`);
+    }
+  }
+
+  const nodes = new Map<string, PlannedDENode>();
+  const key = (bt: DEBracketType, r: number, p: number) => `${bt}:${r}:${p}`;
+
+  function makeNode(
+    bracket_type: DEBracketType,
+    round_number: number,
+    position_in_round: number,
+    team_a_id: string | null = null,
+    team_b_id: string | null = null,
+    status: 'READY' | 'PENDING' = 'PENDING'
+  ): PlannedDENode {
+    const node: PlannedDENode = {
+      bracket_type,
+      round_number,
+      position_in_round,
+      team_a_id,
+      team_b_id,
+      is_bye: false,
+      status,
+      source_a: null,
+      source_b: null,
+      winner_to: null,
+      loser_to: null,
+    };
+    nodes.set(key(bracket_type, round_number, position_in_round), node);
+    return node;
+  }
+
+  function get(bt: DEBracketType, r: number, p: number): PlannedDENode {
+    const node = nodes.get(key(bt, r, p));
+    if (!node) throw new Error(`internal error: missing planned node ${bt}:${r}:${p}`);
+    return node;
+  }
+
+  function link(from: PlannedDENode, to: PlannedDENode, outcome: 'WINNER' | 'LOSER', slot: 'A' | 'B') {
+    const fromRef: DENodeRef = { bracket_type: from.bracket_type, round: from.round_number, position: from.position_in_round };
+    const toRef: DENodeRef = { bracket_type: to.bracket_type, round: to.round_number, position: to.position_in_round };
+    if (outcome === 'WINNER') from.winner_to = { ref: toRef, slot };
+    else from.loser_to = { ref: toRef, slot };
+    if (slot === 'A') to.source_a = { ref: fromRef, outcome };
+    else to.source_b = { ref: fromRef, outcome };
+  }
+
+  const seed = (s: number) => teamBySeed.get(s)!;
+
+  // UPPER R1: seeds 5-12 only, standard mini 8-bracket seeding (local ranks
+  // 1-8 = seeds 5-12 -> pairs [1,8][4,5][2,7][3,6] -> [5,12][8,9][6,11][7,10]).
+  makeNode('UPPER', 1, 1, seed(5), seed(12), 'READY');
+  makeNode('UPPER', 1, 2, seed(8), seed(9), 'READY');
+  makeNode('UPPER', 1, 3, seed(6), seed(11), 'READY');
+  makeNode('UPPER', 1, 4, seed(7), seed(10), 'READY');
+
+  // UPPER R2: seeds 1-4 bye in, waiting for their UPPER R1 opponent.
+  makeNode('UPPER', 2, 1, seed(1), null, 'PENDING');
+  makeNode('UPPER', 2, 2, seed(4), null, 'PENDING');
+  makeNode('UPPER', 2, 3, seed(2), null, 'PENDING');
+  makeNode('UPPER', 2, 4, seed(3), null, 'PENDING');
+
+  makeNode('UPPER', 3, 1); // semifinal
+  makeNode('UPPER', 3, 2); // semifinal
+  makeNode('UPPER', 4, 1); // upper final
+
+  makeNode('LOWER', 1, 1);
+  makeNode('LOWER', 1, 2);
+  makeNode('LOWER', 2, 1);
+  makeNode('LOWER', 2, 2);
+  makeNode('LOWER', 2, 3);
+  makeNode('LOWER', 3, 1);
+  makeNode('LOWER', 4, 1);
+  makeNode('LOWER', 4, 2);
+  makeNode('LOWER', 5, 1); // lower semifinal
+  makeNode('LOWER', 6, 1); // lower final
+
+  makeNode('GRAND_FINAL', 1, 1);
+
+  // UPPER progression.
+  link(get('UPPER', 1, 1), get('UPPER', 2, 1), 'WINNER', 'B');
+  link(get('UPPER', 1, 2), get('UPPER', 2, 2), 'WINNER', 'B');
+  link(get('UPPER', 1, 3), get('UPPER', 2, 3), 'WINNER', 'B');
+  link(get('UPPER', 1, 4), get('UPPER', 2, 4), 'WINNER', 'B');
+  link(get('UPPER', 1, 1), get('LOWER', 1, 1), 'LOSER', 'A');
+  link(get('UPPER', 1, 2), get('LOWER', 1, 1), 'LOSER', 'B');
+  link(get('UPPER', 1, 3), get('LOWER', 1, 2), 'LOSER', 'A');
+  link(get('UPPER', 1, 4), get('LOWER', 1, 2), 'LOSER', 'B');
+
+  link(get('UPPER', 2, 1), get('UPPER', 3, 1), 'WINNER', 'A');
+  link(get('UPPER', 2, 2), get('UPPER', 3, 1), 'WINNER', 'B');
+  link(get('UPPER', 2, 3), get('UPPER', 3, 2), 'WINNER', 'A');
+  link(get('UPPER', 2, 4), get('UPPER', 3, 2), 'WINNER', 'B');
+  link(get('UPPER', 2, 1), get('LOWER', 2, 1), 'LOSER', 'B');
+  link(get('UPPER', 2, 2), get('LOWER', 2, 2), 'LOSER', 'B');
+  link(get('UPPER', 2, 3), get('LOWER', 2, 3), 'LOSER', 'A');
+  link(get('UPPER', 2, 4), get('LOWER', 2, 3), 'LOSER', 'B');
+
+  link(get('UPPER', 3, 1), get('UPPER', 4, 1), 'WINNER', 'A');
+  link(get('UPPER', 3, 2), get('UPPER', 4, 1), 'WINNER', 'B');
+  link(get('UPPER', 3, 1), get('LOWER', 4, 1), 'LOSER', 'B');
+  link(get('UPPER', 3, 2), get('LOWER', 4, 2), 'LOSER', 'B');
+
+  link(get('UPPER', 4, 1), get('GRAND_FINAL', 1, 1), 'WINNER', 'A');
+  link(get('UPPER', 4, 1), get('LOWER', 6, 1), 'LOSER', 'B');
+
+  // LOWER progression.
+  link(get('LOWER', 1, 1), get('LOWER', 2, 1), 'WINNER', 'A');
+  link(get('LOWER', 1, 2), get('LOWER', 2, 2), 'WINNER', 'A');
+
+  link(get('LOWER', 2, 1), get('LOWER', 3, 1), 'WINNER', 'A');
+  link(get('LOWER', 2, 2), get('LOWER', 3, 1), 'WINNER', 'B');
+  // LOWER R2 M3 (the "two fresh dropouts" match) has no LOWER R1 feed, so
+  // its winner skips LOWER R3 entirely and waits at LOWER R4 directly --
+  // the one unavoidable bye this field size produces (see file-level note).
+  link(get('LOWER', 2, 3), get('LOWER', 4, 2), 'WINNER', 'A');
+
+  link(get('LOWER', 3, 1), get('LOWER', 4, 1), 'WINNER', 'A');
+
+  link(get('LOWER', 4, 1), get('LOWER', 5, 1), 'WINNER', 'A');
+  link(get('LOWER', 4, 2), get('LOWER', 5, 1), 'WINNER', 'B');
+
+  link(get('LOWER', 5, 1), get('LOWER', 6, 1), 'WINNER', 'A');
+
+  link(get('LOWER', 6, 1), get('GRAND_FINAL', 1, 1), 'WINNER', 'B');
 
   return Array.from(nodes.values());
 }

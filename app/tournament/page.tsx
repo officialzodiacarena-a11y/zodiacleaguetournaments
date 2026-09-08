@@ -1,30 +1,35 @@
 // app/tournament/page.tsx
-
 import React from 'react';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { TournamentRegistryPageData, TournamentItem, SeasonSplit } from '@/types/tournament';
+import type { TournamentRegistryPageData, TournamentItem, SeasonSplit } from '@/types/tournament';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { pickRelevantSeason, SeasonLike } from '@/lib/season/pickRelevantSeason';
+import { pickRelevantSeason, type SeasonLike } from '@/lib/season/pickRelevantSeason';
 import { selectSeasonAction } from '@/actions/tournament';
 
 const SEASONS: SeasonSplit[] = ['SPRING', 'SUMMER', 'FALL', 'WINTER'];
 
 function mapTournamentStatus(status: string): TournamentItem['status'] {
-  if (status === 'OPEN' || status === 'ONGOING') return 'OPEN';
-  if (status === 'CONCLUDED') return 'CONCLUDED';
+  if (status === 'OPEN' || status === 'ONGOING' || status === 'ACTIVE' || status === 'REGISTRATION') {
+    return 'OPEN';
+  }
+  if (status === 'CONCLUDED' || status === 'COMPLETED') {
+    return 'CONCLUDED';
+  }
   return 'NOT_YET_OPEN';
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+  try {
+    return new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+  } catch {
+    return 'TBA';
+  }
 }
 
 async function getRegistryData(): Promise<TournamentRegistryPageData> {
   const supabase = await createClient();
-  // tournament_registrations RLS จำกัดเห็นเฉพาะทีมตัวเอง (ตามสเปก) — นับจำนวนทีมที่สมัครแบบ public
-  // aggregate ต้องใช้ service role เฉพาะ query นี้ ไม่ใช่การเปิด RLS ให้อ่านรายละเอียดการสมัครแบบ public
   const admin = createAdminClient();
   const cookieStore = await cookies();
   const cookieSeason = cookieStore.get('active_season_split')?.value?.toUpperCase();
@@ -33,7 +38,11 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: game } = await supabase.from('games').select('id').eq('code', 'VAL').maybeSingle();
+  const { data: game } = await supabase
+    .from('games')
+    .select('id')
+    .eq('code', 'VAL')
+    .maybeSingle();
 
   const empty: TournamentRegistryPageData = {
     activeSeason: (cookieSeason as SeasonSplit) ?? 'SUMMER',
@@ -41,13 +50,13 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
     registrationDeadlineText: 'TBA',
     tournaments: [],
   };
+
   if (!game) return empty;
 
   const { data: circuits } = await supabase
     .from('circuits')
-    .select('id, name, season_order')
-    .eq('game_id', game.id)
-    .order('season_order', { ascending: true });
+    .select('id, name')
+    .eq('game_id', game.id);
 
   if (!circuits || circuits.length === 0) return empty;
 
@@ -75,7 +84,7 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
     .select('id, circuit_id, name, status, starts_at, ends_at')
     .eq('circuit_id', selectedCircuit.id);
 
-  const season = pickRelevantSeason(seasonsForCircuit as SeasonLike[] | undefined);
+  const season = pickRelevantSeason(seasonsForCircuit as unknown as SeasonLike[] | undefined);
 
   let tournaments: TournamentItem[] = [];
   let registrationDeadlineText = 'TBA';
@@ -83,14 +92,17 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
   if (season) {
     const { data: tRows } = await supabase
       .from('tournaments')
-      .select('id, name, format, status, max_teams, entry_fee_ap, prize_zp, starts_at, registration_closes_at')
+      .select('id, name, type, status, max_teams, entry_fee_ap, start_at, registration_closes_at')
       .eq('season_id', season.id)
-      .order('starts_at', { ascending: true, nullsFirst: false });
+      .order('start_at', { ascending: true, nullsFirst: false });
 
     const tournamentIds = (tRows ?? []).map((t) => t.id);
     const { data: regRows } =
       tournamentIds.length > 0
-        ? await admin.from('tournament_registrations').select('tournament_id').in('tournament_id', tournamentIds)
+        ? await admin
+            .from('tournament_registrations')
+            .select('tournament_id')
+            .in('tournament_id', tournamentIds)
         : { data: [] as { tournament_id: string }[] };
 
     const countByTournament = new Map<string, number>();
@@ -99,9 +111,10 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
     }
 
     const openDeadlines = (tRows ?? [])
-      .filter((t) => t.status === 'OPEN' && t.registration_closes_at)
+      .filter((t) => (t.status === 'OPEN' || t.status === 'REGISTRATION') && t.registration_closes_at)
       .map((t) => t.registration_closes_at as string)
       .sort();
+
     if (openDeadlines.length > 0) {
       registrationDeadlineText = formatDate(openDeadlines[0]);
     } else if (season.ends_at) {
@@ -112,19 +125,21 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
       const status = mapTournamentStatus(t.status);
       const accentTheme: TournamentItem['accentTheme'] =
         status === 'OPEN' ? 'gold' : status === 'CONCLUDED' ? 'gray' : 'purple';
+      const maxTeams = t.max_teams ?? 12;
 
       return {
         id: t.id,
         circuitSeasonText: `${selectedCircuit.name.toUpperCase()} CIRCUIT`,
         name: t.name,
         status,
-        format: t.format,
-        prizePoolZp: t.prize_zp,
-        prizeTopText: `TOP ${Math.min(8, t.max_teams)}`,
-        dateRangeText: t.starts_at ? formatDate(t.starts_at) : 'TBA',
-        yearText: t.starts_at ? String(new Date(t.starts_at).getFullYear()) : String(new Date().getFullYear()),
+        format: t.type || 'DOUBLE_ELIMINATION',
+        prizePoolZp: 1000,
+        entryFeeAp: t.entry_fee_ap ?? 0,
+        prizeTopText: `TOP ${Math.min(8, maxTeams)}`,
+        dateRangeText: t.start_at ? formatDate(t.start_at) : 'TBA',
+        yearText: t.start_at ? String(new Date(t.start_at).getFullYear()) : String(new Date().getFullYear()),
         registeredTeams: countByTournament.get(t.id) ?? 0,
-        maxTeams: t.max_teams,
+        maxTeams,
         accentTheme,
       };
     });
@@ -133,15 +148,19 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
   const circuitActiveText = !season
     ? 'ยังไม่ประกาศซีซัน'
     : season.status === 'ACTIVE'
-      ? 'CIRCUIT ACTIVE'
-      : season.status === 'UPCOMING'
-        ? 'UPCOMING'
-        : 'CONCLUDED';
+    ? 'CIRCUIT ACTIVE'
+    : season.status === 'UPCOMING'
+    ? 'UPCOMING'
+    : 'CONCLUDED';
 
-  // ZP summary ของทีมผู้ใช้ปัจจุบันใน season นี้ (แสดงเฉพาะ login แล้ว + มีทีม + มีอันดับใน season)
   let userZpSummary: TournamentRegistryPageData['userZpSummary'];
   if (user && season) {
-    const { data: player } = await admin.from('players').select('id').eq('user_id', user.id).maybeSingle();
+    const { data: player } = await admin
+      .from('players')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
     if (player) {
       const { data: membership } = await admin
         .from('team_members')
@@ -161,13 +180,16 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
         if (idx >= 0 && standings) {
           const myRow = standings[idx];
           const aboveRow = idx > 0 ? standings[idx - 1] : null;
+          const myZp = Number(myRow.total_zp) || 0;
+          const aboveZp = aboveRow ? Number(aboveRow.total_zp) || 0 : 0;
+
           userZpSummary = {
             seasonName: `${selectedCircuit.name} Circuit`,
-            accumulatedZp: myRow.total_zp,
+            accumulatedZp: myZp,
             rankNumber: idx + 1,
-            nextRankZp: aboveRow ? aboveRow.total_zp - myRow.total_zp : 0,
+            nextRankZp: aboveRow ? aboveZp - myZp : 0,
             nextRankTarget: aboveRow ? idx : idx + 1,
-            progressPercentage: aboveRow && aboveRow.total_zp > 0 ? Math.round((myRow.total_zp / aboveRow.total_zp) * 100) : 100,
+            progressPercentage: aboveRow && aboveZp > 0 ? Math.round((myZp / aboveZp) * 100) : 100,
           };
         }
       }
@@ -175,7 +197,7 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
   }
 
   return {
-    activeSeason: selectedName as SeasonSplit,
+    activeSeason: (selectedName as SeasonSplit) ?? 'SUMMER',
     circuitActiveText,
     registrationDeadlineText,
     tournaments,
@@ -210,7 +232,7 @@ export default async function TournamentRegistryPage() {
   const data = await getRegistryData();
 
   return (
-    <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20">
+    <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 select-none">
       {/* 1. TOP NAV */}
       <nav className="sticky top-0 z-50 flex h-[60px] items-center justify-between border-b border-[#E8B429]/15 bg-[#0D0E1A]/95 px-6 md:px-10 backdrop-blur-md">
         <div className="flex items-center gap-2">
@@ -222,7 +244,7 @@ export default async function TournamentRegistryPage() {
         </div>
         <div className="hidden md:flex gap-8 text-[13px] font-medium text-[#e9e9ed]/55">
           <Link href="/profile" className="hover:text-[#E8B429] transition-colors">นักกีฬา</Link>
-          <Link href="/home" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
+          <Link href="/teams" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
           <Link href="/tournament" className="text-[#E8B429] font-semibold border-b-2 border-[#E8B429] pb-0.5">ลีก</Link>
           <Link href="/schedule" className="hover:text-[#E8B429] transition-colors">Rankings</Link>
         </div>
@@ -248,14 +270,9 @@ export default async function TournamentRegistryPage() {
         <div className="flex items-end border-b border-[#E8B429]/15">
           {SEASONS.map((s) => {
             const isActive = s === data.activeSeason;
+            const handleSelect = selectSeasonAction.bind(null, s);
             return (
-              <form
-                key={s}
-                action={async () => {
-                  'use server';
-                  await selectSeasonAction(s);
-                }}
-              >
+              <form key={s} action={handleSelect}>
                 <SeasonTabButton season={s} isActive={isActive} />
               </form>
             );
@@ -438,7 +455,7 @@ function SeasonTabButton({ season, isActive }: { season: SeasonSplit; isActive: 
   return (
     <button
       type="submit"
-      className={`relative px-7 py-3 text-[13px] tracking-wider transition-colors ${
+      className={`relative px-7 py-3 text-[13px] tracking-wider transition-colors cursor-pointer ${
         isActive
           ? 'font-bold text-[#E8B429] border-b-2 border-[#E8B429] -mb-[1px]'
           : 'font-medium text-[#e9e9ed]/40 hover:text-[#E8B429]'

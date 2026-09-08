@@ -1,21 +1,24 @@
-// app/tournaments/[tournamentId]/register/page.tsx
-
 import React from 'react';
 import Link from 'next/link';
-import { TournamentRegistrationFlowData, PlayerEligibilityStatus } from '@/types/registration';
-import { ValorantRole } from '@/types/team';
+import type { TournamentRegistrationFlowData, PlayerEligibilityStatus } from '@/types/registration';
+import type { ValorantRole } from '@/types/team';
 import { submitRegistrationAction } from '@/actions/registration';
 
-// Mock ข้อมูลเริ่มต้นตรงตาม Draft ของอลิสเป๊ะๆ
+interface PageProps {
+  params: Promise<{ tournamentId: string }>;
+}
+
+// Mock ข้อมูลเริ่มต้นสอดคล้องกับ SSOT Architecture พร้อม riotId
 const mockFlowData: TournamentRegistrationFlowData = {
   tournamentId: 'tour_summer_open_1',
   tournamentName: 'Summer Open I',
   dateRangeText: '14–16 มิ.ย. 2026',
-  formatText: '5v5 SINGLE ELIM',
+  formatText: '5v5 DOUBLE ELIMINATION',
   prizeZpText: 'ZP 1,000',
   statusBadgeText: 'OPEN',
   teamId: 'team_cw_01',
   teamName: 'CELESTIAL WOLVES',
+  teamTag: 'CW',
   entryFeeAp: 50,
   entryFeeThbText: '25 THB',
   currentApBalance: 124,
@@ -31,6 +34,7 @@ const mockFlowData: TournamentRegistrationFlowData = {
       id: 'r1',
       userId: 'u1',
       handle: 'SkyNova',
+      riotId: 'SkyNova#TH1',
       fullNameTh: 'ณัฐพล เสรีวัฒนา',
       initials: 'SN',
       role: 'DUELIST',
@@ -42,6 +46,7 @@ const mockFlowData: TournamentRegistrationFlowData = {
       id: 'r2',
       userId: 'u2',
       handle: 'KairoX',
+      riotId: 'KairoX#AP1',
       fullNameTh: 'กรวิชญ์ อินทรภักดิ์',
       initials: 'KR',
       role: 'INITIATOR',
@@ -53,6 +58,7 @@ const mockFlowData: TournamentRegistrationFlowData = {
       id: 'r3',
       userId: 'u3',
       handle: 'VoidEx',
+      riotId: 'VoidEx#TH2',
       fullNameTh: 'วิชัย ตั้งมั่น',
       initials: 'VX',
       role: 'CONTROLLER',
@@ -64,6 +70,7 @@ const mockFlowData: TournamentRegistrationFlowData = {
       id: 'r4',
       userId: 'u4',
       handle: 'Phr1sm',
+      riotId: 'Phr1sm#0001',
       fullNameTh: 'ภูริต สมชาย',
       initials: 'PR',
       role: 'SENTINEL',
@@ -75,6 +82,7 @@ const mockFlowData: TournamentRegistrationFlowData = {
       id: 'r5',
       userId: 'u5',
       handle: 'ZenitH',
+      riotId: 'ZenitH#TH9',
       fullNameTh: 'เจนณรงค์ พิทักษ์สิทธิ์',
       initials: 'ZN',
       role: 'FLEX',
@@ -86,6 +94,7 @@ const mockFlowData: TournamentRegistrationFlowData = {
       id: 'r6',
       userId: 'u6',
       handle: 'LunX',
+      riotId: 'LunX#VAL',
       fullNameTh: 'ลูกน้ำ เพชรสว่าง',
       initials: 'LX',
       role: 'DUELIST',
@@ -97,6 +106,7 @@ const mockFlowData: TournamentRegistrationFlowData = {
       id: 'r7',
       userId: 'u7',
       handle: 'Novara',
+      riotId: 'Novara#SEA',
       fullNameTh: 'นรวีร์ ดาวเรือง',
       initials: 'NV',
       role: 'INITIATOR',
@@ -136,19 +146,20 @@ function renderEligibility(status: PlayerEligibilityStatus) {
   );
 }
 
-export default async function TournamentRegistrationPage({
-  params,
-}: {
-  params: Promise<{ tournamentId: string }>;
-}) {
+export default async function TournamentRegistrationPage({ params }: PageProps) {
   const { tournamentId } = await params;
   const data = mockFlowData;
   const starters = data.roster.filter((p) => !p.isSubstitute);
   const substitutes = data.roster.filter((p) => p.isSubstitute);
   const remainingAp = data.currentApBalance - data.entryFeeAp;
 
+  async function handleSubmit() {
+    'use server';
+    await submitRegistrationAction(tournamentId || data.tournamentId, data.teamId);
+  }
+
   return (
-    <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20">
+    <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 select-none">
       {/* 1. NAVBAR */}
       <nav className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-[#E8B429]/20 bg-[#0D0E1A]/90 px-6 md:px-8 backdrop-blur-md">
         <div className="flex items-center gap-2.5 font-black text-sm tracking-widest text-[#E8B429] uppercase">
@@ -156,10 +167,10 @@ export default async function TournamentRegistrationPage({
           <span>ZODIAC ARENA</span>
         </div>
         <div className="flex items-center gap-6 text-[13px] font-medium text-[#b2b6ca]">
-          <Link href="#" className="hover:text-[#E8B429] transition-colors">นักกีฬา</Link>
-          <Link href="/teams/team_za_01" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
-          <Link href="/tournaments" className="text-[#E8B429]">ลีก</Link>
-          <Link href="#" className="hover:text-[#E8B429] transition-colors">Rankings</Link>
+          <Link href="/profile" className="hover:text-[#E8B429] transition-colors">นักกีฬา</Link>
+          <Link href="/teams" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
+          <Link href="/tournament" className="text-[#E8B429] font-bold">ลีก</Link>
+          <Link href="/schedule" className="hover:text-[#E8B429] transition-colors">Rankings</Link>
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#9184d9] to-[#E8B429] font-bold text-xs text-[#0D0E1A]">
             ZA
           </div>
@@ -267,6 +278,7 @@ export default async function TournamentRegistrationPage({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-bold text-white tracking-wide">{player.handle}</span>
+                        <span className="text-xs font-mono text-[#75798c]">({player.riotId})</span>
                         {player.isCaptain && (
                           <span className="rounded border border-[#E8B429]/30 bg-[#E8B429]/15 px-1.5 py-0.2 text-[9px] font-bold tracking-wider text-[#E8B429]">
                             CAPTAIN
@@ -305,7 +317,10 @@ export default async function TournamentRegistrationPage({
                           {sub.initials}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs font-bold text-white truncate">{sub.handle}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-white truncate">{sub.handle}</span>
+                            <span className="text-[10px] font-mono text-[#75798c]">({sub.riotId})</span>
+                          </div>
                           <div className="text-[10px] text-[#75798c] truncate">{sub.fullNameTh}</div>
                         </div>
                         <div className="flex items-center gap-2.5 flex-shrink-0">
@@ -400,20 +415,15 @@ export default async function TournamentRegistrationPage({
           </div>
           <div className="flex items-center gap-3">
             <Link
-              href="/tournaments"
+              href="/tournament"
               className="rounded-lg border border-[#9184d9]/40 bg-transparent px-5 py-2.5 text-xs font-bold tracking-wider text-[#cfd3e5] hover:border-[#9184d9] hover:text-white transition-colors"
             >
               ย้อนกลับ / BACK
             </Link>
-            <form
-              action={async () => {
-                'use server';
-                await submitRegistrationAction(tournamentId, data.teamId);
-              }}
-            >
+            <form action={handleSubmit}>
               <button
                 type="submit"
-                className="rounded-lg bg-gradient-to-r from-[#E8B429] to-[#d97706] px-6 py-2.5 text-xs font-black tracking-wider text-[#0D0E1A] shadow-[0_4px_20px_rgba(232,180,41,0.35)] hover:shadow-[0_6px_28px_rgba(232,180,41,0.55)] transition-all"
+                className="rounded-lg bg-gradient-to-r from-[#E8B429] to-[#d97706] px-6 py-2.5 text-xs font-black tracking-wider text-[#0D0E1A] shadow-[0_4px_20px_rgba(232,180,41,0.35)] hover:shadow-[0_6px_28px_rgba(232,180,41,0.55)] transition-all cursor-pointer"
               >
                 ชำระค่าสมัครและยืนยัน / PAY {data.entryFeeAp} AP & CONFIRM
               </button>
