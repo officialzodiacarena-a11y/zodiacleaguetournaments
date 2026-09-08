@@ -391,6 +391,7 @@ export type Database = {
         Row: {
           created_at: string
           deleted_at: string | null
+          evidence_url: string | null
           external_id: string
           game_id: string
           game_name: string | null
@@ -401,6 +402,7 @@ export type Database = {
           rank_snapshot: Json | null
           region: string | null
           rejection_reason: string | null
+          reviewed_at: string | null
           rso_access_token: string | null
           rso_expires_at: string | null
           rso_refresh_token: string | null
@@ -414,6 +416,7 @@ export type Database = {
         Insert: {
           created_at?: string
           deleted_at?: string | null
+          evidence_url?: string | null
           external_id: string
           game_id: string
           game_name?: string | null
@@ -424,6 +427,7 @@ export type Database = {
           rank_snapshot?: Json | null
           region?: string | null
           rejection_reason?: string | null
+          reviewed_at?: string | null
           rso_access_token?: string | null
           rso_expires_at?: string | null
           rso_refresh_token?: string | null
@@ -437,6 +441,7 @@ export type Database = {
         Update: {
           created_at?: string
           deleted_at?: string | null
+          evidence_url?: string | null
           external_id?: string
           game_id?: string
           game_name?: string | null
@@ -447,6 +452,7 @@ export type Database = {
           rank_snapshot?: Json | null
           region?: string | null
           rejection_reason?: string | null
+          reviewed_at?: string | null
           rso_access_token?: string | null
           rso_expires_at?: string | null
           rso_refresh_token?: string | null
@@ -1373,6 +1379,7 @@ export type Database = {
           status: Database["public"]["Enums"]["account_status_type"]
           suspended_until: string | null
           timezone: string
+          unverified_data: boolean
           updated_at: string
           user_id: string
         }
@@ -1401,6 +1408,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["account_status_type"]
           suspended_until?: string | null
           timezone?: string
+          unverified_data?: boolean
           updated_at?: string
           user_id: string
         }
@@ -1429,6 +1437,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["account_status_type"]
           suspended_until?: string | null
           timezone?: string
+          unverified_data?: boolean
           updated_at?: string
           user_id?: string
         }
