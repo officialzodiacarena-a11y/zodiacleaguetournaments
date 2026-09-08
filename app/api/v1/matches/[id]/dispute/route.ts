@@ -12,7 +12,11 @@ export async function POST(
     const matchId = resolvedParams.id;
     const supabase = await createClient();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    // 1. ตรวจสอบการ Authentication
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user) {
       return NextResponse.json(
         { error: { code: 'UNAUTHORIZED', message: 'กรุณาเข้าสู่ระบบก่อนยื่นข้อพิพาท' } },
@@ -20,6 +24,7 @@ export async function POST(
       );
     }
 
+    // 2. Validate JSON Request Body ด้วย Zod Schema
     let body: unknown;
     try {
       body = await req.json();
@@ -33,15 +38,22 @@ export async function POST(
     const parseResult = CreateDisputeSchema.safeParse(body);
     if (!parseResult.success) {
       return NextResponse.json(
-        { error: { code: 'VALIDATION_ERROR', message: 'ข้อมูลไม่ตรงข้อกำหนด', details: parseResult.error.format() } },
+        {
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'ข้อมูลไม่ตรงข้อกำหนด',
+            details: parseResult.error.format(),
+          },
+        },
         { status: 400 }
       );
     }
     const { category, title, description, evidenceUrls } = parseResult.data;
 
+    // 3. ดึงข้อมูล Player Profile
     const { data: player } = await supabase
       .from('players')
-      .select('id')
+      .select('id, display_name')
       .eq('user_id', user.id)
       .single();
 
@@ -52,6 +64,7 @@ export async function POST(
       );
     }
 
+    // 4. ดึงและตรวจสถานะ Match ปัจจุบัน
     const { data: match, error: matchError } = await supabase
       .from('matches')
       .select('*')
@@ -67,57 +80,70 @@ export async function POST(
 
     if (!['LIVE', 'PAUSED', 'AWAITING_RESULT'].includes(match.status)) {
       return NextResponse.json(
-        { error: { code: 'INVALID_DISPUTE_STATE', message: 'ไม่สามารถยื่นข้อพิพาทได้ในสถานะแมตช์ปัจจุบัน' } },
+        {
+          error: {
+            code: 'INVALID_DISPUTE_STATE',
+            message: `ไม่สามารถยื่นข้อพิพาทได้ในสถานะแมตช์ปัจจุบัน (${match.status})`,
+          },
+        },
         { status: 422 }
       );
     }
 
+    // 5. ตรวจสอบสิทธิ์ (ต้องเป็น Captain / Manager / Owner ของทีมในแมตช์นี้)
     const { data: member, error: memberError } = await supabase
       .from('team_members')
       .select('team_id, role')
       .eq('player_id', player.id)
       .eq('status', 'ACTIVE')
-      .in('team_id', [match.team_a_id, match.team_b_id])
+      .in('team_id', [match.team_a_id ?? '', match.team_b_id ?? ''])
       .in('role', ['CAPTAIN', 'MANAGER', 'OWNER']);
 
     if (memberError || !member || member.length === 0) {
       return NextResponse.json(
-        { error: { code: 'UNAUTHORIZED_TEAM_ROLE', message: 'สิทธิ์ในการยื่นข้อพิพาทจำกัดเฉพาะกัปตันหรือผู้จัดการทีมเท่านั้น' } },
+        {
+          error: {
+            code: 'UNAUTHORIZED_TEAM_ROLE',
+            message: 'สิทธิ์ในการยื่นข้อพิพาทจำกัดเฉพาะกัปตันหรือผู้จัดการทีมในคู่นี้เท่านั้น',
+          },
+        },
         { status: 403 }
       );
     }
 
-    const callerTeamId = member[0].team_id;
-    const againstTeamId = callerTeamId === match.team_a_id ? match.team_b_id : match.team_a_id;
+    // 6. บันทึก Dispute ลงตาราง disputes ตาม DB Schema
+    const formattedReason = `[${title}]\n${description}`;
 
     const { data: dispute, error: insertErr } = await supabase
       .from('disputes')
       .insert({
         match_id: matchId,
         filed_by: player.id,
-        filed_by_team_id: callerTeamId,
-        against_team_id: againstTeamId,
         category,
-        title,
-        description,
+        priority: 'HIGH',
+        reason: formattedReason,
         evidence_urls: evidenceUrls,
         status: 'OPEN',
       })
       .select()
       .single();
 
-    if (insertErr) {
+    if (insertErr || !dispute) {
       return NextResponse.json(
-        { error: { code: 'DISPUTE_FILING_FAILED', message: insertErr.message } },
+        { error: { code: 'DISPUTE_FILING_FAILED', message: insertErr?.message || 'Insert failed' } },
         { status: 500 }
       );
     }
 
+    // 7. ใช้ Admin Client อัปเดต Match Status เป็น DISPUTED & บันทึก Audit State Transition
     const adminSupabase = createAdminClient();
 
     await adminSupabase
       .from('matches')
-      .update({ status: 'DISPUTED', updated_at: new Date().toISOString() })
+      .update({
+        status: 'DISPUTED',
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', matchId);
 
     await adminSupabase.from('match_state_transitions').insert({
@@ -127,21 +153,38 @@ export async function POST(
       trigger_source: 'PLAYER',
       actor_id: player.id,
       reason: `Dispute filed: ${title}`,
+      state_snapshot: {
+        dispute_id: dispute.id,
+        dispute_number: dispute.dispute_number,
+        previous_match_data: match,
+      },
     });
 
+    // 8. ยิง Broadcast แจ้งเตือน Realtime ไปยังห้อง Match Lobby
     await adminSupabase.channel(`match-lobby-${matchId}`).send({
       type: 'broadcast',
       event: 'match_status_changed',
-      payload: { status: 'DISPUTED' },
+      payload: {
+        status: 'DISPUTED',
+        dispute_id: dispute.id,
+        dispute_number: dispute.dispute_number,
+      },
     });
 
     return NextResponse.json(
-      { success: true, dispute_number: dispute.dispute_number, next_status: 'DISPUTED' },
+      {
+        success: true,
+        dispute_id: dispute.id,
+        dispute_number: dispute.dispute_number,
+        next_status: 'DISPUTED',
+      },
       { status: 201 }
     );
-
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
-    return NextResponse.json({ error: { code: 'SERVER_ERROR', message } }, { status: 500 });
+    return NextResponse.json(
+      { error: { code: 'SERVER_ERROR', message } },
+      { status: 500 }
+    );
   }
 }

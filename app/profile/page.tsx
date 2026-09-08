@@ -1,11 +1,9 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { CareerTimeline } from '@/components/profile/CareerTimeline';
-
-const supabase = createClient();
 
 interface PlayerData {
   id: string;
@@ -24,30 +22,44 @@ interface GameAccountData {
   verification_status: string;
 }
 
+interface TeamMembershipData {
+  role: string;
+  team: {
+    id: string;
+    name: string;
+    tag: string;
+    logo_url: string | null;
+  } | null;
+}
+
 export default function ProfilePage() {
+  const supabase = useMemo(() => createClient(), []);
   const [player, setPlayer] = useState<PlayerData | null>(null);
   const [gameAccount, setGameAccount] = useState<GameAccountData | null>(null);
+  const [teamMembership, setTeamMembership] = useState<TeamMembershipData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'STATS' | 'PROFILE' | 'TEAM'>('STATS');
   const [expandedMatches, setExpandedMatches] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchPlayerData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-          setLoading(false);
+          if (isMounted) setLoading(false);
           return;
         }
 
-        // 1. ดึงข้อมูล Profile จากตาราง players (Block 1)
+        // 1. ดึงข้อมูล Profile จากตาราง players
         const { data: playerData } = await supabase
           .from('players')
           .select('*')
           .eq('user_id', user.id)
           .single();
 
-        if (playerData) {
+        if (playerData && isMounted) {
           setPlayer(playerData);
 
           // 2. ดึงข้อมูล Game Account (Riot/Valorant)
@@ -58,19 +70,34 @@ export default function ProfilePage() {
             .eq('is_primary', true)
             .maybeSingle();
 
-          if (accountData) {
+          if (accountData && isMounted) {
             setGameAccount(accountData);
+          }
+
+          // 3. ดึงข้อมูลสังกัดทีม
+          const { data: memberData } = await supabase
+            .from('team_members')
+            .select('role, team:teams(id, name, tag, logo_url)')
+            .eq('player_id', playerData.id)
+            .maybeSingle();
+
+          if (memberData && isMounted) {
+            setTeamMembership(memberData as unknown as TeamMembershipData);
           }
         }
       } catch (err) {
         console.error('Failed to load profile:', err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchPlayerData();
-  }, []);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [supabase]);
 
   const toggleMatch = (id: string) => {
     setExpandedMatches(prev => ({ ...prev, [id]: !prev[id] }));
@@ -79,19 +106,19 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0D0E1A] flex items-center justify-center">
-        <div className="text-[#E8B429] animate-pulse font-mono tracking-widest text-sm">
+        <div className="text-[#E8B429] animate-pulse font-mono tracking-widest text-sm uppercase">
           INITIALIZING ATHLETE PASSPORT...
         </div>
       </div>
     );
   }
 
-  // Fallback Data ตาม Prototype ของอลิส หากยังไม่มีข้อมูลใน DB
+  // Identity Fallbacks
   const displayAthleteId = player?.athlete_id || 'ZA-0001';
-  const displayName = player?.display_name || 'SHADOW_ZX';
+  const displayName = player?.display_name || (gameAccount ? `${gameAccount.game_name}#${gameAccount.tag_line}` : 'SHADOW_ZX');
   const realName = player?.real_name || 'ณัฐวุฒิ สมานใจ';
   const location = player?.country_code === 'TH' ? 'ชลบุรี, ประเทศไทย' : 'ประเทศไทย';
-  const isVerified = gameAccount?.verification_status === 'VERIFIED' || true;
+  const isVerified = gameAccount?.verification_status === 'VERIFIED';
 
   // --- SVG Radar Chart Calculations ---
   const cx = 120, cy = 120, r = 90;
@@ -384,8 +411,29 @@ export default function ProfilePage() {
 
         {/* TAB 3: TEAM INFO */}
         {activeTab === 'TEAM' && (
-          <div className="bg-[#1A1C2E] border border-white/10 rounded-xl p-8 text-center text-neutral-400 text-sm">
-            ⚔️ ข้อมูลสังกัดทีมและโรสเตอร์ผู้เล่น (ผูกกับตาราง <code className="text-[#E8B429]">teams</code> & <code className="text-[#E8B429]">team_members</code> ใน Block 1)
+          <div className="bg-[#1A1C2E] border border-white/10 rounded-xl p-6">
+            <div className="font-bold text-white text-base mb-4">⚔️ Current Roster & Affiliation</div>
+            {teamMembership?.team ? (
+              <div className="flex items-center gap-4 bg-black/20 p-4 rounded-lg border border-white/5">
+                <div className="w-14 h-14 rounded-lg bg-[#E8B429]/10 border border-[#E8B429]/30 flex items-center justify-center font-bold text-[#E8B429] text-xl overflow-hidden">
+                  {teamMembership.team.logo_url ? (
+                    <img src={teamMembership.team.logo_url} alt="Team Logo" className="w-full h-full object-cover" />
+                  ) : (
+                    teamMembership.team.tag || 'TEAM'
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white uppercase">{teamMembership.team.name}</h3>
+                  <div className="text-xs text-neutral-400">
+                    Role: <span className="text-[#E8B429] font-semibold">{teamMembership.role}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-neutral-500 text-xs font-mono">
+                NO ACTIVE TEAM AFFILIATION FOUND (FREE AGENT)
+              </div>
+            )}
           </div>
         )}
 

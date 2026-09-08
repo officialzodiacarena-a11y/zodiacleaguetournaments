@@ -3,14 +3,22 @@
 import { AutoRefresh } from '@/components/auto-refresh';
 import React from 'react';
 import Link from 'next/link';
-import { MatchSchedulePageData, MatchStatus, ScheduleMatch, StandingTeamItem } from '@/types/schedule';
+import {
+  MatchSchedulePageData,
+  ScheduleMatch,
+  ScheduleMatchDisplayStatus,
+  StandingTeamItem,
+} from '@/types/schedule';
 import { setMatchReminderAction } from '@/actions/schedule';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { pickRelevantSeason, SeasonLike } from '@/lib/season/pickRelevantSeason';
 
-interface TeamRef {
+interface TeamJoinedRef {
+  id: string;
   name: string;
+  tag: string;
+  logo_url: string | null;
 }
 
 interface MatchRow {
@@ -18,11 +26,11 @@ interface MatchRow {
   stage_id: string;
   score_a: number | null;
   score_b: number | null;
-  status: 'UPCOMING' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
+  status: string;
   scheduled_at: string | null;
-  team_a: TeamRef[] | TeamRef | null;
-  team_b: TeamRef[] | TeamRef | null;
-  tournament_stages: { name: string } | { name: string }[] | null;
+  best_of: number | null;
+  team_a: TeamJoinedRef[] | TeamJoinedRef | null;
+  team_b: TeamJoinedRef[] | TeamJoinedRef | null;
 }
 
 function one<T>(rel: T[] | T | null): T | null {
@@ -30,26 +38,37 @@ function one<T>(rel: T[] | T | null): T | null {
   return rel;
 }
 
-function toMatchStatus(status: MatchRow['status']): MatchStatus {
+function toMatchStatus(status: string): ScheduleMatchDisplayStatus {
   if (status === 'LIVE') return 'LIVE';
   if (status === 'COMPLETED') return 'COMPLETED';
+  if (status === 'DISPUTED') return 'DISPUTED';
   return 'UPCOMING';
 }
 
 async function getScheduleData(): Promise<MatchSchedulePageData> {
   const supabase = await createClient();
 
-  const { data: game } = await supabase.from('games').select('id').eq('code', 'VAL').maybeSingle();
+  const { data: game } = await supabase
+    .from('games')
+    .select('id')
+    .eq('code', 'VAL')
+    .maybeSingle();
 
   const fallback: MatchSchedulePageData = {
     seasonTitle: 'ยังไม่มี Season Active',
     todayMatches: [],
     standings: [],
-    lastUpdatedText: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+    lastUpdatedText: new Date().toLocaleTimeString('th-TH', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
   };
   if (!game) return fallback;
 
-  const { data: circuits } = await supabase.from('circuits').select('id, name').eq('game_id', game.id);
+  const { data: circuits } = await supabase
+    .from('circuits')
+    .select('id, name')
+    .eq('game_id', game.id);
   const circuitIds = (circuits ?? []).map((c) => c.id);
   if (circuitIds.length === 0) return fallback;
 
@@ -64,17 +83,21 @@ async function getScheduleData(): Promise<MatchSchedulePageData> {
   const circuit = (circuits ?? []).find((c) => c.id === season.circuit_id);
   const seasonTitle = `${(circuit?.name ?? '').toUpperCase()} CIRCUIT · ${season.name}`;
 
-  const { data: tournaments } = await supabase.from('tournaments').select('id').eq('season_id', season.id);
+  const { data: tournaments } = await supabase
+    .from('tournaments')
+    .select('id')
+    .eq('season_id', season.id);
   const tournamentIds = (tournaments ?? []).map((t) => t.id);
 
   let matches: ScheduleMatch[] = [];
   let liveBannerMatch: ScheduleMatch | undefined;
 
   if (tournamentIds.length > 0) {
-    // tournament_stages ไม่มี public-read policy อยู่จริงตอนนี้ (RLS เปิดแต่ไม่มี policy เลย) —
-    // ดู bug note แยก ใช้ service role ชั่วคราวเพื่อให้หน้า schedule ใช้งานได้ก่อน
     const admin = createAdminClient();
-    const { data: stages } = await admin.from('tournament_stages').select('id, name').in('tournament_id', tournamentIds);
+    const { data: stages } = await admin
+      .from('tournament_stages')
+      .select('id, name')
+      .in('tournament_id', tournamentIds);
     const stageIds = (stages ?? []).map((s) => s.id);
     const stageNameById = new Map((stages ?? []).map((s) => [s.id, s.name]));
 
@@ -82,7 +105,7 @@ async function getScheduleData(): Promise<MatchSchedulePageData> {
       const { data: matchRows } = await supabase
         .from('matches')
         .select(
-          'id, stage_id, score_a, score_b, status, scheduled_at, team_a:teams!matches_team_a_id_fkey(name), team_b:teams!matches_team_b_id_fkey(name)'
+          'id, stage_id, score_a, score_b, status, scheduled_at, best_of, team_a:teams!matches_team_a_id_fkey(id, name, tag, logo_url), team_b:teams!matches_team_b_id_fkey(id, name, tag, logo_url)'
         )
         .in('stage_id', stageIds)
         .neq('status', 'CANCELLED')
@@ -90,21 +113,40 @@ async function getScheduleData(): Promise<MatchSchedulePageData> {
         .limit(20);
 
       matches = ((matchRows ?? []) as unknown as MatchRow[]).map((m) => {
-        const teamA = one<TeamRef>(m.team_a);
-        const teamB = one<TeamRef>(m.team_b);
+        const teamA = one<TeamJoinedRef>(m.team_a);
+        const teamB = one<TeamJoinedRef>(m.team_b);
         const status = toMatchStatus(m.status);
         return {
           id: m.id,
           timeText: m.scheduled_at
-            ? new Date(m.scheduled_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+            ? new Date(m.scheduled_at).toLocaleTimeString('th-TH', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })
             : 'TBA',
-          stageRoundLabel: stageNameById.get(m.stage_id) ?? '',
-          teamAName: teamA?.name ?? 'TBD',
-          teamBName: teamB?.name ?? 'TBD',
-          teamAScore: m.score_a ?? undefined,
-          teamBScore: m.score_b ?? undefined,
-          scoreText: status === 'COMPLETED' && m.score_a !== null && m.score_b !== null ? `${m.score_a} – ${m.score_b}` : undefined,
+          stageRoundLabel: stageNameById.get(m.stage_id) ?? 'Stage Round',
+          bestOf: m.best_of ?? 1,
+          bestOfText: `BO${m.best_of ?? 1}`,
+          scheduledAt: m.scheduled_at,
           status,
+          teamA: {
+            id: teamA?.id,
+            name: teamA?.name ?? 'TBD',
+            tag: teamA?.tag ?? 'TBD',
+            logoUrl: teamA?.logo_url,
+            score: m.score_a ?? undefined,
+          },
+          teamB: {
+            id: teamB?.id,
+            name: teamB?.name ?? 'TBD',
+            tag: teamB?.tag ?? 'TBD',
+            logoUrl: teamB?.logo_url,
+            score: m.score_b ?? undefined,
+          },
+          seriesScoreText:
+            status === 'COMPLETED' && m.score_a !== null && m.score_b !== null
+              ? `${m.score_a} – ${m.score_b}`
+              : undefined,
         };
       });
 
@@ -114,21 +156,25 @@ async function getScheduleData(): Promise<MatchSchedulePageData> {
 
   const { data: standingsRows } = await supabase
     .from('season_standings')
-    .select('total_zp, wins, losses, teams(name)')
+    .select('team_id, total_zp, wins, losses, teams(id, name, tag, logo_url)')
     .eq('season_id', season.id)
     .order('total_zp', { ascending: false });
 
   const standings: StandingTeamItem[] = ((standingsRows ?? []) as unknown as {
+    team_id: string;
     total_zp: number;
     wins: number;
     losses: number;
-    teams: TeamRef[] | TeamRef | null;
+    teams: TeamJoinedRef[] | TeamJoinedRef | null;
   }[]).map((s, i) => {
-    const team = one<TeamRef>(s.teams);
+    const team = one<TeamJoinedRef>(s.teams);
     const total = s.wins + s.losses;
     return {
       rank: i + 1,
+      teamId: s.team_id,
       teamName: team?.name ?? 'UNKNOWN',
+      teamTag: team?.tag ?? '',
+      logoUrl: team?.logo_url,
       wins: s.wins,
       losses: s.losses,
       winRate: total > 0 ? Math.round((s.wins / total) * 100) : 0,
@@ -142,11 +188,14 @@ async function getScheduleData(): Promise<MatchSchedulePageData> {
     liveBannerMatch,
     todayMatches: matches,
     standings,
-    lastUpdatedText: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+    lastUpdatedText: new Date().toLocaleTimeString('th-TH', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
   };
 }
 
-function renderMatchStatusBadge(status: MatchStatus) {
+function renderMatchStatusBadge(status: ScheduleMatchDisplayStatus) {
   if (status === 'COMPLETED') {
     return (
       <span className="rounded bg-[#64dc7c]/10 border border-[#64dc7c]/30 px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-[#6ddc7c]">
@@ -159,6 +208,13 @@ function renderMatchStatusBadge(status: MatchStatus) {
       <span className="flex items-center gap-1.5 rounded bg-[#dc3232]/20 border border-[#dc3232]/50 px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-[#ff6b6b]">
         <span className="h-1.5 w-1.5 rounded-full bg-[#ff4444] animate-pulse" />
         LIVE
+      </span>
+    );
+  }
+  if (status === 'DISPUTED') {
+    return (
+      <span className="rounded bg-[#eab308]/10 border border-[#eab308]/30 px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-[#facc15]">
+        DISPUTED
       </span>
     );
   }
@@ -184,10 +240,18 @@ export default async function MatchSchedulePage() {
           <span className="text-base">ZODIAC ARENA</span>
         </div>
         <div className="hidden md:flex gap-7 text-[13px] font-medium text-[#b2b6ca]">
-          <Link href="/profile" className="hover:text-[#E8B429] transition-colors">นักกีฬา</Link>
-          <Link href="/home" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
-          <Link href="/tournament" className="hover:text-[#E8B429] transition-colors">ลีก</Link>
-          <Link href="/schedule" className="text-[#E8B429] font-bold">Rankings</Link>
+          <Link href="/profile" className="hover:text-[#E8B429] transition-colors">
+            นักกีฬา
+          </Link>
+          <Link href="/home" className="hover:text-[#E8B429] transition-colors">
+            ทีม
+          </Link>
+          <Link href="/tournament" className="hover:text-[#E8B429] transition-colors">
+            ลีก
+          </Link>
+          <Link href="/schedule" className="text-[#E8B429] font-bold">
+            Rankings
+          </Link>
         </div>
       </nav>
 
@@ -195,11 +259,17 @@ export default async function MatchSchedulePage() {
       <main className="max-w-[1100px] mx-auto px-6 md:px-8 pt-10">
         <div className="mb-7">
           <div className="flex items-baseline gap-3 mb-1.5">
-            <span className="text-[11px] font-semibold tracking-[0.16em] text-[#E8B429] uppercase">ตารางแข่งขัน</span>
+            <span className="text-[11px] font-semibold tracking-[0.16em] text-[#E8B429] uppercase">
+              ตารางแข่งขัน
+            </span>
             <span className="text-[#E8B429]/35 text-xs">·</span>
-            <span className="text-[11px] font-semibold tracking-[0.16em] text-[#9397ab] uppercase">MATCH SCHEDULE</span>
+            <span className="text-[11px] font-semibold tracking-[0.16em] text-[#9397ab] uppercase">
+              MATCH SCHEDULE
+            </span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-wider text-white mb-6">{data.seasonTitle}</h1>
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-wider text-white mb-6">
+            {data.seasonTitle}
+          </h1>
         </div>
 
         {/* 3. LIVE MATCH BANNER */}
@@ -218,20 +288,26 @@ export default async function MatchSchedulePage() {
 
                 <div className="flex items-center gap-5 md:gap-7 flex-wrap">
                   <div>
-                    <div className="text-xl md:text-2xl font-black tracking-wider text-[#E8B429]">{live.teamAName}</div>
+                    <div className="text-xl md:text-2xl font-black tracking-wider text-[#E8B429]">
+                      {live.teamA.name}
+                    </div>
                   </div>
 
                   <div className="text-center px-2">
                     <div className="text-3xl md:text-4xl font-black text-white leading-none">
-                      <span className="text-[#E8B429]">{live.teamAScore ?? 0}</span>
+                      <span className="text-[#E8B429]">{live.teamA.score ?? 0}</span>
                       <span className="text-white/25 mx-2 text-2xl">–</span>
-                      <span className="text-[#cfd3e5]">{live.teamBScore ?? 0}</span>
+                      <span className="text-[#cfd3e5]">{live.teamB.score ?? 0}</span>
                     </div>
-                    <div className="text-[9px] font-bold tracking-widest text-[#75798c] uppercase mt-1">SCORE</div>
+                    <div className="text-[9px] font-bold tracking-widest text-[#75798c] uppercase mt-1">
+                      SCORE
+                    </div>
                   </div>
 
                   <div>
-                    <div className="text-xl md:text-2xl font-black tracking-wider text-[#cfd3e5]">{live.teamBName}</div>
+                    <div className="text-xl md:text-2xl font-black tracking-wider text-[#cfd3e5]">
+                      {live.teamB.name}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -242,9 +318,13 @@ export default async function MatchSchedulePage() {
         {/* 4. TODAY'S MATCHES */}
         <div className="mb-9">
           <div className="flex items-center gap-2.5 mb-3.5">
-            <span className="text-[10px] font-bold tracking-widest text-[#E8B429] uppercase">การแข่งขัน</span>
+            <span className="text-[10px] font-bold tracking-widest text-[#E8B429] uppercase">
+              การแข่งขัน
+            </span>
             <span className="text-[#E8B429]/30">·</span>
-            <span className="text-[10px] font-semibold tracking-widest text-[#75798c] uppercase">UPCOMING MATCHES</span>
+            <span className="text-[10px] font-semibold tracking-widest text-[#75798c] uppercase">
+              UPCOMING MATCHES
+            </span>
             <div className="h-[1px] flex-1 bg-gradient-to-r from-[#E8B429]/25 to-transparent" />
           </div>
 
@@ -265,17 +345,23 @@ export default async function MatchSchedulePage() {
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-12 text-center flex-shrink-0">
-                      <div className="text-base font-extrabold text-[#E8B429] leading-tight">{m.timeText}</div>
+                      <div className="text-base font-extrabold text-[#E8B429] leading-tight">
+                        {m.timeText}
+                      </div>
                       <div className="text-[9px] text-[#75798c]">{m.stageRoundLabel}</div>
                     </div>
                     <div className="h-7 w-[1px] bg-white/10 flex-shrink-0" />
                     <div className="flex items-center gap-2.5 flex-wrap">
-                      <span className="text-sm font-bold text-white tracking-wide">{m.teamAName}</span>
+                      <span className="text-sm font-bold text-white tracking-wide">
+                        {m.teamA.name}
+                      </span>
                       <span className="text-xs text-[#75798c]">vs</span>
-                      <span className="text-sm font-bold text-white tracking-wide">{m.teamBName}</span>
-                      {m.scoreText && (
+                      <span className="text-sm font-bold text-white tracking-wide">
+                        {m.teamB.name}
+                      </span>
+                      {m.seriesScoreText && (
                         <span className="ml-2 text-xs font-bold text-[#b2b6ca] bg-white/5 px-2 py-0.5 rounded">
-                          {m.scoreText}
+                          {m.seriesScoreText}
                         </span>
                       )}
                     </div>
@@ -284,13 +370,19 @@ export default async function MatchSchedulePage() {
                   <div className="flex items-center gap-3 self-end md:self-auto flex-shrink-0">
                     {renderMatchStatusBadge(m.status)}
                     {m.status === 'COMPLETED' ? (
-                      <button className="rounded-md border border-[#E8B429]/40 bg-transparent px-4 py-1.5 text-xs font-bold text-[#E8B429] hover:bg-[#E8B429]/10">
+                      <Link
+                        href={`/tournament`}
+                        className="rounded-md border border-[#E8B429]/40 bg-transparent px-4 py-1.5 text-xs font-bold text-[#E8B429] hover:bg-[#E8B429]/10"
+                      >
                         ดูผล
-                      </button>
+                      </Link>
                     ) : m.status === 'LIVE' ? (
-                      <button className="rounded-md bg-[#cc2828] px-4 py-1.5 text-xs font-bold text-white hover:bg-[#b02222]">
+                      <Link
+                        href={`/overlay/match/${m.id}`}
+                        className="rounded-md bg-[#cc2828] px-4 py-1.5 text-xs font-bold text-white hover:bg-[#b02222]"
+                      >
                         ดูสด
-                      </button>
+                      </Link>
                     ) : (
                       <form
                         action={async () => {
@@ -316,13 +408,19 @@ export default async function MatchSchedulePage() {
         {/* 5. STANDINGS TABLE */}
         <div className="overflow-hidden rounded-xl border border-white/10 bg-[#1A1C2E] mb-6">
           <div className="flex items-baseline gap-2.5 border-b border-[#E8B429]/15 p-4 md:px-6">
-            <span className="text-[11px] font-bold tracking-wider text-[#E8B429] uppercase">ตารางคะแนน</span>
+            <span className="text-[11px] font-bold tracking-wider text-[#E8B429] uppercase">
+              ตารางคะแนน
+            </span>
             <span className="text-[#E8B429]/30">·</span>
-            <h2 className="text-sm font-extrabold tracking-wider text-white uppercase">STANDINGS</h2>
+            <h2 className="text-sm font-extrabold tracking-wider text-white uppercase">
+              STANDINGS
+            </h2>
           </div>
 
           {data.standings.length === 0 ? (
-            <div className="p-8 text-center text-sm text-[#75798c]">ยังไม่มีตารางคะแนนในซีซันนี้</div>
+            <div className="p-8 text-center text-sm text-[#75798c]">
+              ยังไม่มีตารางคะแนนในซีซันนี้
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -349,7 +447,11 @@ export default async function MatchSchedulePage() {
                       <td className="py-3 px-6">
                         <div className="flex items-center gap-1.5">
                           {team.isHighlight && <span className="text-[#E8B429] text-xs">★</span>}
-                          <span className={`font-extrabold ${team.isHighlight ? 'text-[#E8B429]' : 'text-[#75798c]'}`}>
+                          <span
+                            className={`font-extrabold ${
+                              team.isHighlight ? 'text-[#E8B429]' : 'text-[#75798c]'
+                            }`}
+                          >
                             {team.rank}
                           </span>
                         </div>
@@ -365,15 +467,29 @@ export default async function MatchSchedulePage() {
                           >
                             {team.teamName.slice(0, 2)}
                           </div>
-                          <span className={`font-bold tracking-wide ${team.isHighlight ? 'text-[#E8B429]' : 'text-white'}`}>
+                          <span
+                            className={`font-bold tracking-wide ${
+                              team.isHighlight ? 'text-[#E8B429]' : 'text-white'
+                            }`}
+                          >
                             {team.teamName}
                           </span>
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-center font-bold text-[#4ade80]">{team.wins}</td>
-                      <td className="py-3 px-4 text-center font-bold text-[#75798c]">{team.losses}</td>
-                      <td className="py-3 px-4 text-center font-bold text-[#cfd3e5]">{team.winRate}%</td>
-                      <td className={`py-3 pr-6 pl-4 text-right font-black ${team.isHighlight ? 'text-[#E8B429]' : 'text-[#cfd3e5]'}`}>
+                      <td className="py-3 px-4 text-center font-bold text-[#4ade80]">
+                        {team.wins}
+                      </td>
+                      <td className="py-3 px-4 text-center font-bold text-[#75798c]">
+                        {team.losses}
+                      </td>
+                      <td className="py-3 px-4 text-center font-bold text-[#cfd3e5]">
+                        {team.winRate}%
+                      </td>
+                      <td
+                        className={`py-3 pr-6 pl-4 text-right font-black ${
+                          team.isHighlight ? 'text-[#E8B429]' : 'text-[#cfd3e5]'
+                        }`}
+                      >
                         {team.zpTotal.toLocaleString()} ZP
                       </td>
                     </tr>
