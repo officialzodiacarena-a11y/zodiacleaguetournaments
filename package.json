@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "tree:update": "node update-tree.mjs",
-    "diff:check": "node diff-check.mjs"
+    "diff:check": "node diff-check.mjs",
+    "smoke-test:phase7": "node --env-file=.env.local scripts/smoke-test-phase7.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

@@ -31,16 +31,21 @@ export async function requireAdminRole(
     return { error: NextResponse.json({ error: { code: 'PROFILE_NOT_FOUND', message: 'ไม่พบประวัติโปรไฟล์ของคุณในระบบลีก' } }, { status: 404 }) };
   }
 
-  const { data: userRole, error: roleError } = await supabase
+  // A player commonly holds more than one concurrent, non-revoked role (e.g.
+  // the base ATHLETE role plus ADMIN) — .single() would throw PGRST116 on
+  // that and get misread as "no role", denying every real admin. Fetch all
+  // active roles and check for any that's in the allow-list instead.
+  const { data: userRoles, error: roleError } = await supabase
     .from('user_roles')
     .select('role')
     .eq('player_id', player.id)
-    .is('revoked_at', null)
-    .single();
+    .is('revoked_at', null);
 
-  if (roleError || !userRole || !allowedRoles.includes(userRole.role)) {
+  const matchedRole = userRoles?.find((r) => allowedRoles.includes(r.role));
+
+  if (roleError || !matchedRole) {
     return { error: NextResponse.json({ error: { code: 'FORBIDDEN_ROLE', message: 'บัญชีนี้ไม่มีสิทธิ์เข้าถึงคำสั่งนี้' } }, { status: 403 }) };
   }
 
-  return { playerId: player.id, role: userRole.role };
+  return { playerId: player.id, role: matchedRole.role };
 }
