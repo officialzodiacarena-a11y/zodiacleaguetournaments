@@ -1,3 +1,4 @@
+import { revalidateTag } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -223,6 +224,17 @@ export async function POST(
       idempotency_key: idempotencyKey,
     },
   });
+
+  // Sprint 5.2 — Pro Analytics data freshness: refresh the concurrent
+  // materialized view and revalidate the Next.js cache tag so a subscriber's
+  // dashboard reflects this match within 5 seconds (QA Case 7). Best-effort —
+  // a refresh failure must never fail match finalization itself.
+  try {
+    await adminSupabase.rpc('refresh_team_analytics', {});
+    revalidateTag('team-analytics', 'seconds');
+  } catch {
+    // swallow — analytics freshness is not allowed to block match completion
+  }
 
   return NextResponse.json(updatedMatch);
 }
