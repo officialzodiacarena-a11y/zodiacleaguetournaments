@@ -1,26 +1,60 @@
 # 🌳 Zpdoac Arena Master Data Tree & Schema Map (V1.06)
 
-> 💎 **Last Updated:** เวลา 21:23:04 จันทร์ 07/09/2026
+> 💎 **Last Updated:** เวลา 11:34:02 พฤหัสบดี 10/09/2026
 
 ีวิธีใช้ = node update-tree.mjs
 
 ## 📁 1. Project Directory Architecture (Next.js App Router)
 
+zodiac-arena/
+├── app/
+│   ├── admin/command-room/page.tsx               # Desktop-only Admin Console (Settle/Void/Dispute)
+│   ├── api/v1/
+│   │   ├── admin/
+│   │   │   ├── matches/[id]/void/route.ts        # Emergency Match Void Handler
+│   │   │   ├── predictions/pools/[id]/           # settle, void, retry-settle endpoints
+│   │   │   └── predictions/pools/errors/         # Settlement error inspection
+│   │   ├── matches/[id]/                         # ready, veto, report, dispute, replays, lobby
+│   │   ├── marketplace/                          # listings (floor_price zero-leak), store orders
+│   │   ├── payments/                             # intents, webhook (Omise/Crypto), refunds
+│   │   ├── predictions/                          # pools, tickets (buy/my/inspect)
+│   │   ├── subscriptions/                        # checkout, renew (AP/Fiat), check-access
+│   │   ├── tournaments/                          # bracket, stages, award-zp, zodiac-draw
+│   │   └── watch/                                # sessions start/end, heartbeat (Zero-write cap)
+│   ├── overlay/match/[id]/                       # OBS Real-time 1080p Browser Source
+│   ├── spectator/control/[match_id]/             # Referee & Caster HUD Controller
+│   └── tournament/[tournamentId]/                # Bracket viewer, registration flow
+├── lib/
+│   ├── admin/requireAdminRole.ts                 # Multi-role support Admin Guard
+│   ├── admin/stuckMinutes.ts                     # Match & Dispute timeout monitor
+│   ├── billing/checkAccessGate.ts                # Pro Analytics & Tier gating
+│   ├── tournament/                               # Bracket engines (Single/Double/Round Robin)
+│   └── watch/nextResetAt.ts                      # Server-side reset calculator (Asia/Bangkok)
+└── supabase/migrations/                          # Complete Stage 1 & Stage 2 Database Schemas
+
 ```text
 zodiac/
 ├── app/
 │   ├── admin/
+│   │   ├── command-room/
+│   │   │   └── page.tsx
 │   │   └── store/
 │   ├── api/
-│   │   ├── arena/
-│   │   │   └── ticket/
-│   │   │       └── spend/
-│   │   │           └── route.ts
 │   │   ├── ave/
 │   │   │   └── chat/
 │   │   │       └── route.ts
 │   │   ├── cron/
+│   │   │   ├── abuse-analysis/
+│   │   │   │   └── route.ts
+│   │   │   ├── clean-expired-orders/
+│   │   │   │   └── route.ts
 │   │   │   ├── match-reminders/
+│   │   │   │   └── route.ts
+│   │   │   ├── recalculate-player-stats/
+│   │   │   │   └── route.ts
+│   │   │   ├── reconcile-zp/
+│   │   │   │   └── route.ts
+│   │   │   ├── reset-daily-ap/
 │   │   │   │   └── route.ts
 │   │   │   ├── veto-autopick/
 │   │   │   │   └── route.ts
@@ -33,18 +67,80 @@ zodiac/
 │   │   │       ├── route.ts
 │   │   │       └── TierBadge.tsx
 │   │   └── v1/
+│   │       ├── admin/
+│   │       │   ├── earning-rules/
+│   │       │   │   ├── [id]/
+│   │       │   │   │   └── route.ts
+│   │       │   │   └── route.ts
+│   │       │   ├── finals/
+│   │       │   │   ├── circuit-lock/
+│   │       │   │   │   └── route.ts
+│   │       │   │   ├── season-archive/
+│   │       │   │   │   └── route.ts
+│   │       │   │   └── season-reset/
+│   │       │   │       └── route.ts
+│   │       │   ├── matches/
+│   │       │   │   └── [id]/
+│   │       │   │       └── void/
+│   │       │   │           └── route.ts
+│   │       │   ├── predictions/
+│   │       │   │   └── pools/
+│   │       │   │       ├── errors/
+│   │       │   │       │   └── route.ts
+│   │       │   │       └── [id]/
+│   │       │   │           ├── retry-settle/
+│   │       │   │           │   └── route.ts
+│   │       │   │           ├── settle/
+│   │       │   │           │   └── route.ts
+│   │       │   │           └── void/
+│   │       │   │               └── route.ts
+│   │       │   ├── store/
+│   │       │   │   ├── items/
+│   │       │   │   │   ├── [id]/
+│   │       │   │   │   │   └── route.ts
+│   │       │   │   │   └── route.ts
+│   │       │   │   ├── shipments/
+│   │       │   │   │   └── [id]/
+│   │       │   │   │       └── route.ts
+│   │       │   │   └── variants/
+│   │       │   │       └── [id]/
+│   │       │   │           └── route.ts
+│   │       │   ├── streams/
+│   │       │   │   ├── [id]/
+│   │       │   │   │   └── route.ts
+│   │       │   │   └── route.ts
+│   │       │   ├── themes/
+│   │       │   │   ├── [id]/
+│   │       │   │   │   └── route.ts
+│   │       │   │   └── route.ts
+│   │       │   └── verifications/
+│   │       │       ├── [id]/
+│   │       │       │   ├── approve/
+│   │       │       │   │   └── route.ts
+│   │       │       │   ├── reject/
+│   │       │       │   │   └── route.ts
+│   │       │       │   └── revoke/
+│   │       │       │       └── route.ts
+│   │       │       └── route.ts
 │   │       ├── bracket-nodes/
 │   │       │   └── [id]/
 │   │       │       ├── void/
 │   │       │       │   └── route.ts
 │   │       │       └── route.ts
-│   │       ├── daily/
-│   │       │   ├── matchmake/
-│   │       │   │   └── route.ts
-│   │       │   └── settle-winner/
-│   │       │       └── route.ts
+│   │       ├── circuits/
+│   │       │   └── [id]/
+│   │       │       ├── recalculate/
+│   │       │       │   └── route.ts
+│   │       │       └── standings/
+│   │       │           └── route.ts
+│   │       ├── hall-of-fame/
+│   │       │   └── route.ts
 │   │       ├── matches/
 │   │       │   └── [id]/
+│   │       │       ├── dispute/
+│   │       │       │   ├── resolve/
+│   │       │       │   │   └── route.ts
+│   │       │       │   └── route.ts
 │   │       │       ├── games/
 │   │       │       │   ├── [game_number]/
 │   │       │       │   │   ├── participants/
@@ -54,6 +150,8 @@ zodiac/
 │   │       │       ├── lobby/
 │   │       │       │   ├── messages/
 │   │       │       │   │   └── route.ts
+│   │       │       │   └── route.ts
+│   │       │       ├── participants/
 │   │       │       │   └── route.ts
 │   │       │       ├── ready/
 │   │       │       │   └── route.ts
@@ -74,13 +172,72 @@ zodiac/
 │   │       ├── mercenary/
 │   │       │   └── join/
 │   │       │       └── route.ts
+│   │       ├── payments/
+│   │       │   ├── intents/
+│   │       │   │   ├── crypto/
+│   │       │   │   │   └── route.ts
+│   │       │   │   ├── [id]/
+│   │       │   │   │   └── route.ts
+│   │       │   │   └── route.ts
+│   │       │   ├── refunds/
+│   │       │   │   └── route.ts
+│   │       │   └── webhook/
+│   │       │       ├── crypto/
+│   │       │       │   └── route.ts
+│   │       │       └── omise/
+│   │       │           └── route.ts
 │   │       ├── players/
+│   │       │   ├── [id]/
+│   │       │   │   ├── replays/
+│   │       │   │   │   └── route.ts
+│   │       │   │   └── stats/
+│   │       │   │       └── route.ts
+│   │       │   ├── leaderboard/
+│   │       │   │   └── route.ts
+│   │       │   ├── me/
+│   │       │   │   ├── ap/
+│   │       │   │   │   └── route.ts
+│   │       │   │   ├── game-account/
+│   │       │   │   │   ├── evidence/
+│   │       │   │   │   │   └── route.ts
+│   │       │   │   │   └── route.ts
+│   │       │   │   ├── inventory/
+│   │       │   │   │   ├── [variantId]/
+│   │       │   │   │   │   ├── equip/
+│   │       │   │   │   │   │   └── route.ts
+│   │       │   │   │   │   └── unequip/
+│   │       │   │   │   │       └── route.ts
+│   │       │   │   │   └── route.ts
+│   │       │   │   ├── payments/
+│   │       │   │   │   └── route.ts
+│   │       │   │   └── shipping-addresses/
+│   │       │   │       ├── [id]/
+│   │       │   │       │   └── route.ts
+│   │       │   │       └── route.ts
+│   │       │   └── search/
+│   │       │       └── route.ts
+│   │       ├── predictions/
+│   │       │   ├── pools/
+│   │       │   │   └── route.ts
+│   │       │   └── tickets/
+│   │       │       ├── [id]/
+│   │       │       │   └── route.ts
+│   │       │       ├── my/
+│   │       │       │   └── route.ts
+│   │       │       └── route.ts
+│   │       ├── prize-payouts/
 │   │       │   └── [id]/
-│   │       │       └── replays/
+│   │       │       └── approve/
 │   │       │           └── route.ts
 │   │       ├── rewards/
 │   │       │   └── redeem/
 │   │       │       └── route.ts
+│   │       ├── seasons/
+│   │       │   └── [id]/
+│   │       │       ├── recalculate/
+│   │       │       │   └── route.ts
+│   │       │       └── standings/
+│   │       │           └── route.ts
 │   │       ├── stages/
 │   │       │   └── [id]/
 │   │       │       ├── bracket/
@@ -90,12 +247,31 @@ zodiac/
 │   │       │       ├── status/
 │   │       │       │   └── route.ts
 │   │       │       └── route.ts
+│   │       ├── store/
+│   │       │   ├── items/
+│   │       │   │   └── route.ts
+│   │       │   └── orders/
+│   │       │       ├── [id]/
+│   │       │       │   ├── checkout/
+│   │       │       │   │   └── route.ts
+│   │       │       │   └── shipment/
+│   │       │       │       └── route.ts
+│   │       │       └── route.ts
+│   │       ├── streams/
+│   │       │   ├── [id]/
+│   │       │   │   └── watch/
+│   │       │   │       ├── claim/
+│   │       │   │       │   └── route.ts
+│   │       │   │       ├── heartbeat/
+│   │       │   │       │   └── route.ts
+│   │       │   │       └── start/
+│   │       │   │           └── route.ts
+│   │       │   └── route.ts
+│   │       ├── themes/
+│   │       │   └── active/
+│   │       │       └── route.ts
 │   │       ├── tournament/
 │   │       │   ├── bracket/
-│   │       │   │   ├── create-monthly/
-│   │       │   │   │   └── route.ts
-│   │       │   │   ├── create-weekly/
-│   │       │   │   │   └── route.ts
 │   │       │   │   └── report-result/
 │   │       │   │       └── route.ts
 │   │       │   ├── circuit/
@@ -103,24 +279,34 @@ zodiac/
 │   │       │   │   │   └── route.ts
 │   │       │   │   └── evaluate-monthly-qualifiers/
 │   │       │   │       └── route.ts
-│   │       │   ├── prize/
-│   │       │   │   └── settle/
-│   │       │   │       └── route.ts
-│   │       │   └── swiss/
-│   │       │       ├── finalize-top8/
-│   │       │       │   └── route.ts
-│   │       │       └── generate-pairing/
+│   │       │   └── prize/
+│   │       │       └── settle/
 │   │       │           └── route.ts
 │   │       ├── tournaments/
 │   │       │   └── [id]/
+│   │       │       ├── award-zp/
+│   │       │       │   └── route.ts
 │   │       │       ├── matches/
+│   │       │       │   └── route.ts
+│   │       │       ├── prize-payouts/
 │   │       │       │   └── route.ts
 │   │       │       ├── stages/
 │   │       │       │   └── route.ts
+│   │       │       ├── zodiac-draw/
+│   │       │       │   └── route.ts
 │   │       │       └── route.ts
-│   │       └── wallet/
-│   │           └── cashout/
-│   │               └── route.ts
+│   │       ├── wallet/
+│   │       │   └── cashout/
+│   │       │       └── route.ts
+│   │       └── watch/
+│   │           ├── heartbeat/
+│   │           │   └── route.ts
+│   │           └── sessions/
+│   │               ├── [id]/
+│   │               │   └── end/
+│   │               │       └── route.ts
+│   │               └── start/
+│   │                   └── route.ts
 │   ├── auth/
 │   │   ├── callback/
 │   │   │   ├── riot/
@@ -174,9 +360,6 @@ zodiac/
 │   │       └── page.tsx
 │   ├── tournament/
 │   │   ├── daily/
-│   │   │   ├── lobby/
-│   │   │   │   └── [lobbyId]/
-│   │   │   │       └── page.tsx
 │   │   │   └── page.tsx
 │   │   ├── monthly/
 │   │   │   └── page.tsx
@@ -196,10 +379,14 @@ zodiac/
 │   ├── layout.tsx
 │   └── page.tsx
 ├── lib/
-│   ├── arena/
-│   │   └── ticketService.ts
+│   ├── admin/
+│   │   ├── requireAdminRole.ts
+│   │   └── stuckMinutes.ts
 │   ├── matchmaking/
-│   │   └── dailyArenaTierEngine.ts
+│   ├── payments/
+│   │   ├── cryptoRate.ts
+│   │   ├── omise.ts
+│   │   └── webhookAuth.ts
 │   ├── season/
 │   │   └── pickRelevantSeason.ts
 │   ├── supabase/
@@ -208,14 +395,14 @@ zodiac/
 │   │   └── server.ts
 │   ├── team/
 │   │   └── rosterEligibility.ts
-│   └── tournament/
-│       ├── bracketEngine.ts
-│       ├── circuitPoints.ts
-│       ├── generateDoubleEliminationBracket.ts
-│       ├── generateRoundRobinBracket.ts
-│       ├── generateSingleEliminationBracket.ts
-│       ├── leaderboardService.ts
-│       ├── monthlyDoubleElim.ts
-│       ├── prizeCalculator.ts
-│       └── swissPairing.ts
+│   ├── tournament/
+│   │   ├── bracket12Engine.ts
+│   │   ├── circuitPoints.ts
+│   │   ├── generateDoubleEliminationBracket.ts
+│   │   ├── generateRoundRobinBracket.ts
+│   │   ├── generateSingleEliminationBracket.ts
+│   │   ├── leaderboardService.ts
+│   │   └── prizeCalculator.ts
+│   └── watch/
+│       └── nextResetAt.ts
 ```

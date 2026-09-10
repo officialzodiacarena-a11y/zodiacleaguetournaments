@@ -5,6 +5,8 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import type { Provider } from '@supabase/supabase-js';
+import { TIKTOK_PROVIDER } from '@/lib/auth/tiktokProvider';
 
 const SPRING_CHAMPIONS = {
   teamName: 'ZODIAC APEX',
@@ -19,27 +21,33 @@ const SPRING_CHAMPIONS = {
 };
 
 export default function LoginPage() {
-  const [loading, setLoading] = useState<'google' | null>(null);
+  const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const router = useRouter();
   const supabase = createClient();
 
-  // Google OAuth ผ่าน Supabase — ทางเดียวที่ล็อกอินเข้าระบบได้จริง
+  // OAuth ผ่าน Supabase — Google/Facebook/TikTok เท่านั้นที่ล็อกอินเข้าระบบได้จริง
   // Fix (2026-09-09): เดิมมีปุ่ม "LOGIN WITH RIOT ID" ที่ปลอมทั้งหมด (setTimeout
   // จำลอง delay + เขียน session ลง localStorage เท่านั้น ไม่แตะ DB จริงเลย) ตัดออก
   // เพราะการผูก Riot ID จริงมีระบบ Manual Athlete Verification (T4.0) อยู่แล้วที่
   // /profile ผ่าน GameAccountModal.tsx ซึ่งเขียนลงตาราง game_accounts จริง —
-  // ผู้ใช้ต้อง login ผ่าน Google ก่อน แล้วค่อยไปผูก Riot ID ที่หน้าโปรไฟล์
-  async function handleGoogleLogin() {
-    setLoading('google');
+  // ผู้ใช้ต้อง login ผ่าน provider ด้านล่างก่อน แล้วค่อยไปผูก Riot ID ที่หน้าโปรไฟล์
+  async function handleOAuthLogin(provider: Provider) {
+    setLoading(provider);
     setError(null);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
-    if (error) {
-      setError(error.message);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (error) throw error;
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
+      }
       setLoading(null);
     }
   }
@@ -296,12 +304,33 @@ export default function LoginPage() {
 
             {/* ปุ่ม Google Auth ผ่าน Supabase */}
             <button
-              onClick={handleGoogleLogin}
+              onClick={() => handleOAuthLogin('google')}
               disabled={loading !== null}
               className="w-full flex items-center justify-center gap-2 rounded-lg py-2 px-3 text-[10px] font-semibold tracking-wider text-zinc-200 bg-white/10 hover:bg-white/20 border border-white/20 transition-colors disabled:opacity-50 cursor-pointer"
             >
               {loading === 'google' ? <Spinner /> : <GoogleIcon />}
-              <span>GOOGLE LOGIN</span>
+              <span>{loading === 'google' ? 'CONNECTING...' : 'GOOGLE LOGIN'}</span>
+            </button>
+
+            {/* ปุ่ม Facebook Auth ผ่าน Supabase */}
+            <button
+              onClick={() => handleOAuthLogin('facebook')}
+              disabled={loading !== null}
+              className="w-full flex items-center justify-center gap-2 rounded-lg py-2 px-3 text-[10px] font-bold tracking-wider text-white bg-[#1877F2]/20 hover:bg-[#1877F2]/40 border border-[#1877F2]/40 transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {loading === 'facebook' ? <Spinner /> : <FacebookIcon />}
+              <span>{loading === 'facebook' ? 'CONNECTING...' : 'LOGIN WITH FACEBOOK'}</span>
+            </button>
+
+            {/* ปุ่ม TikTok Auth ผ่าน Supabase (Custom OAuth Provider — ต้องตั้งค่าใน
+                Supabase Dashboard ก่อนใช้งานจริง ดู lib/auth/tiktokProvider.ts) */}
+            <button
+              onClick={() => handleOAuthLogin(TIKTOK_PROVIDER)}
+              disabled={loading !== null}
+              className="w-full flex items-center justify-center gap-2 rounded-lg py-2 px-3 text-[10px] font-bold tracking-wider text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/20 transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {loading === TIKTOK_PROVIDER ? <Spinner /> : <TikTokIcon />}
+              <span>{loading === TIKTOK_PROVIDER ? 'CONNECTING...' : 'LOGIN WITH TIKTOK'}</span>
             </button>
           </div>
         </div>
@@ -413,6 +442,22 @@ function GoogleIcon() {
       <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853" />
       <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
       <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335" />
+    </svg>
+  );
+}
+
+function FacebookIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+    </svg>
+  );
+}
+
+function TikTokIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M16.6 5.82c-1.02-.88-1.66-2.18-1.66-3.62h-3.1v13.3c0 1.66-1.34 3-3 3-1.66 0-3-1.34-3-3s1.34-3 3-3c.31 0 .61.05.9.13V9.4a6.1 6.1 0 0 0-.9-.07 6.1 6.1 0 1 0 6.1 6.1V9.02a9.16 9.16 0 0 0 5.36 1.72V7.65c-1.28 0-2.46-.4-3.7-1.83z" />
     </svg>
   );
 }

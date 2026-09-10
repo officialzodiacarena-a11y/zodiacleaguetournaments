@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isRiotLoginEnabled } from '@/lib/auth/riotSlotGuard';
 
 export async function GET(request: NextRequest) {
+  if (!isRiotLoginEnabled()) {
+    return NextResponse.redirect(new URL('/login?error=riot_disabled', request.url));
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get('code');
   const isMock = process.env.RIOT_MOCK_MODE === 'true';

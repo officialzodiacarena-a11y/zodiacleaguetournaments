@@ -1,7 +1,12 @@
 // app/api/riot/verify/route.ts
-import { NextResponse } from 'next/server';;
+import { NextResponse } from 'next/server';
+import { isRiotLoginEnabled, RIOT_LOGIN_DISABLED_MESSAGE } from '@/lib/auth/riotSlotGuard';
 
 export async function POST(request: Request) {
+  if (!isRiotLoginEnabled()) {
+    return NextResponse.json({ error: RIOT_LOGIN_DISABLED_MESSAGE }, { status: 403 });
+  }
+
   try {
     const { riotId, tagline, region } = await request.json();
 
