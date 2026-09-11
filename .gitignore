@@ -47,3 +47,6 @@ next-env.d.ts
 .env.test.local
 .env.production.local
 .aider.input.history
+
+# generated codebase export (for NotebookLM etc.)
+zodiac_codebase_export.txt
