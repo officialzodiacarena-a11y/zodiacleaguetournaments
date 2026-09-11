@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdminRole, MARKETPLACE_ADMIN_ROLES } from '@/lib/admin/requireAdminRole';
 import { UpdateShipmentSchema } from '@/types/store';
 
 export async function PATCH(
@@ -10,42 +11,8 @@ export async function PATCH(
   try {
     const { id: shipmentId } = await params;
     const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: { code: 'UNAUTHORIZED', message: 'กรุณาเข้าสู่ระบบก่อนทำรายการ' } },
-        { status: 401 }
-      );
-    }
-
-    const { data: player, error: playerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('user_id', user.id)
-      .single();
-
-    if (playerError || !player) {
-      return NextResponse.json(
-        { error: { code: 'PROFILE_NOT_FOUND', message: 'ไม่พบประวัติโปรไฟล์ของคุณในระบบลีก' } },
-        { status: 404 }
-      );
-    }
-
-    const { data: userRole, error: roleError } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('player_id', player.id)
-      .is('revoked_at', null)
-      .single();
-
-    const allowedRoles = ['ADMIN', 'SUPER_ADMIN'];
-    if (roleError || !userRole || !allowedRoles.includes(userRole.role)) {
-      return NextResponse.json(
-        { error: { code: 'FORBIDDEN_ROLE', message: 'บัญชีนี้ไม่มีสิทธิ์จัดการการจัดส่ง' } },
-        { status: 403 }
-      );
-    }
+    const gate = await requireAdminRole(supabase, MARKETPLACE_ADMIN_ROLES);
+    if ('error' in gate) return gate.error;
 
     let body: unknown;
     try {

@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdminRole, MARKETPLACE_ADMIN_ROLES } from '@/lib/admin/requireAdminRole';
-import { CreateStoreItemSchema } from '@/types/store';
+import { CreateStoreCategorySchema } from '@/types/store';
 
-// Admin catalog listing — includes inactive items, unlike the public
-// GET /api/v1/store/items (which also hides items with zero live variants).
+// Admin listing includes inactive categories too — public GET /api/v1/store/categories
+// filters those out for the storefront.
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -13,11 +13,9 @@ export async function GET() {
     if ('error' in gate) return gate.error;
 
     const { data, error } = await supabase
-      .from('store_items')
-      .select(
-        'id, name, type, description, max_per_player, is_active, category_id, item_type, partner_brand, store_item_variants(id, name, price_ap, price_thb, stock, reserved_stock, is_active, available_until)'
-      )
-      .order('created_at', { ascending: false });
+      .from('store_categories')
+      .select('id, name, slug, parent_id, partner_brand, icon_url, display_order, is_active')
+      .order('display_order', { ascending: true });
 
     if (error) {
       return NextResponse.json({ error: { code: 'QUERY_FAILED', message: error.message } }, { status: 500 });
@@ -46,7 +44,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const parseResult = CreateStoreItemSchema.safeParse(body);
+    const parseResult = CreateStoreCategorySchema.safeParse(body);
     if (!parseResult.success) {
       return NextResponse.json(
         { error: { code: 'VALIDATION_ERROR', message: 'ข้อมูลไม่ตรงข้อกำหนด', details: parseResult.error.format() } },
@@ -54,42 +52,33 @@ export async function POST(req: Request) {
       );
     }
 
-    const { name, type, description, maxPerPlayer, variants } = parseResult.data;
+    const { name, slug, parentId, partnerBrand, iconUrl, displayOrder } = parseResult.data;
 
     const adminSupabase = createAdminClient();
-
-    const { data: item, error: itemError } = await adminSupabase
-      .from('store_items')
-      .insert({ name, type, description: description ?? null, max_per_player: maxPerPlayer ?? null })
+    const { data: category, error: insertError } = await adminSupabase
+      .from('store_categories')
+      .insert({
+        name,
+        slug,
+        parent_id: parentId ?? null,
+        partner_brand: partnerBrand ?? null,
+        icon_url: iconUrl ?? null,
+        display_order: displayOrder,
+      })
       .select()
       .single();
 
-    if (itemError || !item) {
-      return NextResponse.json(
-        { error: { code: 'INSERT_FAILED', message: itemError?.message ?? 'สร้างไอเทมไม่สำเร็จ' } },
-        { status: 500 }
-      );
+    if (insertError) {
+      if (insertError.code === '23505') {
+        return NextResponse.json(
+          { error: { code: 'SLUG_TAKEN', message: 'slug นี้ถูกใช้แล้ว' } },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json({ error: { code: 'INSERT_FAILED', message: insertError.message } }, { status: 500 });
     }
 
-    const { data: variantRows, error: variantError } = await adminSupabase
-      .from('store_item_variants')
-      .insert(
-        variants.map((v) => ({
-          item_id: item.id,
-          name: v.name,
-          price_ap: v.priceAp,
-          price_thb: v.priceThb,
-          stock: v.stock,
-          available_until: v.availableUntil ?? null,
-        }))
-      )
-      .select();
-
-    if (variantError) {
-      return NextResponse.json({ error: { code: 'INSERT_FAILED', message: variantError.message } }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true, data: { ...item, variants: variantRows } }, { status: 201 });
+    return NextResponse.json({ success: true, data: category }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     return NextResponse.json({ error: { code: 'SERVER_ERROR', message } }, { status: 500 });
