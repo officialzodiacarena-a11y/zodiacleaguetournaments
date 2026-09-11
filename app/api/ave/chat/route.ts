@@ -9,7 +9,7 @@ const CHAT_RATE_WINDOW_SECONDS = 60;
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
-const ZODIAC_ARENA_SYSTEM_PROMPT = `คุณคือ AVE — AI Assistant ประจำ Zodiac Arena แพลตฟอร์มแข่งขัน Esports อันดับ 1 ของไทย
+const ZODIAC_ARENA_SYSTEM_PROMPT = `คุณคือ ZODIAC ORACLE — AI Assistant ประจำ Zodiac Arena แพลตฟอร์มแข่งขัน Esports อันดับ 1 ของไทย
 
 === กฎการตอบกลับและ Guardrails ===
 1. ตอบเป็นภาษาไทยด้วยน้ำเสียงเป็นกันเอง สนุกสนาน สไตล์ Cyberpunk Esports

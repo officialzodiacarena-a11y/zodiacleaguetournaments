@@ -6,7 +6,7 @@ import { QuickReplies } from './QuickReplies';
 
 const WELCOME_MESSAGE: ChatMessage = {
   role: 'assistant',
-  content: 'สวัสดีค่ะ! หนู AVE ผู้ช่วย AI ประจำ Zodiac Arena เอง มีอะไรให้ช่วยถามได้เลยนะคะ 🚀',
+  content: 'สวัสดีค่ะ! หนู ZODIAC ORACLE ผู้ช่วย AI ประจำ Zodiac Arena เอง มีอะไรให้ช่วยถามได้เลยนะคะ 🚀',
 };
 
 export function ChatWindow() {
@@ -72,7 +72,7 @@ export function ChatWindow() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={sending}
-            placeholder="ถาม AVE อะไรก็ได้เกี่ยวกับ Zodiac Arena..."
+            placeholder="ถาม ZODIAC ORACLE อะไรก็ได้เกี่ยวกับ Zodiac Arena..."
             className="flex-1 rounded-lg bg-[#0D0E1A] px-4 py-2.5 text-sm text-[#F9EDD8] outline-none placeholder:text-[#94A3B8] disabled:opacity-50"
           />
           <button

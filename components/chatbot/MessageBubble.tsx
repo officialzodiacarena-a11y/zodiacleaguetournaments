@@ -16,7 +16,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
         }`}
         style={!isUser ? { boxShadow: '0 0 20px rgba(232,180,41,0.08)' } : undefined}
       >
-        {!isUser && <span className="mb-0.5 block text-[10px] font-black uppercase tracking-widest text-[#E8B429]">AVE</span>}
+        {!isUser && <span className="mb-0.5 block text-[10px] font-black uppercase tracking-widest text-[#E8B429]">ZODIAC ORACLE</span>}
         <span className="whitespace-pre-wrap">{message.content}</span>
       </div>
     </div>
