@@ -7,7 +7,11 @@ export const dynamic = 'force-dynamic';
 const CHAT_RATE_LIMIT = 10;
 const CHAT_RATE_WINDOW_SECONDS = 60;
 
-const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+// gemini-1.5-flash was retired by Google (generateContent now 404s on it) —
+// use the flash alias so the route keeps working as Google rolls the
+// underlying model version forward, instead of needing another emergency
+// pin every time a dated model name gets retired.
+const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent';
 
 const ZODIAC_ARENA_SYSTEM_PROMPT = `คุณคือ ZODIAC ORACLE — AI Assistant ประจำ Zodiac Arena แพลตฟอร์มแข่งขัน Esports อันดับ 1 ของไทย
 
