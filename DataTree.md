@@ -1,6 +1,6 @@
 # 🌳 Zpdoac Arena Master Data Tree & Schema Map (V1.06)
 
-> 💎 **Last Updated:** เวลา 11:34:02 พฤหัสบดี 10/09/2026
+> 💎 **Last Updated:** เวลา 19:33:43 ศุกร์ 11/09/2026
 
 ีวิธีใช้ = node update-tree.mjs
 
@@ -38,13 +38,20 @@ zodiac/
 │   ├── admin/
 │   │   ├── command-room/
 │   │   │   └── page.tsx
+│   │   ├── marketplace/
+│   │   │   ├── catalog/
+│   │   │   │   └── page.tsx
+│   │   │   ├── categories/
+│   │   │   │   └── page.tsx
+│   │   │   ├── shipments/
+│   │   │   │   └── page.tsx
+│   │   │   └── page.tsx
 │   │   └── store/
 │   ├── api/
-│   │   ├── ave/
-│   │   │   └── chat/
-│   │   │       └── route.ts
 │   │   ├── cron/
 │   │   │   ├── abuse-analysis/
+│   │   │   │   └── route.ts
+│   │   │   ├── ap-anomaly-alert/
 │   │   │   │   └── route.ts
 │   │   │   ├── clean-expired-orders/
 │   │   │   │   └── route.ts
@@ -66,6 +73,9 @@ zodiac/
 │   │   │   └── classify/
 │   │   │       ├── route.ts
 │   │   │       └── TierBadge.tsx
+│   │   ├── oracle/
+│   │   │   └── chat/
+│   │   │       └── route.ts
 │   │   └── v1/
 │   │       ├── admin/
 │   │       │   ├── earning-rules/
@@ -95,13 +105,18 @@ zodiac/
 │   │       │   │           └── void/
 │   │       │   │               └── route.ts
 │   │       │   ├── store/
+│   │       │   │   ├── categories/
+│   │       │   │   │   ├── [id]/
+│   │       │   │   │   │   └── route.ts
+│   │       │   │   │   └── route.ts
 │   │       │   │   ├── items/
 │   │       │   │   │   ├── [id]/
 │   │       │   │   │   │   └── route.ts
 │   │       │   │   │   └── route.ts
 │   │       │   │   ├── shipments/
-│   │       │   │   │   └── [id]/
-│   │       │   │   │       └── route.ts
+│   │       │   │   │   ├── [id]/
+│   │       │   │   │   │   └── route.ts
+│   │       │   │   │   └── route.ts
 │   │       │   │   └── variants/
 │   │       │   │       └── [id]/
 │   │       │   │           └── route.ts
@@ -122,6 +137,24 @@ zodiac/
 │   │       │       │   └── revoke/
 │   │       │       │       └── route.ts
 │   │       │       └── route.ts
+│   │       ├── analytics/
+│   │       │   └── team/
+│   │       │       └── [team_id]/
+│   │       │           └── route.ts
+│   │       ├── ap/
+│   │       │   └── transfer/
+│   │       │       ├── [id]/
+│   │       │       │   ├── accept/
+│   │       │       │   │   └── route.ts
+│   │       │       │   ├── dispute/
+│   │       │       │   │   └── route.ts
+│   │       │       │   └── route.ts
+│   │       │       ├── initiate/
+│   │       │       │   └── route.ts
+│   │       │       ├── request-otp/
+│   │       │       │   └── route.ts
+│   │       │       └── verify-2fa/
+│   │       │           └── route.ts
 │   │       ├── bracket-nodes/
 │   │       │   └── [id]/
 │   │       │       ├── void/
@@ -135,6 +168,22 @@ zodiac/
 │   │       │           └── route.ts
 │   │       ├── hall-of-fame/
 │   │       │   └── route.ts
+│   │       ├── marketplace/
+│   │       │   ├── listings/
+│   │       │   │   ├── [id]/
+│   │       │   │   │   ├── bid/
+│   │       │   │   │   │   └── route.ts
+│   │       │   │   │   ├── buyout/
+│   │       │   │   │   │   └── route.ts
+│   │       │   │   │   ├── trade-history/
+│   │       │   │   │   │   └── route.ts
+│   │       │   │   │   └── route.ts
+│   │       │   │   └── route.ts
+│   │       │   └── vendors/
+│   │       │       ├── [id]/
+│   │       │       │   └── route.ts
+│   │       │       └── register/
+│   │       │           └── route.ts
 │   │       ├── matches/
 │   │       │   └── [id]/
 │   │       │       ├── dispute/
@@ -186,6 +235,11 @@ zodiac/
 │   │       │       │   └── route.ts
 │   │       │       └── omise/
 │   │       │           └── route.ts
+│   │       ├── perks/
+│   │       │   ├── generate-qr/
+│   │       │   │   └── route.ts
+│   │       │   └── redeem/
+│   │       │       └── route.ts
 │   │       ├── players/
 │   │       │   ├── [id]/
 │   │       │   │   ├── replays/
@@ -248,15 +302,21 @@ zodiac/
 │   │       │       │   └── route.ts
 │   │       │       └── route.ts
 │   │       ├── store/
+│   │       │   ├── categories/
+│   │       │   │   └── route.ts
 │   │       │   ├── items/
 │   │       │   │   └── route.ts
-│   │       │   └── orders/
-│   │       │       ├── [id]/
-│   │       │       │   ├── checkout/
-│   │       │       │   │   └── route.ts
-│   │       │       │   └── shipment/
-│   │       │       │       └── route.ts
-│   │       │       └── route.ts
+│   │       │   ├── orders/
+│   │       │   │   ├── [id]/
+│   │       │   │   │   ├── checkout/
+│   │       │   │   │   │   └── route.ts
+│   │       │   │   │   └── shipment/
+│   │       │   │   │       └── route.ts
+│   │       │   │   └── route.ts
+│   │       │   └── vouchers/
+│   │       │       └── [inventoryId]/
+│   │       │           └── token/
+│   │       │               └── route.ts
 │   │       ├── streams/
 │   │       │   ├── [id]/
 │   │       │   │   └── watch/
@@ -267,6 +327,15 @@ zodiac/
 │   │       │   │       └── start/
 │   │       │   │           └── route.ts
 │   │       │   └── route.ts
+│   │       ├── subscriptions/
+│   │       │   ├── check-access/
+│   │       │   │   └── route.ts
+│   │       │   ├── checkout/
+│   │       │   │   └── route.ts
+│   │       │   ├── [id]/
+│   │       │   │   └── route.ts
+│   │       │   └── renew/
+│   │       │       └── route.ts
 │   │       ├── themes/
 │   │       │   └── active/
 │   │       │       └── route.ts
@@ -316,7 +385,11 @@ zodiac/
 │   │   │   └── route.ts
 │   │   └── signout/
 │   │       └── route.ts
+│   ├── chatbot/
+│   │   └── page.tsx
 │   ├── dashboard/
+│   │   └── page.tsx
+│   ├── data-deletion/
 │   │   └── page.tsx
 │   ├── home/
 │   │   └── page.tsx
@@ -341,6 +414,8 @@ zodiac/
 │   │           ├── mvp/
 │   │           │   └── route.ts
 │   │           └── page.tsx
+│   ├── privacy/
+│   │   └── page.tsx
 │   ├── profile/
 │   │   ├── [userId]/
 │   │   │   └── page.tsx
@@ -353,6 +428,9 @@ zodiac/
 │   │           └── page.tsx
 │   ├── status/
 │   │   └── page.tsx
+│   ├── store/
+│   │   ├── page.tsx
+│   │   └── StoreClient.tsx
 │   ├── subscribe/
 │   │   └── page.tsx
 │   ├── teams/
@@ -381,14 +459,27 @@ zodiac/
 ├── lib/
 │   ├── admin/
 │   │   ├── requireAdminRole.ts
+│   │   ├── requireMarketplaceAdminPage.ts
 │   │   └── stuckMinutes.ts
+│   ├── auth/
+│   │   ├── riotSlotGuard.ts
+│   │   └── tiktokProvider.ts
+│   ├── billing/
+│   │   ├── checkAccessGate.ts
+│   │   └── retryOnLockTimeout.ts
 │   ├── matchmaking/
+│   ├── p2p/
+│   │   └── transferToken.ts
 │   ├── payments/
 │   │   ├── cryptoRate.ts
 │   │   ├── omise.ts
 │   │   └── webhookAuth.ts
+│   ├── perks/
+│   │   └── perkToken.ts
 │   ├── season/
 │   │   └── pickRelevantSeason.ts
+│   ├── store/
+│   │   └── voucherToken.ts
 │   ├── supabase/
 │   │   ├── admin.ts
 │   │   ├── client.ts
@@ -403,6 +494,7 @@ zodiac/
 │   │   ├── generateSingleEliminationBracket.ts
 │   │   ├── leaderboardService.ts
 │   │   └── prizeCalculator.ts
-│   └── watch/
-│       └── nextResetAt.ts
+│   ├── watch/
+│   │   └── nextResetAt.ts
+│   └── rateLimit.ts
 ```

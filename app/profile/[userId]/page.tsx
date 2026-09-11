@@ -28,11 +28,11 @@ type BadgeSlot = {
     color: string;
 } | null;
 
-type PresenceState = 'AVE_ONLINE' | 'ARENA_READY' | 'IN_GAME' | 'OFFLINE';
+type PresenceState = 'ORACLE_ONLINE' | 'ARENA_READY' | 'IN_GAME' | 'OFFLINE';
 
 // ─── 4-State LED Config ───────────────────────────────────────────────────────
 const LED: Record<PresenceState, { label: string; dot: string; ring: string; pulse: boolean }> = {
-    AVE_ONLINE: { label: 'AVE ONLINE', dot: 'bg-[#00D4FF]', ring: 'shadow-[0_0_8px_#00D4FF]', pulse: true },
+    ORACLE_ONLINE: { label: 'ORACLE ONLINE', dot: 'bg-[#00D4FF]', ring: 'shadow-[0_0_8px_#00D4FF]', pulse: true },
     ARENA_READY: { label: 'ARENA READY', dot: 'bg-[#C9A84C]', ring: 'shadow-[0_0_8px_#C9A84C]', pulse: false },
     IN_GAME: { label: 'IN GAME', dot: 'bg-orange-500', ring: 'shadow-[0_0_8px_#f97316]', pulse: true },
     OFFLINE: { label: 'OFFLINE', dot: 'bg-zinc-600', ring: '', pulse: false },
@@ -88,7 +88,7 @@ export default function ProfilePage() {
                     // Broadcast own presence if this is the logged-in user
                     const { data: { user } } = await supabase.auth.getUser();
                     if (user?.id === userId) {
-                        await channel.track({ status: 'AVE_ONLINE' });
+                        await channel.track({ status: 'ORACLE_ONLINE' });
                     }
                 }
             });

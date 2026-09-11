@@ -93,7 +93,7 @@ export async function POST(req: Request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    const rateLimitKey = user ? `ave_chat:${user.id}` : `ave_chat:anon:${req.headers.get('x-forwarded-for') ?? 'unknown'}`;
+    const rateLimitKey = user ? `oracle_chat:${user.id}` : `oracle_chat:anon:${req.headers.get('x-forwarded-for') ?? 'unknown'}`;
     const rateLimit = checkRateLimit(rateLimitKey, CHAT_RATE_LIMIT, CHAT_RATE_WINDOW_SECONDS);
     if (!rateLimit.ok) {
       return NextResponse.json(
@@ -114,7 +114,7 @@ export async function POST(req: Request) {
     const liveContext = await buildLiveContext(supabase, user?.id ?? null, message);
 
     if (!process.env.GEMINI_API_KEY) {
-      console.error('[ave/chat] GEMINI_API_KEY is not configured');
+      console.error('[oracle/chat] GEMINI_API_KEY is not configured');
       return NextResponse.json({ error: 'ระบบแชทยังไม่พร้อมใช้งานในขณะนี้ กรุณาลองใหม่ภายหลัง' }, { status: 503 });
     }
 
@@ -138,7 +138,7 @@ export async function POST(req: Request) {
     });
 
     if (!geminiRes.ok) {
-      console.error(`[ave/chat] Gemini API error: ${geminiRes.status} ${await geminiRes.text()}`);
+      console.error(`[oracle/chat] Gemini API error: ${geminiRes.status} ${await geminiRes.text()}`);
       return NextResponse.json({ error: 'เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง' }, { status: 502 });
     }
 
@@ -147,7 +147,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ reply: reply ?? 'ขอโทษนะคะ ตอบในส่วนนี้ไม่ได้ แนะนำให้ติดต่อ Support โดยตรงเลยนะคะ' });
   } catch (error: unknown) {
-    console.error('[ave/chat] error:', error);
+    console.error('[oracle/chat] error:', error);
     return NextResponse.json({ error: 'เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง' }, { status: 500 });
   }
 }

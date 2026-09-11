@@ -37,7 +37,7 @@ export default function ZodiacOracle() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/ave/chat', {
+      const res = await fetch('/api/oracle/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

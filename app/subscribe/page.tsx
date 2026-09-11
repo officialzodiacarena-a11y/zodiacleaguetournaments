@@ -77,7 +77,7 @@ export default function SubscribePage() {
             <li className="flex items-center gap-2"><span className="text-[#00D4FF]">+</span> Leaderboard access</li>
             <li className="flex items-center gap-2"><span className="text-[#00D4FF]">+</span> Standard Passport</li>
             <li className="flex items-center gap-2"><span className="text-gray-600">-</span> <span className="text-gray-500">Daily tickets</span></li>
-            <li className="flex items-center gap-2"><span className="text-gray-600">-</span> <span className="text-gray-500">AVE AI analysis</span></li>
+            <li className="flex items-center gap-2"><span className="text-gray-600">-</span> <span className="text-gray-500">ORACLE AI analysis</span></li>
             <li className="flex items-center gap-2"><span className="text-gray-600">-</span> <span className="text-gray-500">Gold Passport frame</span></li>
           </ul>
           {currentTier === 'free' ? (
@@ -109,7 +109,7 @@ export default function SubscribePage() {
             <li className="flex items-center gap-2"><span className="text-[#C9A84C]">+</span> 1 Arena Ticket / day</li>
             <li className="flex items-center gap-2"><span className="text-[#C9A84C]">+</span> Leaderboard access</li>
             <li className="flex items-center gap-2"><span className="text-[#C9A84C]">+</span> Gold Passport frame</li>
-            <li className="flex items-center gap-2"><span className="text-[#C9A84C]">+</span> AVE AI match analysis</li>
+            <li className="flex items-center gap-2"><span className="text-[#C9A84C]">+</span> ORACLE AI match analysis</li>
             <li className="flex items-center gap-2"><span className="text-[#C9A84C]">+</span> Point protection</li>
             <li className="flex items-center gap-2"><span className="text-[#C9A84C]">+</span> Priority matchmaking</li>
           </ul>
