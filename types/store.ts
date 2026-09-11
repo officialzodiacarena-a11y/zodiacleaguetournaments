@@ -20,11 +20,24 @@ export const CreateShippingAddressSchema = z.object({
   isDefault: z.boolean().default(false),
 });
 
+// item_type is the live-schema categorization (PHYSICAL/DIGITAL/VOUCHER, set
+// by the admin UI) — distinct from `type`, the original NOT NULL column with
+// its own DB CHECK (DIGITAL/PHYSICAL only, no VOUCHER). VOUCHER items map
+// `type` to DIGITAL since a voucher is never physically shipped; see the
+// itemTypeToType() mapping used by the POST /items route.
+export const StoreItemTypeEnum = z.enum(['PHYSICAL', 'DIGITAL', 'VOUCHER']);
+
 export const CreateStoreItemSchema = z.object({
   name: z.string().min(2).max(150),
-  type: z.enum(['DIGITAL', 'PHYSICAL']),
+  // Optional: the admin UI only collects itemType (PHYSICAL/DIGITAL/VOUCHER)
+  // and the route derives this NOT NULL column via itemTypeToType() below —
+  // still overridable by callers that pass it explicitly.
+  type: z.enum(['DIGITAL', 'PHYSICAL']).optional(),
   description: z.string().optional(),
   maxPerPlayer: z.number().int().positive().optional(),
+  categoryId: z.string().uuid().nullable().optional(),
+  itemType: StoreItemTypeEnum.nullable().optional().default('PHYSICAL'),
+  partnerBrand: z.string().max(50).nullable().optional(),
   variants: z
     .array(
       z.object({
@@ -46,6 +59,14 @@ export const UpdateStoreItemSchema = z
     isActive: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'ต้องระบุอย่างน้อย 1 ฟิลด์ที่ต้องการอัปเดต' });
+
+export const CreateStoreVariantSchema = z.object({
+  name: z.string().min(1).max(100),
+  priceAp: z.number().int().nonnegative().default(0),
+  priceThb: z.number().int().nonnegative().default(0),
+  stock: z.number().int().nonnegative().default(0),
+  availableUntil: z.string().datetime().nullable().optional(),
+});
 
 export const UpdateStoreVariantSchema = z
   .object({
@@ -79,8 +100,59 @@ export const UpdateStoreCategorySchema = z
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'ต้องระบุอย่างน้อย 1 ฟิลด์ที่ต้องการอัปเดต' });
 
+// item_type -> type derivation for the POST /items insert: `type` is the
+// original NOT NULL column (CHECK DIGITAL/PHYSICAL only) and has no VOUCHER
+// value, so a VOUCHER item is stored as type=DIGITAL (never shipped).
+export function itemTypeToType(itemType: 'PHYSICAL' | 'DIGITAL' | 'VOUCHER' | null | undefined): 'PHYSICAL' | 'DIGITAL' {
+  return itemType === 'PHYSICAL' ? 'PHYSICAL' : 'DIGITAL';
+}
+
 export type CreateStoreCategoryInput = z.infer<typeof CreateStoreCategorySchema>;
 export type UpdateStoreCategoryInput = z.infer<typeof UpdateStoreCategorySchema>;
+export type CreateStoreVariantInput = z.infer<typeof CreateStoreVariantSchema>;
+
+// Row shapes matching the verified live schema (store_items has 3 columns —
+// category_id, item_type, partner_brand — that exist on production but were
+// never added to any tracked migration; see DataTree/migration audit notes).
+// `store_item_variants` is nested under this key (not `variants`) to match
+// what GET/POST /api/v1/admin/store/items actually return today — Supabase's
+// PostgREST nested-select names the relation after the table unless aliased.
+export interface StoreCategory {
+  id: string;
+  name: string;
+  slug: string;
+  parent_id: string | null;
+  partner_brand: string | null;
+  icon_url: string | null;
+  display_order: number;
+  is_active: boolean;
+}
+
+export interface StoreItemVariant {
+  id: string;
+  item_id: string;
+  name: string;
+  price_ap: number;
+  price_thb: number;
+  stock: number;
+  reserved_stock: number;
+  is_active: boolean;
+  available_until: string | null;
+}
+
+export interface StoreItem {
+  id: string;
+  name: string;
+  type: string;
+  item_type: string | null;
+  description: string | null;
+  max_per_player: number | null;
+  is_active: boolean;
+  partner_brand: string | null;
+  category_id: string | null;
+  created_at: string;
+  store_item_variants: StoreItemVariant[];
+}
 
 export const UpdateShipmentSchema = z
   .object({

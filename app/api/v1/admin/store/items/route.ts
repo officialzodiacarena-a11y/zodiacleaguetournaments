@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdminRole, MARKETPLACE_ADMIN_ROLES } from '@/lib/admin/requireAdminRole';
-import { CreateStoreItemSchema } from '@/types/store';
+import { CreateStoreItemSchema, itemTypeToType } from '@/types/store';
 
 // Admin catalog listing — includes inactive items, unlike the public
 // GET /api/v1/store/items (which also hides items with zero live variants).
@@ -15,7 +15,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('store_items')
       .select(
-        'id, name, type, description, max_per_player, is_active, category_id, item_type, partner_brand, store_item_variants(id, name, price_ap, price_thb, stock, reserved_stock, is_active, available_until)'
+        'id, name, type, description, max_per_player, is_active, category_id, item_type, partner_brand, created_at, store_item_variants(id, item_id, name, price_ap, price_thb, stock, reserved_stock, is_active, available_until)'
       )
       .order('created_at', { ascending: false });
 
@@ -54,13 +54,21 @@ export async function POST(req: Request) {
       );
     }
 
-    const { name, type, description, maxPerPlayer, variants } = parseResult.data;
+    const { name, type, description, maxPerPlayer, categoryId, itemType, partnerBrand, variants } = parseResult.data;
 
     const adminSupabase = createAdminClient();
 
     const { data: item, error: itemError } = await adminSupabase
       .from('store_items')
-      .insert({ name, type, description: description ?? null, max_per_player: maxPerPlayer ?? null })
+      .insert({
+        name,
+        type: type ?? itemTypeToType(itemType),
+        description: description ?? null,
+        max_per_player: maxPerPlayer ?? null,
+        category_id: categoryId ?? null,
+        item_type: itemType ?? null,
+        partner_brand: partnerBrand ?? null,
+      })
       .select()
       .single();
 
@@ -89,7 +97,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code: 'INSERT_FAILED', message: variantError.message } }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, data: { ...item, variants: variantRows } }, { status: 201 });
+    return NextResponse.json({ success: true, data: { ...item, store_item_variants: variantRows ?? [] } }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     return NextResponse.json({ error: { code: 'SERVER_ERROR', message } }, { status: 500 });
