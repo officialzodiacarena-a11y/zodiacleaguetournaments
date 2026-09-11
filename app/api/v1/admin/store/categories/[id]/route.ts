@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdminRole, MARKETPLACE_ADMIN_ROLES } from '@/lib/admin/requireAdminRole';
-import { UpdateStoreItemSchema } from '@/types/store';
+import { UpdateStoreCategorySchema } from '@/types/store';
 
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const { id: itemId } = await params;
+    const { id: categoryId } = await params;
     const supabase = await createClient();
     const gate = await requireAdminRole(supabase, MARKETPLACE_ADMIN_ROLES);
     if ('error' in gate) return gate.error;
@@ -24,7 +24,7 @@ export async function PATCH(
       );
     }
 
-    const parseResult = UpdateStoreItemSchema.safeParse(body);
+    const parseResult = UpdateStoreCategorySchema.safeParse(body);
     if (!parseResult.success) {
       return NextResponse.json(
         { error: { code: 'VALIDATION_ERROR', message: 'ข้อมูลไม่ตรงข้อกำหนด', details: parseResult.error.format() } },
@@ -32,19 +32,17 @@ export async function PATCH(
       );
     }
 
-    const { name, description, maxPerPlayer, isActive } = parseResult.data;
-
+    const { name, displayOrder, isActive } = parseResult.data;
     const updatePayload: Record<string, unknown> = {};
     if (name !== undefined) updatePayload.name = name;
-    if (description !== undefined) updatePayload.description = description;
-    if (maxPerPlayer !== undefined) updatePayload.max_per_player = maxPerPlayer;
+    if (displayOrder !== undefined) updatePayload.display_order = displayOrder;
     if (isActive !== undefined) updatePayload.is_active = isActive;
 
     const adminSupabase = createAdminClient();
-    const { data: item, error: updateError } = await adminSupabase
-      .from('store_items')
+    const { data: category, error: updateError } = await adminSupabase
+      .from('store_categories')
       .update(updatePayload)
-      .eq('id', itemId)
+      .eq('id', categoryId)
       .select()
       .single();
 
@@ -52,14 +50,14 @@ export async function PATCH(
       return NextResponse.json({ error: { code: 'UPDATE_FAILED', message: updateError.message } }, { status: 500 });
     }
 
-    if (!item) {
+    if (!category) {
       return NextResponse.json(
-        { error: { code: 'ITEM_NOT_FOUND', message: 'ไม่พบไอเทมนี้ในระบบ' } },
+        { error: { code: 'CATEGORY_NOT_FOUND', message: 'ไม่พบหมวดหมู่นี้ในระบบ' } },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ success: true, data: item });
+    return NextResponse.json({ success: true, data: category });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     return NextResponse.json({ error: { code: 'SERVER_ERROR', message } }, { status: 500 });

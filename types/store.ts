@@ -58,6 +58,30 @@ export const UpdateStoreVariantSchema = z
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'ต้องระบุอย่างน้อย 1 ฟิลด์ที่ต้องการอัปเดต' });
 
+export const CreateStoreCategorySchema = z.object({
+  name: z.string().min(1).max(150),
+  slug: z
+    .string()
+    .min(1)
+    .max(150)
+    .regex(/^[a-z0-9-]+$/, { message: 'slug ต้องเป็นตัวพิมพ์เล็ก ตัวเลข และ - เท่านั้น' }),
+  parentId: z.string().uuid().nullable().optional(),
+  partnerBrand: z.string().max(50).nullable().optional(),
+  iconUrl: z.string().url().nullable().optional(),
+  displayOrder: z.number().int().default(0),
+});
+
+export const UpdateStoreCategorySchema = z
+  .object({
+    name: z.string().min(1).max(150).optional(),
+    displayOrder: z.number().int().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, { message: 'ต้องระบุอย่างน้อย 1 ฟิลด์ที่ต้องการอัปเดต' });
+
+export type CreateStoreCategoryInput = z.infer<typeof CreateStoreCategorySchema>;
+export type UpdateStoreCategoryInput = z.infer<typeof UpdateStoreCategorySchema>;
+
 export const UpdateShipmentSchema = z
   .object({
     trackingNumber: z.string().min(1).optional(),

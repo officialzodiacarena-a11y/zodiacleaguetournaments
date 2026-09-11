@@ -8,7 +8,7 @@ interface Message {
   content: string;
 }
 
-export default function AVEChatbot() {
+export default function ZodiacOracle() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { 

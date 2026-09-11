@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { checkRateLimit } from '@/lib/rateLimit';
 import type { CheckoutOrderResult } from '@/types/store';
+
+const CHECKOUT_RATE_LIMIT = 3;
+const CHECKOUT_RATE_WINDOW_SECONDS = 60;
 
 export async function POST(
   req: Request,
@@ -15,6 +19,22 @@ export async function POST(
       return NextResponse.json(
         { error: { code: 'UNAUTHORIZED', message: 'กรุณาเข้าสู่ระบบก่อนดำเนินการ' } },
         { status: 401 }
+      );
+    }
+
+    // Server-side idempotency for this checkout already lives one layer down:
+    // checkout_order() locks the order row FOR UPDATE, only proceeds while
+    // status = 'PENDING', and calls move_ap() with a deterministic key
+    // ('checkout-order-' || order_id) it derives itself — the client never
+    // supplies one, so a duplicate request either hits ORDER_NOT_PENDING
+    // (order already flipped to PAID) or move_ap's own DUPLICATE_KEY guard.
+    // This rate limit is the remaining gap: it stops the retry storm before
+    // it reaches Postgres at all.
+    const rateLimit = checkRateLimit(`store_checkout:${user.id}`, CHECKOUT_RATE_LIMIT, CHECKOUT_RATE_WINDOW_SECONDS);
+    if (!rateLimit.ok) {
+      return NextResponse.json(
+        { error: { code: 'RATE_LIMITED', message: 'ทำรายการถี่เกินไป กรุณารอสักครู่แล้วลองใหม่' } },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
       );
     }
 
