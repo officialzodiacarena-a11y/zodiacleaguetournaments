@@ -20,14 +20,18 @@ export default async function AdminCommandRoomPage() {
   const { data: player } = await supabase.from('players').select('id').eq('user_id', user.id).maybeSingle();
   if (!player) redirect('/login');
 
-  const { data: userRole } = await supabase
+  // Fetch every active role (not .maybeSingle()) — a player commonly holds
+  // more than one concurrent, non-revoked role (e.g. the base ATHLETE role
+  // plus ADMIN), and .maybeSingle() errors out on multiple rows, misreading
+  // a real admin as roleless. Mirrors requireMarketplaceAdminPage.ts.
+  const { data: userRoles } = await supabase
     .from('user_roles')
     .select('role')
     .eq('player_id', player.id)
-    .is('revoked_at', null)
-    .maybeSingle();
+    .is('revoked_at', null);
 
-  if (!userRole || !['ADMIN', 'SUPER_ADMIN'].includes(userRole.role)) {
+  const userRole = userRoles?.find((r) => ['ADMIN', 'SUPER_ADMIN'].includes(r.role));
+  if (!userRole) {
     redirect('/');
   }
 
