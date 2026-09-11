@@ -11,7 +11,7 @@ const CHAT_RATE_WINDOW_SECONDS = 60;
 // use the flash alias so the route keeps working as Google rolls the
 // underlying model version forward, instead of needing another emergency
 // pin every time a dated model name gets retired.
-const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent';
+const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent';
 
 const ZODIAC_ARENA_SYSTEM_PROMPT = `คุณคือ ZODIAC ORACLE — AI Assistant ประจำ Zodiac Arena แพลตฟอร์มแข่งขัน Esports อันดับ 1 ของไทย
 
