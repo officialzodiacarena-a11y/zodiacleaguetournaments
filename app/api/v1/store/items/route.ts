@@ -17,6 +17,9 @@ interface ItemRow {
   type: string;
   description: string | null;
   max_per_player: number | null;
+  category_id: string | null;
+  item_type: string | null;
+  partner_brand: string | null;
   store_item_variants: VariantRow[];
 }
 
@@ -24,19 +27,39 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const typeFilter = searchParams.get('type');
+    const categorySlug = searchParams.get('category');
+    const brandFilter = searchParams.get('brand');
 
     const supabase = await createClient();
 
     let query = supabase
       .from('store_items')
       .select(
-        'id, name, type, description, max_per_player, store_item_variants(id, name, price_ap, price_thb, stock, reserved_stock, available_until)'
+        'id, name, type, description, max_per_player, category_id, item_type, partner_brand, store_item_variants(id, name, price_ap, price_thb, stock, reserved_stock, available_until)'
       )
       .eq('is_active', true)
       .order('created_at', { ascending: false });
 
     if (typeFilter) {
       query = query.eq('type', typeFilter);
+    }
+
+    if (brandFilter) {
+      query = query.eq('partner_brand', brandFilter);
+    }
+
+    if (categorySlug) {
+      const { data: category, error: categoryError } = await supabase
+        .from('store_categories')
+        .select('id')
+        .eq('slug', categorySlug)
+        .single();
+
+      if (categoryError || !category) {
+        return NextResponse.json({ data: [] });
+      }
+
+      query = query.eq('category_id', category.id);
     }
 
     const { data, error } = await query;
@@ -53,6 +76,9 @@ export async function GET(req: Request) {
         type: item.type,
         description: item.description,
         max_per_player: item.max_per_player,
+        category_id: item.category_id,
+        item_type: item.item_type,
+        partner_brand: item.partner_brand,
         variants: (item.store_item_variants ?? [])
           .filter((v) => !v.available_until || new Date(v.available_until).getTime() > now)
           .map((v) => ({
