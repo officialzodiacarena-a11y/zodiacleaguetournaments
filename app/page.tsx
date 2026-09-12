@@ -12,7 +12,8 @@ import {
   ExternalLink, 
   CheckCircle2, 
   Activity,
-  Flame
+  Flame,
+  Users
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -148,7 +149,7 @@ export default async function LandingPage() {
       <div className="pointer-events-none fixed -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[350px] bg-gradient-to-b from-[#E8B429]/15 via-[#00D4FF]/5 to-transparent rounded-full blur-[140px]" />
 
       {/* ====================================================================
-          SECTION 1: TOP LIVE TELEMETRY STRIP (Case LP-01 Compliant)
+          SECTION 1: TOP LIVE TELEMETRY STRIP
       ==================================================================== */}
       <div className="border-b border-white/5 bg-[#0D0E1A]/80 backdrop-blur-md px-4 py-2">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
@@ -214,7 +215,7 @@ export default async function LandingPage() {
           </div>
 
           <p className="max-w-2xl mx-auto text-sm md:text-base text-[#94A3B8] leading-relaxed">
-            เวทีประลองอีสปอร์ตระดับมืออาชีพ ผสานระบบพาสปอร์ตนักกีฬา การสะสมแต้ม ZP ชิงตั๋ว Grand Finals และระบบ Watch-to-Earn แลกของรางวัลพาร์ตเนอร์ SINOPEC
+            เวทีประลองอีสปอร์ตระดับมืออาชีพ ผสานระบบพาสปอร์ตนักกีฬา การสะสมแต้ม ZP ชิงตั๋ว Grand Finals และระบบ Watch-to-Earn แลกของรางวัล ZODIAC MARKETPLACE
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
@@ -314,7 +315,7 @@ export default async function LandingPage() {
         </section>
 
         {/* ====================================================================
-            SECTION 4: 4-PILLAR ECOSYSTEM GRID
+            SECTION 4: 4-PILLAR ECOSYSTEM GRID (WITH 3D FLIP CARD)
         ==================================================================== */}
         <section className="space-y-6">
           <div className="flex items-center justify-between border-b border-white/5 pb-4">
@@ -336,89 +337,149 @@ export default async function LandingPage() {
             {/* Pillar 1: Tournament Circuit */}
             <Link
               href="/tournament"
-              className="group relative overflow-hidden rounded-xl border border-white/5 bg-[#101223] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#E8B429]/40 hover:shadow-[0_10px_30px_rgba(232,180,41,0.12)]"
+              className="group relative overflow-hidden rounded-xl border border-white/5 bg-[#101223] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#E8B429]/40 hover:shadow-[0_10px_30px_rgba(232,180,41,0.12)] flex flex-col justify-between h-[300px]"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E8B429]/15 border border-[#E8B429]/30 text-[#E8B429]">
-                  <Trophy className="w-6 h-6" />
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E8B429]/15 border border-[#E8B429]/30 text-[#E8B429]">
+                    <Trophy className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-500">01 / CIRCUIT</span>
                 </div>
-                <span className="text-[10px] font-mono text-zinc-500">01 / CIRCUIT</span>
+                <h4 className="text-base font-black text-white group-hover:text-[#E8B429] transition-colors">
+                  TOURNAMENT CIRCUIT
+                </h4>
+                <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
+                  การแข่งขัน 4 ฤดูกาล (Spring, Summer, Fall, Winter) เก็บคะแนน ZP ชิงโควตาสู่ Grand Finals
+                </p>
               </div>
-              <h4 className="text-base font-black text-white group-hover:text-[#E8B429] transition-colors">
-                TOURNAMENT CIRCUIT
-              </h4>
-              <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
-                การแข่งขัน 4 ฤดูกาล (Spring, Summer, Fall, Winter) เก็บคะแนน ZP ชิงโควตาสู่ Grand Finals
-              </p>
               <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-[#E8B429]">
                 <span>เข้าสู่หน้ารายการแข่งขัน</span>
                 <span>→</span>
               </div>
             </Link>
 
-            {/* Pillar 2: Athlete Passport */}
-            <Link
-              href="/profile"
-              className="group relative overflow-hidden rounded-xl border border-white/5 bg-[#101223] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#00D4FF]/40 hover:shadow-[0_10px_30px_rgba(0,212,255,0.12)]"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#00D4FF]/15 border border-[#00D4FF]/30 text-[#00D4FF]">
-                  <UserCheck className="w-6 h-6" />
+            {/* Pillar 2: ATHLETE PASSPORT (3D FLIP CARD -> ATHLETE TRANSFER MARKET) */}
+            <div className="group h-[300px] [perspective:1000px]">
+              <div className="relative h-full w-full rounded-xl transition-all duration-700 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)] shadow-xl cursor-pointer">
+                
+                {/* --- FRONT: ATHLETE PASSPORT --- */}
+                <div className="absolute inset-0 h-full w-full rounded-xl border border-white/5 bg-[#101223] p-6 [backface-visibility:hidden] flex flex-col justify-between group-hover:border-[#00D4FF]/40">
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#00D4FF]/15 border border-[#00D4FF]/30 text-[#00D4FF]">
+                        <UserCheck className="w-6 h-6" />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="flex h-1.5 w-1.5 rounded-full bg-[#00D4FF] animate-pulse" />
+                        <span className="text-[10px] font-mono text-[#00D4FF]">02 / PASSPORT</span>
+                      </div>
+                    </div>
+                    <h4 className="text-base font-black text-[#00D4FF]">
+                      ATHLETE PASSPORT
+                    </h4>
+                    <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
+                      เก็บบันทึกประวัติ ผลงานเรตติ้ง KDA, ACS, ADR และเหรียญเกียรติยศระดับสโมสร
+                    </p>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between pt-2 border-t border-white/5 text-[11px] font-mono">
+                    <span className="text-[#00D4FF] font-bold">ดูพาสปอร์ตนักกีฬา →</span>
+                    <span className="text-zinc-500 text-[10px] bg-white/5 px-2 py-0.5 rounded">ชี้เพื่อดูตลาดซื้อขาย</span>
+                  </div>
                 </div>
-                <span className="text-[10px] font-mono text-zinc-500">02 / PASSPORT</span>
+
+                {/* --- BACK: ATHLETE TRANSFER MARKET (FLIPPED) --- */}
+                <div className="absolute inset-0 h-full w-full rounded-xl border-2 border-[#E8B429] bg-gradient-to-br from-[#1A1810] via-[#121424] to-[#0D0E1A] p-5 text-white [transform:rotateY(180deg)] [backface-visibility:hidden] flex flex-col justify-between shadow-[0_0_30px_rgba(232,180,41,0.25)]">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-[#E8B429]" />
+                        <span className="text-[11px] font-black font-mono tracking-wider text-[#E8B429] uppercase">
+                          ATHLETE MARKET
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-mono bg-[#E8B429]/20 text-[#E8B429] px-2 py-0.5 rounded border border-[#E8B429]/40 font-bold">
+                        P2P ESCROW
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-zinc-300 font-medium line-clamp-2">
+                      ตลาดประมูลและย้ายสังกัดนักกีฬา (FFXI Blind Auction & Buyout)
+                    </p>
+
+                    {/* Featured Athlete Snippet */}
+                    <div className="mt-2.5 p-2 rounded-xl bg-black/50 border border-white/10 space-y-1 font-mono text-[10px]">
+                      <div className="flex justify-between items-center">
+                        <span className="text-white font-bold">SHADOW_ZX #TH1</span>
+                        <span className="text-[#E8B429] font-bold">IMMORTAL 3</span>
+                      </div>
+                      <div className="flex justify-between text-zinc-400 text-[9px]">
+                        <span>ROLE: DUELIST</span>
+                        <span className="text-[#00D4FF]">ACS 274 • K/D 1.87</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1 border-t border-white/10 text-[10px]">
+                        <span className="text-zinc-400">BID START:</span>
+                        <span className="text-[#E8B429] font-black">2,500 AP</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Link
+                    href="/profile"
+                    className="w-full text-center py-2 rounded-lg bg-[#E8B429] hover:bg-[#ffc935] text-black font-black text-[11px] tracking-wider uppercase transition-all shadow-md font-mono mt-1"
+                  >
+                    เข้าสู่ตลาดซื้อขายนักกีฬา →
+                  </Link>
+                </div>
+
               </div>
-              <h4 className="text-base font-black text-white group-hover:text-[#00D4FF] transition-colors">
-                ATHLETE PASSPORT
-              </h4>
-              <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
-                เก็บบันทึกประวัติ ผลงานเรตติ้ง KDA, ACS, ADR และเหรียญเกียรติยศระดับสโมสร
-              </p>
-              <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-[#00D4FF]">
-                <span>ดูพาสปอร์ตนักกีฬา</span>
-                <span>→</span>
-              </div>
-            </Link>
+            </div>
 
             {/* Pillar 3: Watch-to-Earn AP */}
             <Link
               href="/schedule"
-              className="group relative overflow-hidden rounded-xl border border-white/5 bg-[#101223] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#9184D9]/40 hover:shadow-[0_10px_30px_rgba(145,132,217,0.12)]"
+              className="group relative overflow-hidden rounded-xl border border-white/5 bg-[#101223] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#9184D9]/40 hover:shadow-[0_10px_30px_rgba(145,132,217,0.12)] flex flex-col justify-between h-[300px]"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#9184D9]/15 border border-[#9184D9]/30 text-[#9184D9]">
-                  <Radio className="w-6 h-6" />
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#9184D9]/15 border border-[#9184D9]/30 text-[#9184D9]">
+                    <Radio className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-500">03 / STREAM</span>
                 </div>
-                <span className="text-[10px] font-mono text-zinc-500">03 / STREAM</span>
+                <h4 className="text-base font-black text-white group-hover:text-[#9184D9] transition-colors">
+                  WATCH-TO-EARN & AP
+                </h4>
+                <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
+                  รับชมสตรีมสดแมตช์สำคัญ ทายผลการแข่งขันแบบ Pari-Mutuel และสะสมแต้ม AP รายวัน
+                </p>
               </div>
-              <h4 className="text-base font-black text-white group-hover:text-[#9184D9] transition-colors">
-                WATCH-TO-EARN & AP
-              </h4>
-              <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
-                รับชมสตรีมสดแมตช์สำคัญ ทายผลการแข่งขันแบบ Pari-Mutuel และสะสมแต้ม AP รายวัน
-              </p>
               <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-[#9184D9]">
                 <span>ดูตารางถ่ายทอดสด</span>
                 <span>→</span>
               </div>
             </Link>
 
-            {/* Pillar 4: SINOPEC Store */}
+            {/* Pillar 4: ZODIAC MARKETPLACE (UPDATED NAME) */}
             <Link
               href="/store"
-              className="group relative overflow-hidden rounded-xl border border-white/5 bg-[#101223] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#4CAF50]/40 hover:shadow-[0_10px_30px_rgba(76,175,80,0.12)]"
+              className="group relative overflow-hidden rounded-xl border border-white/5 bg-[#101223] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#4CAF50]/40 hover:shadow-[0_10px_30px_rgba(76,175,80,0.12)] flex flex-col justify-between h-[300px]"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#4CAF50]/15 border border-[#4CAF50]/30 text-[#4CAF50]">
-                  <Store className="w-6 h-6" />
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#4CAF50]/15 border border-[#4CAF50]/30 text-[#4CAF50]">
+                    <Store className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-500">04 / REWARDS</span>
                 </div>
-                <span className="text-[10px] font-mono text-zinc-500">04 / REWARDS</span>
+                <h4 className="text-base font-black text-white group-hover:text-[#4CAF50] transition-colors">
+                  ZODIAC MARKETPLACE
+                </h4>
+                <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
+                  นำแต้ม AP ที่สะสมได้มาแลกรับของรางวัลพาร์ตเนอร์ SINOPEC และสินค้าพรีเมียมลิขสิทธิ์
+                </p>
               </div>
-              <h4 className="text-base font-black text-white group-hover:text-[#4CAF50] transition-colors">
-                SINOPEC MARKETPLACE
-              </h4>
-              <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
-                นำแต้ม AP ที่สะสมได้มาแลกรับของรางวัลพาร์ตเนอร์ SINOPEC และสินค้าพรีเมียมลิขสิทธิ์
-              </p>
               <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-[#4CAF50]">
                 <span>เข้าสู่ร้านค้าแลกของรางวัล</span>
                 <span>→</span>
