@@ -25,11 +25,12 @@ export default async function DashboardPage() {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  if (authError || !user) redirect('/login');
 
   // 1. ดึงข้อมูล Player และ Game Account (Riot ID)
-  const { data: player } = await supabase
+  const { data: player, error: playerError } = await supabase
     .from('players')
     .select(`
       id,
@@ -44,9 +45,9 @@ export default async function DashboardPage() {
       )
     `)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
-  if (!player) redirect('/login');
+  if (playerError || !player) redirect('/login');
 
   // 2. ดึงข้อมูลทีมและ ZP
   const { data: memberships } = await supabase
@@ -62,34 +63,45 @@ export default async function DashboardPage() {
     })
     .filter((t): t is TeamInfo => t !== null);
 
-  const teamIds = teams.map((t) => t.id);
+  const teamIds = teams.map((t) => t.id).filter(Boolean);
   const totalZp = teams.reduce((sum, t) => sum + (t.total_zp ?? 0), 0);
 
-  // 3. ดึงข้อมูล Matches
+  // 3. ดึงข้อมูล Matches (ใช้ Safe Query ป้องกันจอดำ)
   let upcomingMatches: UpcomingMatch[] = [];
   if (teamIds.length > 0) {
-    const { data: matches } = await supabase
-      .from('matches')
-      .select(
-        'id, status, scheduled_at, best_of, team_a:teams!matches_team_a_id_fkey(name), team_b:teams!matches_team_b_id_fkey(name)'
-      )
-      .or(`team_a_id.in.(${teamIds.join(',')}),team_b_id.in.(${teamIds.join(',')})`)
-      .in('status', ['SCHEDULED', 'READY_CHECK', 'VETO', 'LIVE'])
-      .order('scheduled_at', { ascending: true, nullsFirst: false })
-      .limit(5);
+    try {
+      const { data: matches } = await supabase
+        .from('matches')
+        .select(`
+          id,
+          status,
+          scheduled_at,
+          best_of,
+          team_a:team_a_id ( name ),
+          team_b:team_b_id ( name )
+        `)
+        .or(`team_a_id.in.(${teamIds.join(',')}),team_b_id.in.(${teamIds.join(',')})`)
+        .in('status', ['SCHEDULED', 'READY_CHECK', 'VETO', 'LIVE'])
+        .order('scheduled_at', { ascending: true, nullsFirst: false })
+        .limit(5);
 
-    upcomingMatches = (matches ?? []).map((m) => {
-      const teamA = Array.isArray(m.team_a) ? m.team_a[0] : m.team_a;
-      const teamB = Array.isArray(m.team_b) ? m.team_b[0] : m.team_b;
-      return {
-        id: m.id,
-        status: m.status,
-        scheduled_at: m.scheduled_at,
-        best_of: m.best_of,
-        teamAName: teamA?.name ?? 'TBD',
-        teamBName: teamB?.name ?? 'TBD',
-      };
-    });
+      if (matches) {
+        upcomingMatches = matches.map((m) => {
+          const teamA = Array.isArray(m.team_a) ? m.team_a[0] : m.team_a;
+          const teamB = Array.isArray(m.team_b) ? m.team_b[0] : m.team_b;
+          return {
+            id: m.id,
+            status: m.status,
+            scheduled_at: m.scheduled_at,
+            best_of: m.best_of,
+            teamAName: (teamA as { name: string } | null)?.name ?? 'TBD',
+            teamBName: (teamB as { name: string } | null)?.name ?? 'TBD',
+          };
+        });
+      }
+    } catch (err) {
+      console.error('[Dashboard] Error fetching matches:', err);
+    }
   }
 
   const currentMatch = upcomingMatches.find(
@@ -125,15 +137,15 @@ export default async function DashboardPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div className="bg-[#12121A]/80 border border-[#00D4FF]/30 p-4 rounded-lg">
-            <span className="text-[10px] text-gray-400 uppercase">AP BALANCE</span>
-            <div className="text-2xl font-black mt-1 text-[#00D4FF]">{player.ap_balance}</div>
+            <span className="text-[10px] text-gray-400 uppercase font-mono">AP BALANCE</span>
+            <div className="text-2xl font-black mt-1 text-[#00D4FF]">{player.ap_balance ?? 0}</div>
           </div>
           <div className="bg-[#12121A]/80 border border-[#C9A84C]/30 p-4 rounded-lg">
-            <span className="text-[10px] text-gray-400 uppercase">ZP สะสม (ทีม)</span>
+            <span className="text-[10px] text-gray-400 uppercase font-mono">ZP สะสม (ทีม)</span>
             <div className="text-2xl font-black mt-1 text-[#C9A84C]">{totalZp}</div>
           </div>
           <div className="bg-[#12121A]/80 border border-gray-800 p-4 rounded-lg">
-            <span className="text-[10px] text-gray-400 uppercase">UPCOMING MATCHES</span>
+            <span className="text-[10px] text-gray-400 uppercase font-mono">UPCOMING MATCHES</span>
             <div className="text-2xl font-black mt-1 text-white">{upcomingMatches.length}</div>
           </div>
         </div>

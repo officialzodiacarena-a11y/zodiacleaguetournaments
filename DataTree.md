@@ -1,6 +1,6 @@
 # 🌳 Zpdoac Arena Master Data Tree & Schema Map (V1.06)
 
-> 💎 **Last Updated:** เวลา 12:08:46 เสาร์ 12/09/2026
+> 💎 **Last Updated:** เวลา 15:12:57 เสาร์ 12/09/2026
 
 ีวิธีใช้ = node update-tree.mjs
 
@@ -396,6 +396,7 @@ zodiac/
 │   ├── chatbot/
 │   │   └── page.tsx
 │   ├── dashboard/
+│   │   ├── DashboardClientAction.tsx
 │   │   └── page.tsx
 │   ├── data-deletion/
 │   │   └── page.tsx
