@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Bot, X, Send, Sparkles } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -13,7 +14,7 @@ export default function ZodiacOracle() {
   const [messages, setMessages] = useState<Message[]>([
     { 
       role: 'assistant', 
-      content: 'สวัสดีครับ! ผมคือ ZODIAC ORACLE ผู้ช่วย AI ประจำ ZODIAC ARENA มีอะไรให้ผมช่วยเหลือเกี่ยวกับสายการแข่งขัน ตารางแข่ง กติการาศี หรือระบบ ZP ไหมครับ?' 
+      content: 'สวัสดีครับ! ผมคือ ZODIAC ORACLE ผู้ช่วย AI ประจำ ZODIAC ARENA\nมีอะไรให้ผมช่วยเหลือเกี่ยวกับสายการแข่งขัน ตารางแข่ง กติการาศี หรือระบบ ZP ไหมครับ?' 
     }
   ]);
   const [input, setInput] = useState('');
@@ -72,7 +73,7 @@ export default function ZodiacOracle() {
       )}
 
       {isOpen && (
-        <div className="bg-[#0B0F17] border border-[#00D4FF]/40 rounded-2xl w-80 sm:w-96 h-120 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden backdrop-blur-xl">
+        <div className="bg-[#0B0F17] border border-[#00D4FF]/40 rounded-2xl w-80 sm:w-96 h-[480px] shadow-[0_0_30px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden backdrop-blur-xl">
           {/* Header */}
           <div className="bg-slate-950 p-3.5 border-b border-slate-800 flex justify-between items-center">
             <div className="flex items-center gap-2.5">
@@ -102,19 +103,51 @@ export default function ZodiacOracle() {
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-xl p-3 text-xs leading-relaxed font-sans ${
+                  className={`max-w-[85%] rounded-xl p-3 text-xs leading-relaxed font-sans whitespace-pre-wrap break-words ${
                     msg.role === 'user'
-                      ? 'bg-[#00D4FF] text-slate-950 font-medium rounded-br-xs shadow-md'
-                      : 'bg-slate-900 text-zinc-200 border border-slate-800 rounded-bl-xs shadow-inner'
+                      ? 'bg-[#00D4FF] text-slate-950 font-medium rounded-br-none shadow-md'
+                      : 'bg-slate-900 text-zinc-200 border border-slate-800 rounded-bl-none shadow-inner'
                   }`}
                 >
-                  {msg.content}
+                  <ReactMarkdown
+                    components={{
+                      // ตัวหนา (หัวข้อ/คีย์เวิร์ด): ใช้สีทองนีออน พร้อมเอฟเฟกต์โกลว์เบาๆ
+                      strong: ({ children }) => (
+                        <strong className="font-extrabold text-[#E8B429] drop-shadow-[0_0_8px_rgba(232,180,41,0.3)]">
+                          {children}
+                        </strong>
+                      ),
+                      // ลิงก์: ใช้สีฟ้าไซเบอร์
+                      a: ({ href, children }) => (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[#00D4FF] underline hover:text-white transition-colors"
+                        >
+                          {children}
+                        </a>
+                      ),
+                      // บล็อกโค้ด/ตัวเลขไฮไลท์: พื้นหลังเข้ม ขอบฟ้า
+                      code: ({ children }) => (
+                        <code className="bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/30 px-1 py-0.5 rounded text-[11px] font-mono">
+                          {children}
+                        </code>
+                      ),
+                      // ย่อหน้า
+                      p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
+                      // รายการจุดไข่ปลา
+                      li: ({ children }) => <li className="ml-3 list-disc marker:text-[#00D4FF]">{children}</li>,
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
                 </div>
               </div>
             ))}
             {loading && (
               <div className="flex justify-start">
-                <div className="bg-slate-900 border border-slate-800 rounded-xl rounded-bl-xs p-3 text-xs text-[#00D4FF] animate-pulse flex items-center gap-2">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl rounded-bl-none p-3 text-xs text-[#00D4FF] animate-pulse flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-[#00D4FF] animate-ping" />
                   ORACLE กำลังประมวลผลดวงดาว...
                 </div>
@@ -137,7 +170,7 @@ export default function ZodiacOracle() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="สอบถาม ZODIAC ORACLE ได้ที่นี่..."
-                className="flex-1 bg-slate-900 border border-slate-800 focus:border-[#00D4FF]/60 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-hidden transition-colors"
+                className="flex-1 bg-slate-900 border border-slate-800 focus:border-[#00D4FF]/60 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none transition-colors font-sans"
               />
               <button
                 type="submit"
