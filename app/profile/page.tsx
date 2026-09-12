@@ -4,6 +4,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { CareerTimeline } from '@/components/profile/CareerTimeline';
+import { GameAccountModal } from '@/components/profile/GameAccountModal';
 
 interface PlayerData {
   id: string;
@@ -40,6 +41,9 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'STATS' | 'PROFILE' | 'TEAM'>('STATS');
   const [expandedMatches, setExpandedMatches] = useState<Record<string, boolean>>({});
+
+  // State สำหรับเปิด/ปิด GameAccountModal
+  const [isGameModalOpen, setIsGameModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -119,6 +123,7 @@ export default function ProfilePage() {
   const realName = player?.real_name || 'ณัฐวุฒิ สมานใจ';
   const location = player?.country_code === 'TH' ? 'ชลบุรี, ประเทศไทย' : 'ประเทศไทย';
   const isVerified = gameAccount?.verification_status === 'VERIFIED';
+  const isPending = gameAccount?.verification_status === 'PENDING' || gameAccount?.verification_status === 'MANUAL_REVIEW';
 
   // --- SVG Radar Chart Calculations ---
   const cx = 120, cy = 120, r = 90;
@@ -235,7 +240,7 @@ export default function ProfilePage() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-5 py-2.5 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
+              className={`px-5 py-2.5 text-xs font-bold uppercase tracking-widest transition-all border-b-2 cursor-pointer ${
                 activeTab === tab
                   ? 'border-[#E8B429] text-[#E8B429]'
                   : 'border-transparent text-neutral-500 hover:text-neutral-300'
@@ -396,15 +401,52 @@ export default function ProfilePage() {
           </>
         )}
 
-        {/* TAB 2: PROFILE & TIMELINE */}
+        {/* TAB 2: PROFILE & TIMELINE (With Riot ID Connect Action) */}
         {activeTab === 'PROFILE' && (
           <div className="space-y-6">
-            <div className="bg-[#1A1C2E] border border-white/10 rounded-xl p-6 text-sm text-neutral-300">
-              <div className="font-bold text-white text-base mb-2">👤 Athlete Identity & Verification</div>
-              <p className="text-neutral-400 text-xs">
-                Athlete ID: <span className="font-mono text-[#E8B429]">{displayAthleteId}</span> · สถานะบัญชี: <span className="text-emerald-400 font-semibold">{player?.status || 'ACTIVE'}</span>
-              </p>
+            <div className="bg-[#1A1C2E] border border-[#E8B429]/30 rounded-xl p-6 text-sm text-neutral-300 shadow-xl">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+                <div>
+                  <div className="font-bold text-white text-base mb-1 flex items-center gap-2">
+                    <span>👤</span> <span>Athlete Identity & Verification</span>
+                  </div>
+                  <p className="text-neutral-400 text-xs">
+                    Athlete ID: <span className="font-mono text-[#E8B429]">{displayAthleteId}</span> · สถานะบัญชี:{' '}
+                    <span className={`font-semibold ${isVerified ? 'text-emerald-400' : isPending ? 'text-amber-400' : 'text-neutral-400'}`}>
+                      {isVerified ? 'VERIFIED' : isPending ? 'PENDING (รอแอดมินตรวจ)' : 'UNLINKED (ยังไม่ผูก)'}
+                    </span>
+                  </p>
+                </div>
+
+                {/* ปุ่มเปิด Modal ผูกบัญชี */}
+                <button
+                  type="button"
+                  onClick={() => setIsGameModalOpen(true)}
+                  className="rounded-xl bg-gradient-to-r from-[#E8B429] to-[#b38815] px-5 py-2.5 text-xs font-extrabold tracking-wider text-black uppercase transition-all hover:from-[#ffd154] hover:to-[#cfa01f] shadow-[0_0_15px_rgba(232,180,41,0.2)] cursor-pointer shrink-0"
+                >
+                  🎯 {gameAccount ? 'แก้ไข / ยืนยัน Riot ID' : '+ ผูกบัญชี VALORANT (Riot ID)'}
+                </button>
+              </div>
+
+              {/* ข้อมูลบัญชีเกมที่ผูกไว้ */}
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
+                <div className="rounded-xl bg-[#0D0E1A] p-3.5 border border-white/5">
+                  <span className="text-neutral-500 block text-[10px]">GAME / เกม</span>
+                  <span className="text-white font-bold">VALORANT</span>
+                </div>
+                <div className="rounded-xl bg-[#0D0E1A] p-3.5 border border-white/5">
+                  <span className="text-neutral-500 block text-[10px]">RIOT ID & TAGLINE</span>
+                  <span className="text-[#E8B429] font-bold text-sm">
+                    {gameAccount ? `${gameAccount.game_name}#${gameAccount.tag_line.replace(/^#/, '')}` : 'ยังไม่ได้เชื่อมโยง'}
+                  </span>
+                </div>
+                <div className="rounded-xl bg-[#0D0E1A] p-3.5 border border-white/5">
+                  <span className="text-neutral-500 block text-[10px]">REGION / เซิร์ฟเวอร์</span>
+                  <span className="text-white uppercase font-bold">{gameAccount?.region || 'AP (Asia Pacific)'}</span>
+                </div>
+              </div>
             </div>
+
             <CareerTimeline />
           </div>
         )}
@@ -446,6 +488,17 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* 4. MODAL DIALOG */}
+      <GameAccountModal
+        isOpen={isGameModalOpen}
+        onClose={() => setIsGameModalOpen(false)}
+        playerId={player?.id}
+        onSuccess={() => {
+          setIsGameModalOpen(false);
+          window.location.reload();
+        }}
+      />
     </div>
   );
 }

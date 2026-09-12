@@ -1,6 +1,8 @@
+// app/dashboard/page.tsx
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import DashboardClientAction from './DashboardClientAction';
 
 interface TeamInfo {
   id: string;
@@ -18,11 +20,6 @@ interface UpcomingMatch {
   teamBName: string;
 }
 
-// Athlete Activity Dashboard — ดึงข้อมูลจริงทั้งหมด: players.ap_balance, ทีมที่สังกัด
-// (teams.total_zp เพราะ ZP เป็นสกุลเงินระดับสโมสรไม่ใช่รายบุคคล), Upcoming Matches
-// จาก matches จริง และสถานะห้องแข่งปัจจุบันจาก matches.status/lobby ที่ใกล้ที่สุด
-// (ไม่มีตาราง "ห้องซ้อม" แยกต่างหากอยู่จริงในระบบ — scrim_lobbies มีแค่ในเอกสาร
-// แผนงาน ZA_Master_Brief.md ไม่มีโค้ดใช้งานจริงเลยสักที่ จึงไม่ผูกกับตารางนั้น)
 export default async function DashboardPage() {
   const supabase = await createClient();
 
@@ -31,14 +28,27 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+  // 1. ดึงข้อมูล Player และ Game Account (Riot ID)
   const { data: player } = await supabase
     .from('players')
-    .select('id, display_name, ap_balance')
+    .select(`
+      id,
+      display_name,
+      ap_balance,
+      game_accounts (
+        id,
+        game_name,
+        tag_line,
+        region,
+        verification_status
+      )
+    `)
     .eq('user_id', user.id)
     .single();
 
   if (!player) redirect('/login');
 
+  // 2. ดึงข้อมูลทีมและ ZP
   const { data: memberships } = await supabase
     .from('team_members')
     .select('team_id, teams(id, name, tag, total_zp)')
@@ -55,6 +65,7 @@ export default async function DashboardPage() {
   const teamIds = teams.map((t) => t.id);
   const totalZp = teams.reduce((sum, t) => sum + (t.total_zp ?? 0), 0);
 
+  // 3. ดึงข้อมูล Matches
   let upcomingMatches: UpcomingMatch[] = [];
   if (teamIds.length > 0) {
     const { data: matches } = await supabase
@@ -81,7 +92,12 @@ export default async function DashboardPage() {
     });
   }
 
-  const currentMatch = upcomingMatches.find((m) => m.status === 'LIVE' || m.status === 'READY_CHECK' || m.status === 'VETO');
+  const currentMatch = upcomingMatches.find(
+    (m) => m.status === 'LIVE' || m.status === 'READY_CHECK' || m.status === 'VETO'
+  );
+
+  const rawAccount = player.game_accounts;
+  const gameAccount = Array.isArray(rawAccount) ? rawAccount[0] : rawAccount;
 
   return (
     <div className="min-h-screen bg-[#07090E] text-white pt-24 pb-12 px-4 md:px-8 flex flex-col items-center relative font-mono selection:bg-[#00D4FF] selection:text-black">
@@ -91,7 +107,9 @@ export default async function DashboardPage() {
         <div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[#00D4FF] animate-pulse" />
-            <span className="text-[#00D4FF] text-xs tracking-widest uppercase font-bold">ATHLETE ACTIVITY DASHBOARD</span>
+            <span className="text-[#00D4FF] text-xs tracking-widest uppercase font-bold">
+              ATHLETE ACTIVITY DASHBOARD
+            </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-black tracking-wider text-white mt-1 uppercase">
             สวัสดี, {player.display_name}
@@ -100,6 +118,10 @@ export default async function DashboardPage() {
       </header>
 
       <div className="w-full max-w-6xl space-y-6 z-10">
+        
+        {/* BANNER: เชื่อมต่อ Riot ID / สถานะการตรวจสอบ */}
+        <DashboardClientAction playerId={player.id} gameAccount={gameAccount ?? null} />
+
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div className="bg-[#12121A]/80 border border-[#00D4FF]/30 p-4 rounded-lg">
