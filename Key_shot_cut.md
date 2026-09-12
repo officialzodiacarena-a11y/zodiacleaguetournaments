@@ -1,0 +1,3 @@
+npm run diff:check -- 5             = "diff_check"   
+npm run tree:update                 = "tree:update"
+npm run export:codebase
