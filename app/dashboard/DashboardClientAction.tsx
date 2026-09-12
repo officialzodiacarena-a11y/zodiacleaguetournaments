@@ -1,21 +1,24 @@
-// app/dashboard/DashboardClientAction.tsx
+//app/dashboard/DashboardClientAction.tsx
 'use client';
 
 import React, { useState } from 'react';
 import { GameAccountModal } from '@/components/profile/GameAccountModal';
 
+interface GameAccountData {
+  id?: string;
+  game_name: string;
+  tag_line: string;
+  region?: string;
+  verification_status: string;
+}
+
 interface Props {
   playerId: string;
-  gameAccount: {
-    game_name: string;
-    tag_line: string;
-    region: string;
-    verification_status: string;
-  } | null;
+  gameAccount: GameAccountData | null;
 }
 
 export default function DashboardClientAction({ playerId, gameAccount }: Props) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const isVerified = gameAccount?.verification_status === 'VERIFIED';
   const isPending =
@@ -24,20 +27,21 @@ export default function DashboardClientAction({ playerId, gameAccount }: Props) 
 
   return (
     <>
-      <div className="p-4 md:p-5 rounded-xl bg-gradient-to-r from-[#12121A] to-[#1A1C2E] border border-[#00D4FF]/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
-        <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-lg bg-[#FF4655]/20 border border-[#FF4655]/40 flex items-center justify-center text-xl shrink-0">
+      {/* BANNER: เชื่อมต่อ Riot ID / สถานะการตรวจสอบ */}
+      <div className="p-5 rounded-2xl bg-gradient-to-r from-[#121424] via-[#1A1C2E] to-[#121424] border border-[#E8B429]/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-[#FF4655]/20 border border-[#FF4655]/40 flex items-center justify-center text-2xl shrink-0">
             🎯
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-xs md:text-sm font-bold text-white uppercase tracking-wider">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm md:text-base font-bold text-white uppercase tracking-wider">
                 {gameAccount
                   ? `RIOT ID: ${gameAccount.game_name}#${gameAccount.tag_line.replace(/^#/, '')}`
-                  : 'VALORANT ATHLETE PASSPORT'}
+                  : 'เชื่อมต่อบัญชี VALORANT (Riot ID)'}
               </h3>
               <span
-                className={`text-[9px] font-mono px-2 py-0.5 rounded font-bold ${
+                className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
                   isVerified
                     ? 'bg-[#4CAF50]/20 text-[#4CAF50] border border-[#4CAF50]/40'
                     : isPending
@@ -48,29 +52,30 @@ export default function DashboardClientAction({ playerId, gameAccount }: Props) 
                 {isVerified ? 'VERIFIED' : isPending ? 'PENDING REVIEW' : 'UNLINKED'}
               </span>
             </div>
-            <p className="text-[11px] text-gray-400 mt-0.5">
+            <p className="text-xs text-neutral-400 mt-1">
               {isVerified
-                ? 'บัญชีได้รับการยืนยันแล้ว สามารถเข้าร่วมการแข่งขันและเก็บคะแนน ZP ได้'
-                : 'เชื่อมต่อ Riot ID เพื่อรับรองสิทธิ์และเข้าร่วมทัวร์นาเมนต์'}
+                ? 'บัญชีของคุณได้รับการยืนยันสถานะนักกีฬา พร้อมเข้าแข่งขันเรียบร้อยแล้ว'
+                : 'เชื่อมต่อ Riot ID เพื่อรับรองสิทธิ์เข้าแข่งขันทัวร์นาเมนต์และบันทึกสถิติ'}
             </p>
           </div>
         </div>
 
         <button
           type="button"
-          onClick={() => setIsOpen(true)}
-          className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-[#00D4FF] to-[#0099b8] hover:from-[#33ddff] hover:to-[#00b4d8] text-black font-black rounded-lg text-xs tracking-wider uppercase transition-all shadow-[0_0_15px_rgba(0,212,255,0.25)] cursor-pointer whitespace-nowrap shrink-0"
+          onClick={() => setIsModalOpen(true)}
+          className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-[#E8B429] to-[#b38815] hover:from-[#ffd154] hover:to-[#cfa01f] text-black font-extrabold rounded-xl text-xs tracking-wider uppercase transition-all shadow-[0_0_15px_rgba(232,180,41,0.2)] cursor-pointer whitespace-nowrap shrink-0"
         >
-          {gameAccount ? 'แก้ไข / ยืนยัน Riot ID' : '+ เชื่อมต่อ RIOT ID'}
+          {gameAccount ? 'แก้ไข / ยืนยัน Riot ID' : '+ ผูกบัญชี RIOT ID'}
         </button>
       </div>
 
+      {/* MODAL DIALOG */}
       <GameAccountModal
-        isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
         playerId={playerId}
         onSuccess={() => {
-          setIsOpen(false);
+          setIsModalOpen(false);
           window.location.reload();
         }}
       />
