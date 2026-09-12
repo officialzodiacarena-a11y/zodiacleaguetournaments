@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import type { CheckAccessResult, PhaseApiFeature, SubscriberType } from '@/types/subscriptions';
+import type { CheckAccessResult, PhaseApiFeature, SubscriberType, PlanCode, SubscriptionStatus } from '@/types/subscriptions';
 
 const ANALYTICS_ELIGIBLE_PLANS = ['PRO_CLUB', 'VIP_CLUB'];
 const VIP_PERK_ELIGIBLE_PLANS = ['VIP_CLUB'];
@@ -32,23 +32,26 @@ export async function checkAccessGate(
     return { has_access: false, plan_code: null, current_status: null, read_only: false };
   }
 
+  const planCode = data.plan_code as PlanCode;
+  const currentStatus = data.current_status as SubscriptionStatus;
+
   const eligiblePlans = feature === 'ANALYTICS' ? ANALYTICS_ELIGIBLE_PLANS : VIP_PERK_ELIGIBLE_PLANS;
-  const planEligible = eligiblePlans.includes(data.plan_code);
+  const planEligible = eligiblePlans.includes(planCode);
 
   if (!planEligible) {
-    return { has_access: false, plan_code: data.plan_code, current_status: data.current_status, read_only: false };
+    return { has_access: false, plan_code: planCode, current_status: currentStatus, read_only: false };
   }
 
-  if (data.current_status === 'ACTIVE') {
-    return { has_access: true, plan_code: data.plan_code, current_status: data.current_status, read_only: false };
+  if (currentStatus === 'ACTIVE') {
+    return { has_access: true, plan_code: planCode, current_status: currentStatus, read_only: false };
   }
 
-  if (data.current_status === 'GRACE_PERIOD') {
+  if (currentStatus === 'GRACE_PERIOD') {
     // Grace Period: dashboard visible read-only; VIP perk generation is blocked
     // at the /perks/generate-qr route itself (Gate 4), not here.
-    return { has_access: feature === 'ANALYTICS', plan_code: data.plan_code, current_status: data.current_status, read_only: true };
+    return { has_access: feature === 'ANALYTICS', plan_code: planCode, current_status: currentStatus, read_only: true };
   }
 
   // PAST_DUE / EXPIRED / CANCELLED
-  return { has_access: false, plan_code: data.plan_code, current_status: data.current_status, read_only: false };
+  return { has_access: false, plan_code: planCode, current_status: currentStatus, read_only: false };
 }

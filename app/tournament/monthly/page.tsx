@@ -1,3 +1,4 @@
+// app/tournament/monthly/page.tsx
 import { createClient } from '@/lib/supabase/server';
 import { TournamentBracketView } from '@/components/tournament-bracket-view';
 import type { TournamentBracketPageData, BracketMatchNode, BracketTeamParticipant } from '@/types/bracket';
@@ -18,24 +19,35 @@ interface StandingRow {
   teams: { name: string; tag: string } | { name: string; tag: string }[] | null;
 }
 
+interface TournamentRecord {
+  id: string;
+  name: string;
+  type?: string | null;
+  start_at?: string | null;
+  starts_at?: string | null;
+  season_id?: string | null;
+  created_at?: string | null;
+}
+
 function one<T>(rel: T[] | T | null | undefined): T | null {
   if (Array.isArray(rel)) return rel[0] ?? null;
   return rel ?? null;
 }
 
-// Monthly Major Hub — ดึงข้อมูลจริง: tournaments (type=MONTHLY) -> tournament_stages
-// (format=DOUBLE_ELIM) -> bracket_nodes (ผังสายแข่งจริง, ใช้ component เดียวกับหน้า
-// bracket) และ circuit_standings (โควตาสะสมแต้ม ZP ของฤดูกาล) แทน mock เดิมทั้งหมด
+// Monthly Major Hub — ดึงข้อมูลจริง: tournaments -> tournament_stages -> bracket_nodes
 export default async function MonthlyTournamentPage() {
   const supabase = await createClient();
 
-  const { data: tournament } = await supabase
+  // ดึงรายการ tournaments แบบ Safe-type
+  const { data: rawTournaments } = (await supabase
     .from('tournaments')
-    .select('id, name, type, start_at, season_id')
-    .eq('type', 'MONTHLY')
-    .order('start_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(10)) as unknown as { data: TournamentRecord[] | null };
+
+  const tournament = (rawTournaments ?? []).find(
+    (t: TournamentRecord) => t.type === 'MONTHLY' || t.name?.toLowerCase().includes('monthly')
+  );
 
   let bracketData: TournamentBracketPageData | null = null;
   let standings: StandingRow[] = [];
@@ -90,8 +102,9 @@ export default async function MonthlyTournamentPage() {
       }));
     }
 
-    const dateText = tournament.start_at
-      ? new Date(tournament.start_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
+    const startDate = tournament.start_at || tournament.starts_at;
+    const dateText = startDate
+      ? new Date(startDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
       : 'TBA';
 
     bracketData = {
@@ -148,7 +161,9 @@ export default async function MonthlyTournamentPage() {
                   return (
                     <tr key={s.team_id} className="hover:bg-[#161B22]/50">
                       <td className="py-3.5 px-4 font-bold text-amber-400">#{s.rank ?? '—'}</td>
-                      <td className="py-3.5 px-4 font-bold text-gray-200">{team?.name ?? 'Unknown'} <span className="text-gray-500 text-xs">[{team?.tag}]</span></td>
+                      <td className="py-3.5 px-4 font-bold text-gray-200">
+                        {team?.name ?? 'Unknown'} <span className="text-gray-500 text-xs">[{team?.tag}]</span>
+                      </td>
                       <td className="py-3.5 px-4 font-bold text-cyan-400">{s.total_zp} ZP</td>
                       <td className="py-3.5 px-4 text-emerald-400">{s.counted_zp} ZP</td>
                       <td className="py-3.5 px-4 text-center">

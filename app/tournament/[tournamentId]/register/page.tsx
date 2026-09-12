@@ -1,3 +1,4 @@
+// app/tournament/[tournamentId]/register/page.tsx
 import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -6,6 +7,18 @@ import { submitRegistrationAction } from '@/actions/registration';
 
 interface PageProps {
   params: Promise<{ tournamentId: string }>;
+}
+
+interface TournamentRow {
+  id: string;
+  name: string;
+  type?: string | null;
+  status: string;
+  entry_fee_ap?: number | null;
+  start_at?: string | null;
+  starts_at?: string | null;
+  registration_closes_at?: string | null;
+  season_id?: string | null;
 }
 
 interface GameAccountRow {
@@ -94,11 +107,13 @@ export default async function TournamentRegistrationPage({ params }: PageProps) 
     .single();
   if (!actor) notFound();
 
-  const { data: tournament } = await supabase
+  // ดึงข้อมูล tournament แบบ Safe-type
+  const { data: tournament } = (await supabase
     .from('tournaments')
-    .select('id, name, type, status, entry_fee_ap, start_at, registration_closes_at, season_id')
+    .select('*')
     .eq('id', tournamentId)
-    .single();
+    .maybeSingle()) as unknown as { data: TournamentRow | null };
+
   if (!tournament) notFound();
 
   const { data: season } = tournament.season_id
@@ -171,10 +186,11 @@ export default async function TournamentRegistrationPage({ params }: PageProps) 
         .maybeSingle()
     : { data: null };
 
-  const entryFeeAp: number = tournament.entry_fee_ap;
+  const entryFeeAp: number = tournament.entry_fee_ap ?? 0;
   const remainingAp = actor.ap_balance - entryFeeAp;
-  const startDateText = tournament.start_at
-    ? new Date(tournament.start_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
+  const startDate = tournament.start_at || tournament.starts_at;
+  const startDateText = startDate
+    ? new Date(startDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
     : 'TBA';
 
   const isMemberCountOk = starters.length + substitutes.length >= requiredCount;
@@ -229,7 +245,7 @@ export default async function TournamentRegistrationPage({ params }: PageProps) 
           <span className="text-[#E8B429]/30">·</span>
           <span className="text-xs text-[#cfd3e5]">{startDateText}</span>
           <span className="text-[#E8B429]/30">·</span>
-          <span className="text-xs font-semibold tracking-wider text-[#cfd3e5]">{tournament.type}</span>
+          <span className="text-xs font-semibold tracking-wider text-[#cfd3e5]">{tournament.type || 'TOURNAMENT'}</span>
           <div className="ml-auto">
             <span className="rounded border border-[#9184d9]/35 bg-[#9184d9]/15 px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-[#9184d9]">
               {tournament.status}

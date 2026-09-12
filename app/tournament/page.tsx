@@ -10,6 +10,18 @@ import { selectSeasonAction } from '@/actions/tournament';
 
 const SEASONS: SeasonSplit[] = ['SPRING', 'SUMMER', 'FALL', 'WINTER'];
 
+interface RawTournamentRow {
+  id: string;
+  name: string;
+  type?: string | null;
+  status: string;
+  max_teams?: number | null;
+  entry_fee_ap?: number | null;
+  start_at?: string | null;
+  starts_at?: string | null;
+  registration_closes_at?: string | null;
+}
+
 function mapTournamentStatus(status: string): TournamentItem['status'] {
   if (status === 'OPEN' || status === 'ONGOING' || status === 'ACTIVE' || status === 'REGISTRATION') {
     return 'OPEN';
@@ -90,13 +102,18 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
   let registrationDeadlineText = 'TBA';
 
   if (season) {
-    const { data: tRows } = await supabase
+    const { data: tRows } = (await supabase
       .from('tournaments')
-      .select('id, name, type, status, max_teams, entry_fee_ap, start_at, registration_closes_at')
-      .eq('season_id', season.id)
-      .order('start_at', { ascending: true, nullsFirst: false });
+      .select('*')
+      .eq('season_id', season.id)) as unknown as { data: RawTournamentRow[] | null };
 
-    const tournamentIds = (tRows ?? []).map((t) => t.id);
+    const sortedRows = (tRows ?? []).sort((a, b) => {
+      const dateA = a.start_at || a.starts_at || '';
+      const dateB = b.start_at || b.starts_at || '';
+      return dateA.localeCompare(dateB);
+    });
+
+    const tournamentIds = sortedRows.map((t) => t.id);
     const { data: regRows } =
       tournamentIds.length > 0
         ? await admin
@@ -110,7 +127,7 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
       countByTournament.set(r.tournament_id, (countByTournament.get(r.tournament_id) ?? 0) + 1);
     }
 
-    const openDeadlines = (tRows ?? [])
+    const openDeadlines = sortedRows
       .filter((t) => (t.status === 'OPEN' || t.status === 'REGISTRATION') && t.registration_closes_at)
       .map((t) => t.registration_closes_at as string)
       .sort();
@@ -121,11 +138,12 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
       registrationDeadlineText = formatDate(season.ends_at);
     }
 
-    tournaments = (tRows ?? []).map((t) => {
+    tournaments = sortedRows.map((t) => {
       const status = mapTournamentStatus(t.status);
       const accentTheme: TournamentItem['accentTheme'] =
         status === 'OPEN' ? 'gold' : status === 'CONCLUDED' ? 'gray' : 'purple';
       const maxTeams = t.max_teams ?? 12;
+      const startDate = t.start_at || t.starts_at;
 
       return {
         id: t.id,
@@ -136,8 +154,8 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
         prizePoolZp: 1000,
         entryFeeAp: t.entry_fee_ap ?? 0,
         prizeTopText: `TOP ${Math.min(8, maxTeams)}`,
-        dateRangeText: t.start_at ? formatDate(t.start_at) : 'TBA',
-        yearText: t.start_at ? String(new Date(t.start_at).getFullYear()) : String(new Date().getFullYear()),
+        dateRangeText: startDate ? formatDate(startDate) : 'TBA',
+        yearText: startDate ? String(new Date(startDate).getFullYear()) : String(new Date().getFullYear()),
         registeredTeams: countByTournament.get(t.id) ?? 0,
         maxTeams,
         accentTheme,
