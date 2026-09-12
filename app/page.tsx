@@ -1,4 +1,5 @@
 // app/page.tsx
+import AthletePassportCard from '@/components/landing/AthletePassportCard';
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -13,7 +14,6 @@ import {
   CheckCircle2, 
   Activity,
   Flame,
-  Users
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -359,83 +359,8 @@ export default async function LandingPage() {
               </div>
             </Link>
 
-            {/* Pillar 2: ATHLETE PASSPORT (3D FLIP CARD -> ATHLETE TRANSFER MARKET) */}
-            <div className="group h-[300px] [perspective:1000px]">
-              <div className="relative h-full w-full rounded-xl transition-all duration-700 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)] shadow-xl cursor-pointer">
-                
-                {/* --- FRONT: ATHLETE PASSPORT --- */}
-                <div className="absolute inset-0 h-full w-full rounded-xl border border-white/5 bg-[#101223] p-6 [backface-visibility:hidden] flex flex-col justify-between group-hover:border-[#00D4FF]/40">
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#00D4FF]/15 border border-[#00D4FF]/30 text-[#00D4FF]">
-                        <UserCheck className="w-6 h-6" />
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="flex h-1.5 w-1.5 rounded-full bg-[#00D4FF] animate-pulse" />
-                        <span className="text-[10px] font-mono text-[#00D4FF]">02 / PASSPORT</span>
-                      </div>
-                    </div>
-                    <h4 className="text-base font-black text-[#00D4FF]">
-                      ATHLETE PASSPORT
-                    </h4>
-                    <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
-                      เก็บบันทึกประวัติ ผลงานเรตติ้ง KDA, ACS, ADR และเหรียญเกียรติยศระดับสโมสร
-                    </p>
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between pt-2 border-t border-white/5 text-[11px] font-mono">
-                    <span className="text-[#00D4FF] font-bold">ดูพาสปอร์ตนักกีฬา →</span>
-                    <span className="text-zinc-500 text-[10px] bg-white/5 px-2 py-0.5 rounded">ชี้เพื่อดูตลาดซื้อขาย</span>
-                  </div>
-                </div>
-
-                {/* --- BACK: ATHLETE TRANSFER MARKET (FLIPPED) --- */}
-                <div className="absolute inset-0 h-full w-full rounded-xl border-2 border-[#E8B429] bg-gradient-to-br from-[#1A1810] via-[#121424] to-[#0D0E1A] p-5 text-white [transform:rotateY(180deg)] [backface-visibility:hidden] flex flex-col justify-between shadow-[0_0_30px_rgba(232,180,41,0.25)]">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-1.5">
-                        <Users className="w-4 h-4 text-[#E8B429]" />
-                        <span className="text-[11px] font-black font-mono tracking-wider text-[#E8B429] uppercase">
-                          ATHLETE MARKET
-                        </span>
-                      </div>
-                      <span className="text-[9px] font-mono bg-[#E8B429]/20 text-[#E8B429] px-2 py-0.5 rounded border border-[#E8B429]/40 font-bold">
-                        P2P ESCROW
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-zinc-300 font-medium line-clamp-2">
-                      ตลาดประมูลและย้ายสังกัดนักกีฬา (FFXI Blind Auction & Buyout)
-                    </p>
-
-                    {/* Featured Athlete Snippet */}
-                    <div className="mt-2.5 p-2 rounded-xl bg-black/50 border border-white/10 space-y-1 font-mono text-[10px]">
-                      <div className="flex justify-between items-center">
-                        <span className="text-white font-bold">SHADOW_ZX #TH1</span>
-                        <span className="text-[#E8B429] font-bold">IMMORTAL 3</span>
-                      </div>
-                      <div className="flex justify-between text-zinc-400 text-[9px]">
-                        <span>ROLE: DUELIST</span>
-                        <span className="text-[#00D4FF]">ACS 274 • K/D 1.87</span>
-                      </div>
-                      <div className="flex justify-between items-center pt-1 border-t border-white/10 text-[10px]">
-                        <span className="text-zinc-400">BID START:</span>
-                        <span className="text-[#E8B429] font-black">2,500 AP</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Link
-                    href="/profile"
-                    className="w-full text-center py-2 rounded-lg bg-[#E8B429] hover:bg-[#ffc935] text-black font-black text-[11px] tracking-wider uppercase transition-all shadow-md font-mono mt-1"
-                  >
-                    เข้าสู่ตลาดซื้อขายนักกีฬา →
-                  </Link>
-                </div>
-
-              </div>
-            </div>
-
+            {/* Pillar 2: ATHLETE PASSPORT & MARKET (Interactive Card) */}
+            <AthletePassportCard />
             {/* Pillar 3: Watch-to-Earn AP */}
             <Link
               href="/schedule"
