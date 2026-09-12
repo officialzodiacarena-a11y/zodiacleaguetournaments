@@ -1,6 +1,6 @@
 # 🌳 Zpdoac Arena Master Data Tree & Schema Map (V1.06)
 
-> 💎 **Last Updated:** เวลา 19:33:43 ศุกร์ 11/09/2026
+> 💎 **Last Updated:** เวลา 01:08:54 เสาร์ 12/09/2026
 
 ีวิธีใช้ = node update-tree.mjs
 
@@ -111,6 +111,8 @@ zodiac/
 │   │       │   │   │   └── route.ts
 │   │       │   │   ├── items/
 │   │       │   │   │   ├── [id]/
+│   │       │   │   │   │   ├── variants/
+│   │       │   │   │   │   │   └── route.ts
 │   │       │   │   │   │   └── route.ts
 │   │       │   │   │   └── route.ts
 │   │       │   │   ├── shipments/
@@ -125,6 +127,8 @@ zodiac/
 │   │       │   │   │   └── route.ts
 │   │       │   │   └── route.ts
 │   │       │   ├── themes/
+│   │       │   │   ├── active/
+│   │       │   │   │   └── route.ts
 │   │       │   │   ├── [id]/
 │   │       │   │   │   └── route.ts
 │   │       │   │   └── route.ts

@@ -1,482 +1,446 @@
-// app/home/page.tsx
-// TASK 2.1-SA-02 — 5-Card Season Hub เชื่อม Supabase จริง (circuits + seasons + season_standings)
-// อ้างอิง layout/สี/structure จาก "Zodiac Arena Hub.dc.html" (Claude Design canvas) แต่ใช้ grid
-// responsive แบบเดียวกับ app/teams และ app/schedule แทนขนาด fixed ของ canvas เดิม
-
+// app/page.tsx
 import React from 'react';
 import Link from 'next/link';
-import { Orbitron, Rajdhani } from 'next/font/google';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/server';
-import { JoinCircuitButtons } from '@/components/hub/JoinCircuitButtons';
-import { pickRelevantSeason } from '@/lib/season/pickRelevantSeason';
+import { 
+  Radio, 
+  Trophy, 
+  UserCheck, 
+  Store, 
+  ArrowRight, 
+  ExternalLink, 
+  CheckCircle2, 
+  Activity,
+  Flame
+} from 'lucide-react';
 
-const orbitron = Orbitron({ subsets: ['latin'], weight: ['700', '900'], variable: '--font-orbitron' });
-const rajdhani = Rajdhani({ subsets: ['latin'], weight: ['500', '600', '700'], variable: '--font-rajdhani' });
+export const dynamic = 'force-dynamic';
 
-interface CircuitRow {
+interface LiveMatchRow {
   id: string;
-  name: string;
-  season_order: number;
+  status: string;
+  best_of: number;
+  score_a: number;
+  score_b: number;
+  team_a: { name: string; tag: string } | { name: string; tag: string }[] | null;
+  team_b: { name: string; tag: string } | { name: string; tag: string }[] | null;
 }
 
-interface SeasonRow {
+interface UserProfileData {
   id: string;
-  circuit_id: string;
-  name: string;
-  status: 'UPCOMING' | 'ACTIVE' | 'CONCLUDED';
-  starts_at: string;
-  ends_at: string;
+  athlete_id: string | null;
+  display_name: string | null;
+  real_name: string | null;
+  ap_balance: number;
+  game_account: {
+    game_name: string | null;
+    tag_line: string | null;
+    verification_status: string;
+  } | null;
 }
 
-interface StandingRow {
-  total_zp: number;
-  wins: number;
-  losses: number;
-  teamName: string;
-}
-
-interface CircuitCardData extends CircuitRow {
-  season: SeasonRow | null;
-  standings: StandingRow[];
-}
-
-const SEASON_THEME: Record<string, { color: string; months: string }> = {
-  SPRING: { color: '#63A66F', months: 'JAN – MAR' },
-  SUMMER: { color: '#E8B429', months: 'APR – JUN' },
-  FALL: { color: '#E87529', months: 'JUL – SEP' },
-  WINTER: { color: '#5BA8D4', months: 'OCT – DEC' },
-};
-
-async function getHubData(): Promise<{ isAuthenticated: boolean; circuitCards: CircuitCardData[] }> {
+export default async function LandingPage() {
   const supabase = await createClient();
 
-  const [
-    {
-      data: { user },
-    },
-    { data: game },
-  ] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase.from('games').select('id').eq('code', 'VAL').maybeSingle(),
+  // 1. ตรวจสอบสถานะ Auth และข้อมูลผู้เล่นตาม Schema จริง (display_name, real_name, athlete_id)
+  const { data: { user } } = await supabase.auth.getUser();
+
+  let athleteProfile: UserProfileData | null = null;
+  if (user) {
+    const { data: player } = await supabase
+      .from('players')
+      .select(`
+        id,
+        athlete_id,
+        display_name,
+        real_name,
+        ap_balance,
+        game_accounts (
+          game_name,
+          tag_line,
+          verification_status
+        )
+      `)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (player) {
+      const rawAccounts = player.game_accounts;
+      const account = Array.isArray(rawAccounts) ? rawAccounts[0] : rawAccounts;
+
+      athleteProfile = {
+        id: player.id,
+        athlete_id: player.athlete_id,
+        display_name: player.display_name,
+        real_name: player.real_name,
+        ap_balance: player.ap_balance ?? 0,
+        game_account: account ? {
+          game_name: account.game_name,
+          tag_line: account.tag_line,
+          verification_status: account.verification_status,
+        } : null,
+      };
+    }
+  }
+
+  // 2. ดึงแมตช์กำลังแข่งสด (Fault-Tolerant ด้วย Promise.allSettled)
+  const results = await Promise.allSettled([
+    supabase
+      .from('matches')
+      .select(`
+        id,
+        status,
+        best_of,
+        score_a,
+        score_b,
+        team_a:teams!matches_team_a_id_fkey ( name, tag ),
+        team_b:teams!matches_team_b_id_fkey ( name, tag )
+      `)
+      .eq('status', 'LIVE')
+      .limit(3),
+    supabase
+      .from('tournaments')
+      .select('id', { count: 'exact', head: true })
+      .in('status', ['REGISTRATION_OPEN', 'ACTIVE']),
   ]);
 
-  if (!game) return { isAuthenticated: !!user, circuitCards: [] };
+  const liveMatchesRaw = results[0].status === 'fulfilled' ? results[0].value.data ?? [] : [];
+  const openTournamentsCount = results[1].status === 'fulfilled' ? results[1].value.count ?? 0 : 0;
 
-  const { data: circuits } = await supabase
-    .from('circuits')
-    .select('id, name, season_order')
-    .eq('game_id', game.id)
-    .order('season_order', { ascending: true });
+  const liveMatches = (liveMatchesRaw as unknown as LiveMatchRow[]).map((m) => {
+    const teamA = Array.isArray(m.team_a) ? m.team_a[0] : m.team_a;
+    const teamB = Array.isArray(m.team_b) ? m.team_b[0] : m.team_b;
+    return {
+      id: m.id,
+      scoreA: m.score_a,
+      scoreB: m.score_b,
+      teamAName: teamA?.name || 'TBD',
+      teamATag: teamA?.tag || 'A',
+      teamBName: teamB?.name || 'TBD',
+      teamBTag: teamB?.tag || 'B',
+    };
+  });
 
-  if (!circuits || circuits.length === 0) {
-    return { isAuthenticated: !!user, circuitCards: [] };
-  }
-
-  const circuitIds = circuits.map((c) => c.id);
-  const { data: seasons } = await supabase
-    .from('seasons')
-    .select('id, circuit_id, name, status, starts_at, ends_at')
-    .in('circuit_id', circuitIds);
-
-  const seasonsByCircuit = new Map<string, SeasonRow[]>();
-  for (const s of (seasons ?? []) as SeasonRow[]) {
-    const list = seasonsByCircuit.get(s.circuit_id) ?? [];
-    list.push(s);
-    seasonsByCircuit.set(s.circuit_id, list);
-  }
-
-  const circuitCards: CircuitCardData[] = [];
-  for (const c of circuits as CircuitRow[]) {
-    const season = pickRelevantSeason(seasonsByCircuit.get(c.id));
-    let standings: StandingRow[] = [];
-
-    if (season?.status === 'CONCLUDED') {
-      const { data } = await supabase
-        .from('season_standings')
-        .select('total_zp, wins, losses, teams(name)')
-        .eq('season_id', season.id)
-        .order('total_zp', { ascending: false })
-        .limit(5);
-
-      standings = ((data ?? []) as unknown as { total_zp: number; wins: number; losses: number; teams: { name: string } | { name: string }[] | null }[]).map(
-        (row) => ({
-          total_zp: row.total_zp,
-          wins: row.wins,
-          losses: row.losses,
-          teamName: (Array.isArray(row.teams) ? row.teams[0]?.name : row.teams?.name) ?? 'UNKNOWN',
-        })
-      );
-    }
-
-    circuitCards.push({ ...c, season, standings });
-  }
-
-  return { isAuthenticated: !!user, circuitCards };
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso)
-    .toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
-    .toUpperCase();
-}
-
-function CrownIcon({ color }: { color: string }) {
   return (
-    <svg width="32" height="32" viewBox="0 0 36 36" fill="none">
-      <path d="M4 26L8 12L14 20L18 8L22 20L28 12L32 26H4Z" fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
-      <circle cx="4" cy="26" r="2.5" fill={color} />
-      <circle cx="18" cy="8" r="2.5" fill="#E8B429" />
-      <circle cx="32" cy="26" r="2.5" fill={color} />
-      <line x1="4" y1="29" x2="32" y2="29" stroke={color} strokeWidth="1.5" />
-    </svg>
-  );
-}
-
-function SeasonIcon({ name, color }: { name: string; color: string }) {
-  if (name === 'SPRING') {
-    return (
-      <svg width="32" height="32" viewBox="0 0 36 36" fill="none">
-        {[0, 72, 144, 216, 288].map((deg) => (
-          <ellipse
-            key={deg}
-            cx="18"
-            cy="10"
-            rx="4"
-            ry="7"
-            fill={`${color}40`}
-            stroke={color}
-            strokeWidth="1.2"
-            transform={`rotate(${deg} 18 18)`}
-          />
-        ))}
-        <circle cx="18" cy="18" r="3.5" fill={color} />
-      </svg>
-    );
-  }
-  if (name === 'SUMMER') {
-    return (
-      <svg width="40" height="40" viewBox="0 0 52 52" fill="none" className="animate-za-rotate-slow">
-        <circle cx="26" cy="26" r="10" fill={`${color}33`} stroke={color} strokeWidth="1.5" />
-        <circle cx="26" cy="26" r="6" fill={color} opacity="0.6" />
-        {[
-          [26, 4, 26, 10],
-          [26, 42, 26, 48],
-          [4, 26, 10, 26],
-          [42, 26, 48, 26],
-          [10.8, 10.8, 15.1, 15.1],
-          [36.9, 36.9, 41.2, 41.2],
-          [41.2, 10.8, 36.9, 15.1],
-          [15.1, 36.9, 10.8, 41.2],
-        ].map(([x1, y1, x2, y2], i) => (
-          <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-        ))}
-      </svg>
-    );
-  }
-  if (name === 'FALL') {
-    return (
-      <svg width="32" height="32" viewBox="0 0 36 36" fill="none">
-        <path d="M18 4C10 4 4 12 4 20c0 7 6 12 14 12 8 0 14-5 14-12 0-8-6-16-14-16z" fill={`${color}33`} stroke={color} strokeWidth="1.5" />
-        <path d="M18 6C12 10 8 15 9 22" stroke={color} strokeWidth="1" strokeLinecap="round" opacity="0.6" />
-        <line x1="18" y1="32" x2="18" y2="20" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-        <line x1="18" y1="24" x2="13" y2="20" stroke={color} strokeWidth="1" strokeLinecap="round" opacity="0.7" />
-        <line x1="18" y1="27" x2="23" y2="23" stroke={color} strokeWidth="1" strokeLinecap="round" opacity="0.7" />
-      </svg>
-    );
-  }
-  return (
-    <svg width="32" height="32" viewBox="0 0 36 36" fill="none" className="animate-za-rotate-slower">
-      <line x1="18" y1="4" x2="18" y2="32" stroke={color} strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
-      <line x1="4" y1="18" x2="32" y2="18" stroke={color} strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
-      <line x1="7.5" y1="7.5" x2="28.5" y2="28.5" stroke={color} strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
-      <line x1="28.5" y1="7.5" x2="7.5" y2="28.5" stroke={color} strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
-      <circle cx="18" cy="18" r="3" fill="none" stroke={color} strokeWidth="1.5" />
-    </svg>
-  );
-}
-
-function StatusPill({ status, color }: { status: SeasonRow['status'] | undefined; color: string }) {
-  if (!status) {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-semibold tracking-wider text-[#94A3B8]">
-        ยังไม่ประกาศ
-      </span>
-    );
-  }
-  if (status === 'ACTIVE') {
-    return (
-      <span
-        className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[9px] font-bold tracking-wider"
-        style={{ borderColor: `${color}55`, background: `${color}1a`, color }}
-      >
-        <span className="h-1.5 w-1.5 rounded-full animate-za-pulse-live" style={{ background: color }} />
-        CIRCUIT ACTIVE
-      </span>
-    );
-  }
-  if (status === 'CONCLUDED') {
-    return (
-      <span
-        className="inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[9px] font-semibold tracking-wider"
-        style={{ borderColor: `${color}4d`, background: `${color}1f`, color }}
-      >
-        CONCLUDED
-      </span>
-    );
-  }
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[9px] font-semibold tracking-wider"
-      style={{ borderColor: `${color}4d`, background: `${color}1a`, color }}
-    >
-      UPCOMING
-    </span>
-  );
-}
-
-function ConcludedPanel({ standings, color }: { standings: StandingRow[]; color: string }) {
-  const champion = standings[0];
-  return (
-    <div>
-      {champion && (
-        <div
-          className="rounded-md border p-2.5 mb-2"
-          style={{ borderColor: `${color}33`, background: `${color}14` }}
-        >
-          <div className="text-[8px] font-semibold tracking-[0.2em] mb-1" style={{ color }}>
-            🏆 CHAMPION
-          </div>
-          <div className="text-[11px] font-bold text-[#F9EDD8]" style={{ fontFamily: 'var(--font-orbitron)' }}>
-            {champion.teamName}
-          </div>
-        </div>
-      )}
-      {standings.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <div className="text-[8px] font-semibold tracking-[0.18em] text-[#94A3B8] mb-0.5">TOP TEAMS · ZP</div>
-          {standings.map((s, i) => (
-            <div key={s.teamName + i} className="flex items-center justify-between">
-              <span className="text-[10px] font-medium text-[#F9EDD8]/90 truncate max-w-[110px]">
-                {i + 1}. {s.teamName}
-              </span>
-              <span className="text-[9px]" style={{ color }}>{s.total_zp.toLocaleString()} ZP</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function UpcomingPanel({ season, color }: { season: SeasonRow; color: string }) {
-  return (
-    <div className="rounded-md border p-3 flex flex-col gap-1.5" style={{ borderColor: `${color}30`, background: `${color}0f` }}>
-      <div className="text-[9px] font-semibold tracking-[0.2em] text-[#94A3B8]">REGISTRATION OPENS</div>
-      <div className="text-[13px] font-bold" style={{ color, fontFamily: 'var(--font-orbitron)' }}>
-        {formatDate(season.starts_at)}
-      </div>
-    </div>
-  );
-}
-
-function NoSeasonPanel({ color }: { color: string }) {
-  return (
-    <div className="rounded-md border p-3" style={{ borderColor: `${color}25`, background: `${color}0a` }}>
-      <div className="text-[9px] text-[#94A3B8] leading-relaxed">รอประกาศวันเปิดซีซัน</div>
-    </div>
-  );
-}
-
-function CircuitCard({
-  circuit,
-  isAuthenticated,
-}: {
-  circuit: CircuitCardData;
-  isAuthenticated: boolean;
-}) {
-  const key = circuit.name.toUpperCase();
-  const theme = SEASON_THEME[key] ?? { color: '#9184D9', months: '' };
-  const color = theme.color;
-  const status = circuit.season?.status;
-  const isActive = status === 'ACTIVE';
-
-  const inner = (
-    <div
-      className={`group relative flex h-full min-h-[280px] flex-col overflow-hidden rounded-xl border bg-[#1A1C2E] p-5 transition-all duration-200 hover:-translate-y-1 ${
-        isActive ? 'animate-za-pulse-glow-gold' : ''
-      }`}
-      style={{ borderColor: color }}
-    >
-      <span className="pointer-events-none absolute left-0 top-0 h-6 w-6 rounded-tl-xl border-l-2 border-t-2" style={{ borderColor: color }} />
-      <span className="pointer-events-none absolute bottom-0 right-0 h-6 w-6 rounded-br-xl border-b-2 border-r-2" style={{ borderColor: color }} />
-      <div className="pointer-events-none absolute -bottom-8 -right-8 h-24 w-24 rounded-full opacity-30 blur-2xl" style={{ background: color }} />
-
-      <div className="relative flex items-center justify-between mb-3">
-        <span className="text-[9px] font-semibold tracking-[0.22em]" style={{ color }}>
-          SEASON {circuit.season_order} · {theme.months}
-        </span>
-        {isActive && (
-          <span className="flex items-center gap-1.5 rounded border border-[#E82929]/40 bg-[#E82929]/15 px-2 py-0.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#E82929] animate-za-pulse-live" />
-            <span className="text-[9px] font-bold tracking-wider text-[#E82929]">LIVE</span>
-          </span>
-        )}
+    <main className="min-h-screen bg-[#08090F] text-[#F9EDD8] font-sans relative overflow-x-hidden selection:bg-[#E8B429] selection:text-black select-none">
+      
+      {/* Background Faceoff Image & Cyber HUD Overlay */}
+      <div className="fixed inset-0 -z-20 opacity-25 pointer-events-none">
+        <Image
+          src="/images/seasons/BG.png"
+          alt="Zodiac Arena Background"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+        />
       </div>
 
-      <div className="relative mb-3 animate-za-float w-fit">
-        <SeasonIcon name={key} color={color} />
-      </div>
-
-      <h3 className="relative text-xl font-bold tracking-wide text-[#F9EDD8] mb-2" style={{ fontFamily: 'var(--font-orbitron)' }}>
-        {key}
-      </h3>
-
-      <div className="relative mb-3 w-fit">
-        <StatusPill status={status} color={color} />
-      </div>
-
-      <div className="relative mt-auto">
-        {status === 'CONCLUDED' && <ConcludedPanel standings={circuit.standings} color={color} />}
-        {status === 'UPCOMING' && circuit.season && <UpcomingPanel season={circuit.season} color={color} />}
-        {!circuit.season && <NoSeasonPanel color={color} />}
-
-        {isActive && (
-          <div className="mt-3 pt-3 border-t border-white/10">
-            {isAuthenticated ? (
-              <Link
-                href="/tournament"
-                className="block w-full text-center rounded-lg py-2.5 text-xs font-black tracking-wider text-[#0D0E1A] transition-all hover:shadow-[0_0_20px_rgba(232,180,41,0.4)]"
-                style={{ background: color }}
-              >
-                ดูทัวร์นาเมนต์ / VIEW TOURNAMENTS
-              </Link>
-            ) : (
-              <JoinCircuitButtons />
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  if (status && status !== 'ACTIVE') {
-    return (
-      <Link href="/tournament" className="block h-full">
-        {inner}
-      </Link>
-    );
-  }
-  return inner;
-}
-
-export default async function HomeHubPage() {
-  const { isAuthenticated, circuitCards } = await getHubData();
-
-  return (
-    <div className={`${orbitron.variable} ${rajdhani.variable} min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 relative overflow-hidden`}>
-      {/* Background grid + radial glow — decorative, matches design reference */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-60"
+      {/* Cyber Grid Pattern */}
+      <div 
+        className="pointer-events-none fixed inset-0 opacity-20 -z-10" 
         style={{
-          backgroundImage:
-            'linear-gradient(rgba(145,132,217,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(145,132,217,0.04) 1px, transparent 1px)',
+          backgroundImage: 'linear-gradient(rgba(232, 180, 41, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 212, 255, 0.08) 1px, transparent 1px)',
           backgroundSize: '48px 48px',
         }}
       />
-      <div className="pointer-events-none absolute top-1/3 left-1/2 -translate-x-1/2 w-[800px] max-w-[90vw] h-[400px] rounded-full bg-[radial-gradient(ellipse,rgba(145,132,217,0.08)_0%,transparent_70%)]" />
+      <div className="pointer-events-none fixed -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[350px] bg-gradient-to-b from-[#E8B429]/15 via-[#00D4FF]/5 to-transparent rounded-full blur-[140px]" />
 
-      {/* TOP NAV — เหมือน pages อื่นในโปรเจกต์ (teams / tournament / schedule) */}
-      <nav className="sticky top-0 z-50 flex h-[60px] items-center justify-between border-b border-[#E8B429]/20 bg-[#0D0E1A]/95 px-6 md:px-10 backdrop-blur-md">
-        <div className="flex items-center gap-2.5 font-bold tracking-widest text-[#E8B429]">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md border-2 border-[#E8B429] font-black text-sm">
-            Z
+      {/* ====================================================================
+          SECTION 1: TOP LIVE TELEMETRY STRIP (Case LP-01 Compliant)
+      ==================================================================== */}
+      <div className="border-b border-white/5 bg-[#0D0E1A]/80 backdrop-blur-md px-4 py-2">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+          
+          <div className="flex items-center gap-2">
+            <span className="flex h-2 w-2 rounded-full bg-[#E3322F] animate-ping" />
+            <span className="font-black text-[#E3322F] uppercase tracking-wider">LIVE TELEMETRY:</span>
           </div>
-          <span className="text-base tracking-widest">ZODIAC ARENA</span>
-        </div>
-        <div className="hidden md:flex gap-8 text-[13px] font-medium text-[#b2b6ca]">
-          <Link href="/profile" className="hover:text-[#E8B429] transition-colors">นักกีฬา</Link>
-          <Link href="/tournament" className="hover:text-[#E8B429] transition-colors">ลีก</Link>
-          <Link href="/schedule" className="hover:text-[#E8B429] transition-colors">ตารางแข่ง</Link>
-        </div>
-      </nav>
 
-      <main className="relative z-10 max-w-[1400px] mx-auto px-6 md:px-10 pt-12">
-        {/* Header */}
-        <div className="text-center mb-10">
-          <div className="text-[11px] font-semibold tracking-[0.35em] uppercase mb-2.5" style={{ color: '#E8B429', fontFamily: 'var(--font-rajdhani)' }}>
-            ESPORTS TOURNAMENT PLATFORM
-          </div>
-          <h1
-            className="text-4xl md:text-6xl font-black tracking-wide leading-none bg-clip-text text-transparent animate-za-shimmer-text"
-            style={{
-              fontFamily: 'var(--font-orbitron)',
-              backgroundImage: 'linear-gradient(135deg,#F9EDD8 0%,#9184D9 40%,#E8B429 80%,#F9EDD8 100%)',
-            }}
-          >
-            ZODIAC ARENA
-          </h1>
-          <div className="text-[13px] font-medium tracking-[0.2em] text-[#94A3B8] mt-2" style={{ fontFamily: 'var(--font-rajdhani)' }}>
-            SEASON HUB · SELECT YOUR BATTLEGROUND
-          </div>
-          <div className="w-[120px] h-px mx-auto mt-4 bg-gradient-to-r from-transparent via-[#E8B429] to-transparent" />
-        </div>
-
-        {/* 5-Card grid — responsive แบบเดียวกับ roster grid ใน app/teams/[teamId] */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
-          {/* CARD 1: ZODIAC LEAGUE — ยังไม่มีตารางรองรับใน Sprint 2.1 (Grand Finals เป็น scope ถัดไป) */}
-          <div className="relative flex h-full min-h-[280px] flex-col overflow-hidden rounded-xl border border-[#9184D9] bg-[#1A1C2E] p-5">
-            <span className="pointer-events-none absolute left-0 top-0 h-6 w-6 rounded-tl-xl border-l-2 border-t-2 border-[#9184D9]" />
-            <span className="pointer-events-none absolute bottom-0 right-0 h-6 w-6 rounded-br-xl border-b-2 border-r-2 border-[#9184D9]" />
-            <div className="pointer-events-none absolute -bottom-8 -right-8 h-24 w-24 rounded-full opacity-30 blur-2xl bg-[#9184D9]" />
-
-            <div className="relative mb-3 animate-za-float w-fit">
-              <CrownIcon color="#9184D9" />
-            </div>
-            <div className="relative text-[9px] font-semibold tracking-[0.25em] text-[#E8B429] leading-relaxed mb-2">
-              ANNUAL FINALS
-              <br />
-              TOP 12 CLASH
-            </div>
-            <h3
-              className="relative text-xl font-black leading-tight mb-1 bg-clip-text text-transparent"
-              style={{ fontFamily: 'var(--font-orbitron)', backgroundImage: 'linear-gradient(135deg,#C9BAFF,#9184D9,#7060C0)' }}
-            >
-              ZODIAC
-              <br />
-              LEAGUE
-            </h3>
-            <div className="relative text-[11px] font-semibold tracking-[0.15em] text-[#94A3B8] mb-auto pb-2">
-              GRAND CHAMPIONSHIP
-            </div>
-            <div className="relative mt-4 pt-4 border-t border-[#9184D9]/20">
-              <div className="text-[9px] font-semibold tracking-[0.18em] text-[#94A3B8] leading-loose">
-                TOTAL PRIZE POOL
-                <br />
-                ANNUAL GLORY
+          <div className="flex-1 overflow-x-auto flex items-center gap-6 no-scrollbar py-0.5">
+            {liveMatches.length > 0 ? (
+              liveMatches.map((match) => (
+                <Link
+                  key={match.id}
+                  href={`/matches/${match.id}/lobby`}
+                  className="flex items-center gap-2 hover:text-[#E8B429] transition-colors whitespace-nowrap"
+                >
+                  <span className="font-bold text-white">[{match.teamATag}]</span>
+                  <span className="text-[#E8B429] font-black">{match.scoreA} : {match.scoreB}</span>
+                  <span className="font-bold text-white">[{match.teamBTag}]</span>
+                  <span className="text-[10px] text-zinc-500 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">
+                    WATCH LIVE
+                  </span>
+                </Link>
+              ))
+            ) : (
+              <div className="flex items-center gap-2 text-zinc-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#E8B429]" />
+                <span>ALL CIRCUITS STANDBY · NEXT TOURNAMENT SOON ({openTournamentsCount} OPEN FOR REGISTRATION)</span>
               </div>
-            </div>
+            )}
           </div>
 
-          {circuitCards.length === 0 && (
-            <div className="sm:col-span-1 md:col-span-2 lg:col-span-4 flex items-center justify-center rounded-xl border border-white/10 bg-[#1A1C2E] p-10 text-sm text-[#75798c]">
-              ยังไม่มี Circuit ของเกมนี้ในระบบ
+          <div className="hidden md:flex items-center gap-3 text-[11px] text-[#94A3B8]">
+            <span className="flex items-center gap-1">
+              <Activity className="w-3.5 h-3.5 text-[#4CAF50]" />
+              <span>SERVER: ASIA-BANGKOK</span>
+            </span>
+          </div>
+
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-16">
+        
+        {/* ====================================================================
+            SECTION 2: HERO CYBER-HUD SECTION
+        ==================================================================== */}
+        <section className="text-center space-y-6 pt-6 md:pt-12">
+          
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-[#E8B429]/30 bg-[#E8B429]/10 text-xs font-mono font-bold text-[#E8B429]">
+            <Flame className="w-3.5 h-3.5 text-[#E8B429]" />
+            <span>VALORANT ESPORTS INTEGRATED ECOSYSTEM</span>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-xs md:text-sm font-mono tracking-[0.3em] text-[#94A3B8] uppercase">
+              12 SIGNS • 4 SEASONS • 1 DESTINY
+            </h2>
+            <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-tight text-white leading-none">
+              ZODIAC <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E8B429] via-[#FCE49C] to-[#E8B429]">ARENA</span>
+            </h1>
+          </div>
+
+          <p className="max-w-2xl mx-auto text-sm md:text-base text-[#94A3B8] leading-relaxed">
+            เวทีประลองอีสปอร์ตระดับมืออาชีพ ผสานระบบพาสปอร์ตนักกีฬา การสะสมแต้ม ZP ชิงตั๋ว Grand Finals และระบบ Watch-to-Earn แลกของรางวัลพาร์ตเนอร์ SINOPEC
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+            <Link
+              href="/home"
+              className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-[#E8B429] text-[#08090F] font-black text-sm tracking-wider hover:bg-[#f5c84c] hover:shadow-[0_0_25px_rgba(232,180,41,0.4)] transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>เข้าสู่สนามประลอง (TOURNAMENT HUB)</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+
+            <Link
+              href={athleteProfile ? '/dashboard' : '/login'}
+              className="w-full sm:w-auto px-8 py-3.5 rounded-xl border border-white/15 bg-white/5 text-white font-bold text-sm tracking-wider hover:bg-white/10 hover:border-white/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>{athleteProfile ? 'ไปยัง DASHBOARD ของคุณ' : 'ลงทะเบียนนักกีฬา (ATHLETE ACCESS)'}</span>
+              <ExternalLink className="w-4 h-4 text-zinc-400" />
+            </Link>
+          </div>
+
+        </section>
+
+        {/* ====================================================================
+            SECTION 3: DYNAMIC ONBOARDING / PASSPORT STRIP
+        ==================================================================== */}
+        <section className="rounded-2xl border border-white/10 bg-[#101223]/90 backdrop-blur-md p-6 md:p-8 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-[#E8B429]/5 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+            
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-[#E8B429]" />
+                <span className="text-xs font-mono uppercase tracking-wider text-[#E8B429]">
+                  {athleteProfile ? 'ATHLETE PASSPORT ACTIVE' : 'FAST-TRACK ONBOARDING'}
+                </span>
+              </div>
+              
+              <h3 className="text-xl md:text-2xl font-black text-white">
+                {athleteProfile 
+                  ? `ยินดีต้อนรับกลับ, ${athleteProfile.display_name || athleteProfile.real_name || athleteProfile.athlete_id || 'ATHLETE'}`
+                  : 'เริ่มต้นเส้นทางสู่นักกีฬาอีสปอร์ตมืออาชีพ'}
+              </h3>
+              
+              <p className="text-xs md:text-sm text-[#94A3B8] max-w-xl">
+                {athleteProfile
+                  ? 'เชื่อมต่อ Riot ID เรียบร้อยแล้ว พร้อมเข้าร่วมการแข่งขันและสะสมคะแนน ZP ประจำฤดูกาล'
+                  : 'ลงทะเบียนเข้าสู่ระบบเพียงครั้งเดียวเพื่อเชื่อมโยง Riot ID สะสมประวัติการแข่งขัน และสร้างสถิติลงบน Athlete Passport'}
+              </p>
             </div>
-          )}
 
-          {circuitCards.map((circuit) => (
-            <CircuitCard key={circuit.id} circuit={circuit} isAuthenticated={isAuthenticated} />
-          ))}
-        </div>
+            <div className="w-full lg:w-auto flex-shrink-0">
+              {athleteProfile ? (
+                <div className="flex flex-wrap items-center gap-3 bg-[#16192E] p-4 rounded-xl border border-white/5">
+                  <div>
+                    <div className="text-[10px] font-mono text-zinc-500">ATHLETE / RIOT ID</div>
+                    <div className="text-sm font-bold text-white font-mono">
+                      {athleteProfile.game_account?.game_name ? (
+                        <>
+                          {athleteProfile.game_account.game_name}{' '}
+                          <span className="text-[#E8B429]">#{athleteProfile.game_account.tag_line}</span>
+                        </>
+                      ) : (
+                        <span>{athleteProfile.display_name || athleteProfile.athlete_id}</span>
+                      )}
+                    </div>
+                  </div>
 
-        {/* Footer bar */}
-        <div className="mt-10 flex items-center justify-center gap-6">
-          <div className="w-14 h-px bg-gradient-to-r from-transparent to-white/15" />
-          <span className="text-[9px] font-semibold tracking-[0.3em] text-[#94A3B8]/40">
-            ZODIAC ARENA · {new Date().getFullYear()} CIRCUIT · ALL SEASONS
-          </span>
-          <div className="w-14 h-px bg-gradient-to-l from-transparent to-white/15" />
-        </div>
-      </main>
-    </div>
+                  <div className="h-8 w-[1px] bg-white/10 mx-2" />
+
+                  <div>
+                    <div className="text-[10px] font-mono text-zinc-500">AP BALANCE</div>
+                    <div className="text-sm font-bold text-[#E8B429] font-mono">
+                      {athleteProfile.ap_balance.toLocaleString()} AP
+                    </div>
+                  </div>
+
+                  <Link
+                    href="/profile"
+                    className="ml-2 px-4 py-2 rounded-lg bg-[#E8B429]/15 border border-[#E8B429]/30 text-xs font-bold text-[#E8B429] hover:bg-[#E8B429]/25 transition-all"
+                  >
+                    ดูพาสปอร์ต
+                  </Link>
+                </div>
+              ) : (
+                <Link
+                  href="/login"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#00D4FF] text-[#08090F] font-black text-xs uppercase tracking-wider hover:bg-[#33ddff] hover:shadow-[0_0_20px_rgba(0,212,255,0.4)] transition-all cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>เชื่อมต่อบัญชีนักกีฬา (1-CLICK CONNECT)</span>
+                </Link>
+              )}
+            </div>
+
+          </div>
+        </section>
+
+        {/* ====================================================================
+            SECTION 4: 4-PILLAR ECOSYSTEM GRID
+        ==================================================================== */}
+        <section className="space-y-6">
+          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+            <div>
+              <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-[#E8B429]">
+                PLATFORM ARCHITECTURE
+              </h2>
+              <h3 className="text-xl md:text-2xl font-black text-white mt-1">
+                4 เสาหลักระบบนิเวศ ZODIAC ARENA
+              </h3>
+            </div>
+            <span className="text-xs font-mono text-zinc-500 hidden sm:inline-block">
+              INTEGRATED VCT STANDARD
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            
+            {/* Pillar 1: Tournament Circuit */}
+            <Link
+              href="/tournament"
+              className="group relative overflow-hidden rounded-xl border border-white/5 bg-[#101223] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#E8B429]/40 hover:shadow-[0_10px_30px_rgba(232,180,41,0.12)]"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E8B429]/15 border border-[#E8B429]/30 text-[#E8B429]">
+                  <Trophy className="w-6 h-6" />
+                </div>
+                <span className="text-[10px] font-mono text-zinc-500">01 / CIRCUIT</span>
+              </div>
+              <h4 className="text-base font-black text-white group-hover:text-[#E8B429] transition-colors">
+                TOURNAMENT CIRCUIT
+              </h4>
+              <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
+                การแข่งขัน 4 ฤดูกาล (Spring, Summer, Fall, Winter) เก็บคะแนน ZP ชิงโควตาสู่ Grand Finals
+              </p>
+              <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-[#E8B429]">
+                <span>เข้าสู่หน้ารายการแข่งขัน</span>
+                <span>→</span>
+              </div>
+            </Link>
+
+            {/* Pillar 2: Athlete Passport */}
+            <Link
+              href="/profile"
+              className="group relative overflow-hidden rounded-xl border border-white/5 bg-[#101223] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#00D4FF]/40 hover:shadow-[0_10px_30px_rgba(0,212,255,0.12)]"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#00D4FF]/15 border border-[#00D4FF]/30 text-[#00D4FF]">
+                  <UserCheck className="w-6 h-6" />
+                </div>
+                <span className="text-[10px] font-mono text-zinc-500">02 / PASSPORT</span>
+              </div>
+              <h4 className="text-base font-black text-white group-hover:text-[#00D4FF] transition-colors">
+                ATHLETE PASSPORT
+              </h4>
+              <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
+                เก็บบันทึกประวัติ ผลงานเรตติ้ง KDA, ACS, ADR และเหรียญเกียรติยศระดับสโมสร
+              </p>
+              <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-[#00D4FF]">
+                <span>ดูพาสปอร์ตนักกีฬา</span>
+                <span>→</span>
+              </div>
+            </Link>
+
+            {/* Pillar 3: Watch-to-Earn AP */}
+            <Link
+              href="/schedule"
+              className="group relative overflow-hidden rounded-xl border border-white/5 bg-[#101223] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#9184D9]/40 hover:shadow-[0_10px_30px_rgba(145,132,217,0.12)]"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#9184D9]/15 border border-[#9184D9]/30 text-[#9184D9]">
+                  <Radio className="w-6 h-6" />
+                </div>
+                <span className="text-[10px] font-mono text-zinc-500">03 / STREAM</span>
+              </div>
+              <h4 className="text-base font-black text-white group-hover:text-[#9184D9] transition-colors">
+                WATCH-TO-EARN & AP
+              </h4>
+              <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
+                รับชมสตรีมสดแมตช์สำคัญ ทายผลการแข่งขันแบบ Pari-Mutuel และสะสมแต้ม AP รายวัน
+              </p>
+              <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-[#9184D9]">
+                <span>ดูตารางถ่ายทอดสด</span>
+                <span>→</span>
+              </div>
+            </Link>
+
+            {/* Pillar 4: SINOPEC Store */}
+            <Link
+              href="/store"
+              className="group relative overflow-hidden rounded-xl border border-white/5 bg-[#101223] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#4CAF50]/40 hover:shadow-[0_10px_30px_rgba(76,175,80,0.12)]"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#4CAF50]/15 border border-[#4CAF50]/30 text-[#4CAF50]">
+                  <Store className="w-6 h-6" />
+                </div>
+                <span className="text-[10px] font-mono text-zinc-500">04 / REWARDS</span>
+              </div>
+              <h4 className="text-base font-black text-white group-hover:text-[#4CAF50] transition-colors">
+                SINOPEC MARKETPLACE
+              </h4>
+              <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
+                นำแต้ม AP ที่สะสมได้มาแลกรับของรางวัลพาร์ตเนอร์ SINOPEC และสินค้าพรีเมียมลิขสิทธิ์
+              </p>
+              <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-[#4CAF50]">
+                <span>เข้าสู่ร้านค้าแลกของรางวัล</span>
+                <span>→</span>
+              </div>
+            </Link>
+
+          </div>
+        </section>
+
+        {/* ====================================================================
+            FOOTER STRIP
+        ==================================================================== */}
+        <footer className="border-t border-white/5 pt-8 pb-4 text-center text-xs text-zinc-500 font-mono space-y-2">
+          <p>© 2026 ZODIAC ARENA. ALL RIGHTS RESERVED. POWERED BY AI CASING & ESPORTS TELEMETRY.</p>
+          <div className="flex items-center justify-center gap-4 text-[11px]">
+            <Link href="/terms" className="hover:text-zinc-400 underline">Terms of Service</Link>
+            <span>·</span>
+            <Link href="/privacy" className="hover:text-zinc-400 underline">Privacy Policy</Link>
+          </div>
+        </footer>
+
+      </div>
+    </main>
   );
 }
