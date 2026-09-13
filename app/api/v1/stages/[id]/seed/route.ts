@@ -1,9 +1,30 @@
+// app/api/v1/stages/[id]/seed/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { planSingleEliminationBracket, type SeededTeam } from '@/lib/tournament/generateSingleEliminationBracket';
 import { planDoubleEliminationBracket, type PlannedDENode } from '@/lib/tournament/generateDoubleEliminationBracket';
 import { planRoundRobinBracket } from '@/lib/tournament/generateRoundRobinBracket';
+
+interface SingleElimNodePatch {
+  winner_to_node_id?: string | null;
+  winner_to_slot?: string | null;
+  source_a_node_id?: string | null;
+  source_a_outcome?: string | null;
+  source_b_node_id?: string | null;
+  source_b_outcome?: string | null;
+}
+
+interface DoubleElimNodePatch {
+  source_a_node_id?: string | null;
+  source_a_outcome?: string | null;
+  source_b_node_id?: string | null;
+  source_b_outcome?: string | null;
+  winner_to_node_id?: string | null;
+  winner_to_slot?: string | null;
+  loser_to_node_id?: string | null;
+  loser_to_slot?: string | null;
+}
 
 function bestOfForRound(bestOfConfig: unknown, roundNumber: number, totalRounds: number): number {
   const config = (bestOfConfig ?? {}) as Record<string, unknown>;
@@ -195,16 +216,9 @@ export async function POST(
     );
   }
 
-  async function cleanupAndFail(insertedIds: string[], err: unknown, groupLabelTeamIds: string[] = []) {
+  async function cleanupAndFail(insertedIds: string[], err: unknown) {
     if (insertedIds.length > 0) {
       await admin.from('bracket_nodes').delete().in('id', insertedIds);
-    }
-    if (groupLabelTeamIds.length > 0 && stage) {
-      await admin
-        .from('tournament_registrations')
-        .update({ group_label: null })
-        .eq('tournament_id', stage.tournament_id)
-        .in('team_id', groupLabelTeamIds);
     }
     const message = err instanceof Error ? err.message : 'failed to generate bracket';
     return NextResponse.json({ error: { code: 'BRACKET_GENERATION_FAILED', message } }, { status: 500 });
@@ -262,7 +276,7 @@ export async function POST(
       for (const round of rounds) {
         for (const node of round) {
           const nodeId = idByRoundPosition.get(`${node.round_number}-${node.position_in_round}`)!;
-          const patch: Record<string, unknown> = {};
+          const patch: SingleElimNodePatch = {};
 
           if (node.winner_to) {
             patch.winner_to_node_id = idByRoundPosition.get(`${node.winner_to.round}-${node.winner_to.position}`) ?? null;
@@ -352,7 +366,7 @@ export async function POST(
 
       for (const node of plannedNodes) {
         const nodeId = idByRef.get(`${node.bracket_type}:${node.round_number}:${node.position_in_round}`)!;
-        const patch: Record<string, unknown> = {};
+        const patch: DoubleElimNodePatch = {};
 
         if (node.source_a) {
           const ref = node.source_a.ref;
@@ -420,20 +434,9 @@ export async function POST(
       : 1;
 
   const insertedIds: string[] = [];
-  const groupLabelTeamIds: string[] = [];
   let updatedStage: { id: string; status: string };
 
   try {
-    for (const group of roundRobinPlan.groups) {
-      const { error } = await admin
-        .from('tournament_registrations')
-        .update({ group_label: group.label })
-        .eq('tournament_id', stage.tournament_id)
-        .in('team_id', group.team_ids);
-      if (error) throw new Error(error.message);
-      groupLabelTeamIds.push(...group.team_ids);
-    }
-
     for (const node of roundRobinPlan.nodes) {
       const { data: inserted, error } = await supabase
         .from('bracket_nodes')
@@ -459,7 +462,7 @@ export async function POST(
 
     updatedStage = await moveStageToSeeding();
   } catch (err) {
-    return cleanupAndFail(insertedIds, err, groupLabelTeamIds);
+    return cleanupAndFail(insertedIds, err);
   }
 
   return NextResponse.json(

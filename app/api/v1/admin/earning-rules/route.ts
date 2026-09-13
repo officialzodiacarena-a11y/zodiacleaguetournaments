@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { CreateEarningRuleSchema } from '@/types/watch-to-earn';
+import type { Database, Json } from '@/types/database.types';
+
+type ApEarningRuleInsert = Database['public']['Tables']['ap_earning_rules']['Insert'];
 
 async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -95,17 +98,26 @@ export async function POST(req: Request) {
 
     const { name, apPerInterval, intervalSeconds, dailyCapAp, maxSessionMinutes, isActive } = parseResult.data;
 
+    const insertPayload: ApEarningRuleInsert = {
+      code: name.trim().toLowerCase().replace(/\s+/g, '_'),
+      name,
+      reason: 'WATCH_REWARD' as unknown as Database['public']['Tables']['ap_earning_rules']['Insert']['reason'],
+      ap_amount: apPerInterval,
+      min_watch_seconds: intervalSeconds,
+      min_watch_percent: 0,
+      max_per_day: dailyCapAp ?? null,
+      max_per_stream: 0,
+      cooldown_seconds: 0,
+      is_active: isActive,
+      conditions: {
+        max_session_minutes: maxSessionMinutes ?? null,
+      } as unknown as Json,
+    };
+
     const adminSupabase = createAdminClient();
     const { data: rule, error: insertError } = await adminSupabase
       .from('ap_earning_rules')
-      .insert({
-        name,
-        ap_per_interval: apPerInterval,
-        interval_seconds: intervalSeconds,
-        daily_cap_ap: dailyCapAp,
-        max_session_minutes: maxSessionMinutes,
-        is_active: isActive,
-      })
+      .insert(insertPayload)
       .select()
       .single();
 

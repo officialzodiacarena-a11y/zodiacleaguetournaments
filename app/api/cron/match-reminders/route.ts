@@ -1,3 +1,4 @@
+//app/api/cron/match-reminders/route.ts
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -39,9 +40,9 @@ export async function GET(request: Request) {
 
   const notificationsToInsert: MatchNotificationPayload[] = [];
 
-  for (const match of upcomingMatches || []) {
-    const matchTime = new Date(match.scheduled_at).getTime();
-    const timeDiffHours = Math.round((matchTime - now.getTime()) / (1000 * 60 * 60));
+ for (const match of upcomingMatches || []) {
+  const matchTime = new Date(match.scheduled_at ?? '').getTime();
+  const timeDiffHours = Math.round((matchTime - now.getTime()) / (1000 * 60 * 60));
 
     const is1Hour = timeDiffHours <= 1;
     const title = is1Hour ? 'เตรียมตัว! แมตช์จะเริ่มใน 1 ชั่วโมง' : 'แมตช์ของคุณจะเริ่มใน 24 ชั่วโมง';

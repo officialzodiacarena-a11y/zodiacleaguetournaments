@@ -8,11 +8,21 @@ const BidSchema = z.object({
   destination_team_id: z.string().uuid(),
 });
 
+interface BidRpcResponse {
+  success: boolean;
+  code?: string;
+  message?: string;
+  matched?: boolean;
+}
+
 export async function POST(req: Request) {
   try {
     const idempotencyKey = req.headers.get('idempotency-key') || req.headers.get('Idempotency-Key');
     if (!idempotencyKey) {
-      return NextResponse.json({ error: { code: 'MISSING_IDEMPOTENCY_KEY', message: 'Header Idempotency-Key จำเป็นต้องระบุ' } }, { status: 400 });
+      return NextResponse.json(
+        { error: { code: 'MISSING_IDEMPOTENCY_KEY', message: 'Header Idempotency-Key จำเป็นต้องระบุ' } },
+        { status: 400 }
+      );
     }
 
     const body = await req.json();
@@ -36,7 +46,7 @@ export async function POST(req: Request) {
 
     // Anti-Sybil Check: Unverified KYC จำกัด 500 AP/วัน
     if (!bidder.kyc_verified_at) {
-      const { data: dailyBidsSum } = await supabase.rpc('get_daily_unverified_bid_total', { p_player_id: bidder.id });
+      const { data: dailyBidsSum } = await supabase.rpc('get_daily_unverified_bid_total' as never, { p_player_id: bidder.id } as never);
       if (Number(dailyBidsSum || 0) + payload.bid_amount_ap > 500) {
         return NextResponse.json({
           error: {
@@ -47,31 +57,39 @@ export async function POST(req: Request) {
       }
     }
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('match_ffxi_athlete_bid', {
+    const { data: rawRpcResult, error: rpcError } = await supabase.rpc('match_ffxi_athlete_bid' as never, {
       p_listing_id: payload.listing_id,
       p_bidder_player_id: bidder.id,
       p_destination_team_id: payload.destination_team_id,
       p_bid_amount_ap: payload.bid_amount_ap,
       p_idempotency_key: idempotencyKey,
-    });
+    } as never);
 
     if (rpcError) {
       return NextResponse.json({ error: { code: 'DATABASE_RPC_ERROR', message: rpcError.message } }, { status: 500 });
     }
 
-    if (!rpcResult.success) {
-      return NextResponse.json({ error: { code: rpcResult.code, message: rpcResult.message } }, { status: 400 });
+    if (!rawRpcResult) {
+      return NextResponse.json({ error: { code: 'RPC_EMPTY_RESPONSE', message: 'ไม่ได้รับข้อมูลตอบกลับจากระบบประมูล' } }, { status: 500 });
     }
+
+    const rpcResult = rawRpcResult as unknown as BidRpcResponse;
+
+    if (!rpcResult.success) {
+      return NextResponse.json({ error: { code: rpcResult.code ?? 'BID_FAILED', message: rpcResult.message ?? 'เกิดข้อผิดพลาดในการประมูล' } }, { status: 400 });
+    }
+
+    const isMatched = Boolean(rpcResult.matched);
 
     return NextResponse.json({
       success: true,
-      matched: rpcResult.matched ?? false,
-      message: rpcResult.matched
+      matched: isMatched,
+      message: isMatched
         ? "ข้อเสนอประมูลถึงราคาขั้นต่ำ ทำการซื้อขายสัญญาสำเร็จทันที!"
         : "บันทึกราคาเสนอประมูลเรียบร้อยแล้ว",
       data: {
         listing_id: payload.listing_id,
-        status: rpcResult.matched ? "SOLD" : "BID_RECORDED",
+        status: isMatched ? "SOLD" : "BID_RECORDED",
       }
     }, { status: 200 });
 

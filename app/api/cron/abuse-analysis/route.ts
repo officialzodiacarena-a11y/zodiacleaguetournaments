@@ -1,6 +1,8 @@
+// app/api/cron/abuse-analysis/route.ts
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { MoveApResult } from '@/types/watch-to-earn';
+import type { Json } from '@/types/database.types';
 
 const LOOKBACK_HOURS = 24;
 const IP_CLUSTER_THRESHOLD = 5;
@@ -15,6 +17,15 @@ interface WatchSessionAbuseRow {
   ap_awarded: number | null;
   risk_score: number;
   is_anomalous: boolean;
+}
+
+interface AbuseFlagInsert {
+  player_id: string;
+  flag_type: 'DEVICE_MULTI_ACCOUNT' | 'IP_CLUSTER' | 'BOT_PATTERN';
+  severity: 'LOW' | 'MEDIUM' | 'HIGH';
+  details: Json;
+  status: 'OPEN' | 'CLAWED_BACK';
+  clawback_amount?: number;
 }
 
 // รันทุกวัน 03:00 Asia/Bangkok — วิเคราะห์ watch_sessions ย้อนหลัง 24 ชม.
@@ -40,52 +51,55 @@ export async function GET(request: Request) {
   }
 
   const sessions = (sessionsData ?? []) as WatchSessionAbuseRow[];
+  const flagsToInsert: AbuseFlagInsert[] = [];
 
-  const flagsToInsert: Array<{
-    player_id: string;
-    flag_type: 'DEVICE_MULTI_ACCOUNT' | 'IP_CLUSTER' | 'BOT_PATTERN';
-    severity: 'LOW' | 'MEDIUM' | 'HIGH';
-    details: Record<string, unknown>;
-    status: 'OPEN' | 'CLAWED_BACK';
-    clawback_amount?: number;
-  }> = [];
-
-  // 1) Device ใช้หลายบัญชี
-  const byDevice = new Map<string, Set<string>>();
+  // 1) Device multi-account — 1 device_id มีหลาย player_id ใน 24 ชม.
+  const deviceToPlayers = new Map<string, Set<string>>();
   for (const s of sessions) {
     if (!s.device_id) continue;
-    if (!byDevice.has(s.device_id)) byDevice.set(s.device_id, new Set());
-    byDevice.get(s.device_id)!.add(s.player_id);
+    const set = deviceToPlayers.get(s.device_id) ?? new Set<string>();
+    set.add(s.player_id);
+    deviceToPlayers.set(s.device_id, set);
   }
-  for (const [deviceId, playerIds] of byDevice) {
-    if (playerIds.size > 1) {
-      for (const playerId of playerIds) {
+
+  for (const [device_id, players] of deviceToPlayers.entries()) {
+    if (players.size > 1) {
+      for (const player_id of players) {
         flagsToInsert.push({
-          player_id: playerId,
+          player_id,
           flag_type: 'DEVICE_MULTI_ACCOUNT',
-          severity: 'MEDIUM',
-          details: { device_id: deviceId, related_player_ids: Array.from(playerIds) },
+          severity: players.size >= 5 ? 'HIGH' : 'MEDIUM',
+          details: {
+            device_id,
+            shared_with_count: players.size,
+            player_ids: Array.from(players),
+          } as unknown as Json,
           status: 'OPEN',
         });
       }
     }
   }
 
-  // 2) IP รวมกลุ่มผิดปกติ
-  const byIp = new Map<string, Set<string>>();
+  // 2) IP cluster — 1 IP มี player_id เกิน IP_CLUSTER_THRESHOLD
+  const ipToPlayers = new Map<string, Set<string>>();
   for (const s of sessions) {
     if (!s.ip_address) continue;
-    if (!byIp.has(s.ip_address)) byIp.set(s.ip_address, new Set());
-    byIp.get(s.ip_address)!.add(s.player_id);
+    const set = ipToPlayers.get(s.ip_address) ?? new Set<string>();
+    set.add(s.player_id);
+    ipToPlayers.set(s.ip_address, set);
   }
-  for (const [ip, playerIds] of byIp) {
-    if (playerIds.size >= IP_CLUSTER_THRESHOLD) {
-      for (const playerId of playerIds) {
+
+  for (const [ip_address, players] of ipToPlayers.entries()) {
+    if (players.size >= IP_CLUSTER_THRESHOLD) {
+      for (const player_id of players) {
         flagsToInsert.push({
-          player_id: playerId,
+          player_id,
           flag_type: 'IP_CLUSTER',
-          severity: 'HIGH',
-          details: { ip_address: ip, cluster_size: playerIds.size, related_player_ids: Array.from(playerIds) },
+          severity: players.size >= 10 ? 'HIGH' : 'MEDIUM',
+          details: {
+            ip_address,
+            cluster_size: players.size,
+          } as unknown as Json,
           status: 'OPEN',
         });
       }
@@ -105,7 +119,7 @@ export async function GET(request: Request) {
         player_id: s.player_id,
         flag_type: 'BOT_PATTERN',
         severity: 'HIGH',
-        details: { session_id: s.id, risk_score: s.risk_score },
+        details: { session_id: s.id, risk_score: s.risk_score } as unknown as Json,
         status: 'OPEN',
       });
       continue;
@@ -125,14 +139,18 @@ export async function GET(request: Request) {
         player_id: s.player_id,
         flag_type: 'BOT_PATTERN',
         severity: 'HIGH',
-        details: { session_id: s.id, risk_score: s.risk_score, clawback_error: moveError.message },
+        details: {
+          session_id: s.id,
+          risk_score: s.risk_score,
+          clawback_error: moveError.message,
+        } as unknown as Json,
         status: 'OPEN',
       });
       continue;
     }
 
-    const result = moveResult as MoveApResult;
-    const wasClawedBack = result.success || result.error === 'DUPLICATE_KEY';
+    const result = moveResult as unknown as MoveApResult;
+    const wasClawedBack = result?.success || result?.error === 'DUPLICATE_KEY';
 
     if (wasClawedBack) {
       clawbackCount += 1;
@@ -143,7 +161,11 @@ export async function GET(request: Request) {
       player_id: s.player_id,
       flag_type: 'BOT_PATTERN',
       severity: 'HIGH',
-      details: { session_id: s.id, risk_score: s.risk_score, move_ap_result: result },
+      details: {
+        session_id: s.id,
+        risk_score: s.risk_score,
+        move_ap_result: result as unknown as Json,
+      } as unknown as Json,
       status: wasClawedBack ? 'CLAWED_BACK' : 'OPEN',
       clawback_amount: wasClawedBack ? clawbackAmount : undefined,
     });

@@ -96,7 +96,7 @@ export default async function MonthlyTournamentPage() {
         positionInRound: n.position_in_round,
         label: n.label ?? undefined,
         bestOf: n.best_of,
-        status: n.status,
+        status: n.status as BracketMatchNode['status'],
         teamA: toParticipant(n.team_a_id),
         teamB: toParticipant(n.team_b_id),
       }));

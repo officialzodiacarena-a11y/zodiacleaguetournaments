@@ -1,9 +1,11 @@
+// app/api/v1/stages/[id]/route.ts
 // PATCH /api/v1/stages/:id
 // T2.2-A04 (part 1) — edit stage config. Only allowed while status = PENDING.
 // Org Admin only, enforced by RLS (tournament_stages_admin_write).
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import type { Json } from '@/types/database.types';
 
 const VALID_FORMATS = [
   'SINGLE_ELIMINATION',
@@ -13,21 +15,23 @@ const VALID_FORMATS = [
   'GROUP_STAGE',
   'GAUNTLET',
   'SHOWDOWN',
-];
-
-const EDITABLE_FIELDS = [
-  'name',
-  'stage_order',
-  'format',
-  'teams_in',
-  'teams_advancing',
-  'format_config',
-  'best_of_config',
-  'map_pool',
-  'veto_format',
-  'start_at',
-  'end_at',
 ] as const;
+
+type StageFormat = (typeof VALID_FORMATS)[number];
+
+interface StageUpdatePayload {
+  name?: string;
+  stage_order?: number;
+  format?: StageFormat;
+  teams_in?: number | null;
+  teams_advancing?: number | null;
+  format_config?: Json;
+  best_of_config?: Json;
+  map_pool?: string[] | null;
+  veto_format?: Json;
+  start_at?: string | null;
+  end_at?: string | null;
+}
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: stageId } = await params;
@@ -45,7 +49,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   let body: Record<string, unknown>;
   try {
-    body = await request.json();
+    body = (await request.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json(
       { error: { code: 'VALIDATION_ERROR', message: 'invalid JSON body' } },
@@ -78,27 +82,40 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     );
   }
 
-  const patch: Record<string, unknown> = {};
-  for (const key of EDITABLE_FIELDS) {
-    if (key in body) patch[key] = body[key];
-  }
-
-  if (Object.keys(patch).length === 0) {
-    return NextResponse.json(
-      { error: { code: 'VALIDATION_ERROR', message: 'ไม่มีฟิลด์ที่แก้ไข' } },
-      { status: 400 }
-    );
-  }
-
-  if ('format' in patch && (typeof patch.format !== 'string' || !VALID_FORMATS.includes(patch.format))) {
+  if ('format' in body && (typeof body.format !== 'string' || !VALID_FORMATS.includes(body.format as StageFormat))) {
     return NextResponse.json(
       { error: { code: 'VALIDATION_ERROR', message: `format must be one of: ${VALID_FORMATS.join(', ')}` } },
       { status: 400 }
     );
   }
-  if ('stage_order' in patch && (typeof patch.stage_order !== 'number' || !Number.isInteger(patch.stage_order) || patch.stage_order <= 0)) {
+
+  if (
+    'stage_order' in body &&
+    (typeof body.stage_order !== 'number' || !Number.isInteger(body.stage_order) || body.stage_order <= 0)
+  ) {
     return NextResponse.json(
       { error: { code: 'VALIDATION_ERROR', message: 'stage_order must be a positive integer' } },
+      { status: 400 }
+    );
+  }
+
+  const patch: StageUpdatePayload = {};
+
+  if (typeof body.name === 'string') patch.name = body.name;
+  if (typeof body.stage_order === 'number') patch.stage_order = body.stage_order;
+  if (typeof body.format === 'string') patch.format = body.format as StageFormat;
+  if ('teams_in' in body) patch.teams_in = (body.teams_in as number | null) ?? null;
+  if ('teams_advancing' in body) patch.teams_advancing = (body.teams_advancing as number | null) ?? null;
+  if ('format_config' in body) patch.format_config = body.format_config as Json;
+  if ('best_of_config' in body) patch.best_of_config = body.best_of_config as Json;
+  if ('map_pool' in body) patch.map_pool = Array.isArray(body.map_pool) ? (body.map_pool as string[]) : null;
+  if ('veto_format' in body) patch.veto_format = body.veto_format as Json;
+  if ('start_at' in body) patch.start_at = typeof body.start_at === 'string' ? body.start_at : null;
+  if ('end_at' in body) patch.end_at = typeof body.end_at === 'string' ? body.end_at : null;
+
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json(
+      { error: { code: 'VALIDATION_ERROR', message: 'ไม่มีฟิลด์ที่แก้ไข' } },
       { status: 400 }
     );
   }
@@ -128,10 +145,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         { status: 422 }
       );
     }
-    // RLS on UPDATE doesn't raise 42501 like it does on INSERT -- a write the
-    // policy denies just matches 0 rows, and .single() turns that into
-    // PGRST116. We already confirmed the row exists above, so 0 rows here
-    // means RLS blocked the write, not that the stage disappeared.
     if (error.code === '42501' || error.code === 'PGRST116') {
       return NextResponse.json(
         { error: { code: 'FORBIDDEN', message: 'ต้องเป็น Org Admin เท่านั้น' } },

@@ -20,6 +20,48 @@ interface UpcomingMatch {
   teamBName: string;
 }
 
+interface TeamQueryResult {
+  id: string;
+  name: string;
+  tag: string;
+  total_zp: number | null;
+}
+
+interface MembershipRow {
+  team_id: string;
+  teams: TeamQueryResult | TeamQueryResult[] | null;
+}
+
+interface MatchTeamName {
+  name: string;
+}
+
+interface MatchQueryResult {
+  id: string;
+  status: string;
+  scheduled_at: string | null;
+  best_of: number;
+  team_a: MatchTeamName | MatchTeamName[] | null;
+  team_b: MatchTeamName | MatchTeamName[] | null;
+}
+
+interface GameAccountQueryResult {
+  id: string;
+  game_name: string | null;
+  tag_line: string | null;
+  region: string | null;
+  verification_status: string;
+}
+
+interface PlayerQueryResult {
+  id: string;
+  display_name: string;
+  real_name: string | null;
+  athlete_id: string;
+  ap_balance: number;
+  game_accounts: GameAccountQueryResult | GameAccountQueryResult[] | null;
+}
+
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
@@ -50,7 +92,7 @@ export default async function DashboardPage() {
   }
 
   // 2. ดึงข้อมูล Player และ Game Account (Riot ID)
-  const { data: player } = await supabase
+  const { data: rawPlayer } = await supabase
     .from('players')
     .select(`
       id,
@@ -69,8 +111,10 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
     .maybeSingle();
 
+  const player = rawPlayer as unknown as PlayerQueryResult | null;
+
   // กรณีเป็น User ใหม่ที่ยังไม่มี Record ในตาราง players
-  const currentPlayer = player ?? {
+  const currentPlayer: PlayerQueryResult = player ?? {
     id: user.id,
     display_name: user.email?.split('@')[0] ?? 'ATHLETE_RECRUIT',
     real_name: null,
@@ -88,10 +132,12 @@ export default async function DashboardPage() {
       .eq('player_id', player.id)
       .eq('status', 'ACTIVE');
 
-    teams = (memberships ?? [])
+    const typedMemberships = (memberships ?? []) as unknown as MembershipRow[];
+
+    teams = typedMemberships
       .map((m) => {
         const t = Array.isArray(m.teams) ? m.teams[0] : m.teams;
-        return t ? { id: t.id, name: t.name, tag: t.tag, total_zp: t.total_zp } : null;
+        return t ? { id: t.id, name: t.name, tag: t.tag, total_zp: t.total_zp ?? 0 } : null;
       })
       .filter((t): t is TeamInfo => t !== null);
   }
@@ -119,7 +165,8 @@ export default async function DashboardPage() {
         .limit(5);
 
       if (matches) {
-        upcomingMatches = matches.map((m) => {
+        const typedMatches = matches as unknown as MatchQueryResult[];
+        upcomingMatches = typedMatches.map((m) => {
           const teamA = Array.isArray(m.team_a) ? m.team_a[0] : m.team_a;
           const teamB = Array.isArray(m.team_b) ? m.team_b[0] : m.team_b;
           return {
@@ -127,8 +174,8 @@ export default async function DashboardPage() {
             status: m.status,
             scheduled_at: m.scheduled_at,
             best_of: m.best_of,
-            teamAName: (teamA as { name: string } | null)?.name ?? 'TBD',
-            teamBName: (teamB as { name: string } | null)?.name ?? 'TBD',
+            teamAName: teamA?.name ?? 'TBD',
+            teamBName: teamB?.name ?? 'TBD',
           };
         });
       }
@@ -142,7 +189,17 @@ export default async function DashboardPage() {
   );
 
   const rawAccount = currentPlayer.game_accounts;
-  const gameAccount = Array.isArray(rawAccount) ? rawAccount[0] : rawAccount;
+  const rawGameAccount = Array.isArray(rawAccount) ? rawAccount[0] : rawAccount;
+  
+  const gameAccount = rawGameAccount
+    ? {
+        id: rawGameAccount.id,
+        game_name: rawGameAccount.game_name ?? '',
+        tag_line: rawGameAccount.tag_line ?? '',
+        region: rawGameAccount.region ?? '',
+        verification_status: rawGameAccount.verification_status,
+      }
+    : null;
 
   return (
     <div className="min-h-screen bg-[#07090E] text-white pt-24 pb-12 px-4 md:px-8 flex flex-col items-center relative font-mono selection:bg-[#00D4FF] selection:text-black">
@@ -165,7 +222,7 @@ export default async function DashboardPage() {
       <div className="w-full max-w-6xl space-y-6 z-10">
         
         {/* BANNER: เชื่อมต่อ Riot ID / สถานะการตรวจสอบ */}
-        <DashboardClientAction playerId={currentPlayer.id} gameAccount={gameAccount ?? null} />
+        <DashboardClientAction playerId={currentPlayer.id} gameAccount={gameAccount} />
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

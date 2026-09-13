@@ -118,13 +118,13 @@ async function buildLiveContext(
   if (/tournament|ทัวร์|แข่ง/i.test(message)) {
     const { data: tournaments } = await supabase
       .from('tournaments')
-      .select('name, start_at')
+      .select('id, name, starts_at')
       .gt('start_at', new Date().toISOString())
       .order('start_at', { ascending: true })
       .limit(3);
 
     if (tournaments?.length) {
-      const list = tournaments.map((t) => `${t.name} (${new Date(t.start_at).toLocaleDateString('th-TH')})`).join(', ');
+      const list = tournaments.map((t) => `${t.name} (${new Date(t.starts_at?? '').toLocaleDateString('th-TH')})`).join(', ');
       context.push(`[Live Data] ทัวร์นาเมนต์ที่กำลังจะมา: ${list}`);
     }
   }

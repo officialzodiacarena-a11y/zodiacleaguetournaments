@@ -1,5 +1,7 @@
+// app/api/cron/recalculate-player-stats/route.ts
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { Json } from '@/types/database.types';
 
 interface MatchInfo {
   seasonId: string | null;
@@ -41,6 +43,30 @@ interface PlayerStatsAccum {
   agentPool: Record<string, number>;
   mapPerformance: Record<string, { played: number; won: number }>;
   lastMatchAt: string | null;
+}
+
+interface PlayerStatsInsertRow {
+  player_id: string;
+  game_id: string;
+  season_id: string | null;
+  matches_played: number;
+  games_played: number;
+  matches_won: number;
+  matches_lost: number;
+  total_kills: number;
+  total_deaths: number;
+  total_assists: number;
+  total_first_bloods: number;
+  avg_acs: number | null;
+  avg_adr: number | null;
+  avg_kd: number | null;
+  avg_kda: number | null;
+  headshot_pct: number | null;
+  win_rate: number | null;
+  agent_pool: Json;
+  map_performance: Json;
+  last_match_at: string | null;
+  updated_at: string;
 }
 
 const avg = (arr: number[]): number | null =>
@@ -206,13 +232,13 @@ export async function GET(req: Request) {
     }
 
     // Step 4: Build DB rows
-    const seasonRows: Record<string, unknown>[] = [];
-    const careerRows: Record<string, unknown>[] = [];
+    const seasonRows: PlayerStatsInsertRow[] = [];
+    const careerRows: PlayerStatsInsertRow[] = [];
     const now = new Date().toISOString();
 
     for (const stats of statsMap.values()) {
       const matchesPlayed = stats.matchIds.size;
-      const row: Record<string, unknown> = {
+      const row: PlayerStatsInsertRow = {
         player_id: stats.player_id,
         game_id: stats.game_id,
         season_id: stats.season_id,
@@ -230,8 +256,8 @@ export async function GET(req: Request) {
         avg_kda: stats.totalDeaths > 0 ? round2((stats.totalKills + stats.totalAssists) / stats.totalDeaths) : null,
         headshot_pct: stats.hsValues.length > 0 ? round2(avg(stats.hsValues)) : null,
         win_rate: matchesPlayed > 0 ? round2((stats.matchesWon / matchesPlayed) * 100) : null,
-        agent_pool: stats.agentPool,
-        map_performance: stats.mapPerformance,
+        agent_pool: stats.agentPool as unknown as Json,
+        map_performance: stats.mapPerformance as unknown as Json,
         last_match_at: stats.lastMatchAt,
         updated_at: now,
       };

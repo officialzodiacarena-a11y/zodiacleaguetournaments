@@ -1,3 +1,4 @@
+// app/api/v1/tournament/bracket/report-result/route.ts
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
           score_a: scoreA,
           score_b: scoreB,
           winner_team_id: winnerTeamId,
-          status: 'COMPLETED',
+          status: 'COMPLETED' as const,
           ended_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -91,7 +92,7 @@ export async function POST(req: Request) {
     const { error: updateCurrentErr } = await supabase
       .from('bracket_nodes')
       .update({
-        status: 'COMPLETED',
+        status: 'COMPLETED' as const,
         updated_at: new Date().toISOString(),
       })
       .eq('id', matchId);
@@ -102,42 +103,66 @@ export async function POST(req: Request) {
 
     // 4. ส่งทีมผู้ชนะไปยัง Winner Node ถัดไป (Auto-Advance)
     if (matchNode.winner_to_node_id) {
-      const targetSlot = matchNode.winner_to_slot === 'B' ? 'team_b_id' : 'team_a_id';
-      await supabase
-        .from('bracket_nodes')
-        .update({
-          [targetSlot]: winnerTeamId,
-          status: 'READY',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', matchNode.winner_to_node_id);
+      if (matchNode.winner_to_slot === 'B') {
+        await supabase
+          .from('bracket_nodes')
+          .update({
+            team_b_id: winnerTeamId,
+            status: 'READY' as const,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', matchNode.winner_to_node_id);
+      } else {
+        await supabase
+          .from('bracket_nodes')
+          .update({
+            team_a_id: winnerTeamId,
+            status: 'READY' as const,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', matchNode.winner_to_node_id);
+      }
     }
 
     // 5. ส่งทีมผู้แพ้ไปยัง Lower Bracket Node (Double Elimination)
     if (matchNode.loser_to_node_id && loserTeamId) {
-      const targetSlot = matchNode.loser_to_slot === 'B' ? 'team_b_id' : 'team_a_id';
-      await supabase
-        .from('bracket_nodes')
-        .update({
-          [targetSlot]: loserTeamId,
-          status: 'READY',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', matchNode.loser_to_node_id);
+      if (matchNode.loser_to_slot === 'B') {
+        await supabase
+          .from('bracket_nodes')
+          .update({
+            team_b_id: loserTeamId,
+            status: 'READY' as const,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', matchNode.loser_to_node_id);
+      } else {
+        await supabase
+          .from('bracket_nodes')
+          .update({
+            team_a_id: loserTeamId,
+            status: 'READY' as const,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', matchNode.loser_to_node_id);
+      }
     }
 
-    // 6. บันทึกผลลงใน matches ควบคู่กัน (ถ้ามี record)
-    await supabase
-      .from('matches')
-      .update({
-        score_a: scoreA,
-        score_b: scoreB,
-        winner_team_id: winnerTeamId,
-        status: 'COMPLETED',
-        ended_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('bracket_node_id', matchId);
+    // 6. บันทึกผลลงใน matches ควบคู่กัน (ถ้ามี record แมตช์ที่ตรงกับรอบนี้)
+    if (teamAId && teamBId && matchNode.stage_id) {
+      await supabase
+        .from('matches')
+        .update({
+          score_a: scoreA,
+          score_b: scoreB,
+          winner_team_id: winnerTeamId,
+          status: 'COMPLETED' as const,
+          ended_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('stage_id', matchNode.stage_id)
+        .eq('team_a_id', teamAId)
+        .eq('team_b_id', teamBId);
+    }
 
     return NextResponse.json({
       success: true,

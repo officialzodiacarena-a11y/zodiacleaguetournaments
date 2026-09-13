@@ -1,3 +1,4 @@
+//app/api/v1/athlete-market/buyout/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
@@ -7,11 +8,28 @@ const BuyoutSchema = z.object({
   destination_team_id: z.string().uuid(),
 });
 
+interface BuyoutRpcSuccess {
+  success: true;
+  deal_price: number;
+  fee_burned: number;
+}
+
+interface BuyoutRpcError {
+  success: false;
+  code: string;
+  message: string;
+}
+
+type BuyoutRpcResult = BuyoutRpcSuccess | BuyoutRpcError;
+
 export async function POST(req: Request) {
   try {
     const idempotencyKey = req.headers.get('idempotency-key') || req.headers.get('Idempotency-Key');
     if (!idempotencyKey) {
-      return NextResponse.json({ error: { code: 'MISSING_IDEMPOTENCY_KEY', message: 'Header Idempotency-Key จำเป็นต้องระบุ' } }, { status: 400 });
+      return NextResponse.json(
+        { error: { code: 'MISSING_IDEMPOTENCY_KEY', message: 'Header Idempotency-Key จำเป็นต้องระบุ' } },
+        { status: 400 }
+      );
     }
 
     const body = await req.json();
@@ -20,7 +38,10 @@ export async function POST(req: Request) {
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      return NextResponse.json({ error: { code: 'UNAUTHORIZED', message: 'กรุณาเข้าสู่ระบบก่อนทำรายการ' } }, { status: 401 });
+      return NextResponse.json(
+        { error: { code: 'UNAUTHORIZED', message: 'กรุณาเข้าสู่ระบบก่อนทำรายการ' } },
+        { status: 401 }
+      );
     }
 
     const { data: buyer } = await supabase
@@ -30,22 +51,40 @@ export async function POST(req: Request) {
       .single();
 
     if (!buyer) {
-      return NextResponse.json({ error: { code: 'PLAYER_NOT_FOUND', message: 'ไม่พบข้อมูลโปรไฟล์ผู้ใช้' } }, { status: 404 });
+      return NextResponse.json(
+        { error: { code: 'PLAYER_NOT_FOUND', message: 'ไม่พบข้อมูลโปรไฟล์ผู้ใช้' } },
+        { status: 404 }
+      );
     }
 
-    const { data: result, error: rpcError } = await supabase.rpc('buyout_athlete_listing', {
+    const { data: rawResult, error: rpcError } = await supabase.rpc('buyout_athlete_listing', {
       p_listing_id: payload.listing_id,
       p_buyer_player_id: buyer.id,
       p_destination_team_id: payload.destination_team_id,
     });
 
     if (rpcError) {
-      return NextResponse.json({ error: { code: 'DATABASE_ERROR', message: rpcError.message } }, { status: 500 });
+      return NextResponse.json(
+        { error: { code: 'DATABASE_ERROR', message: rpcError.message } },
+        { status: 500 }
+      );
     }
+
+    if (!rawResult) {
+      return NextResponse.json(
+        { error: { code: 'RPC_EMPTY_RESPONSE', message: 'ไม่ได้รับข้อมูลตอบกลับจากระบบซื้อสัญญา' } },
+        { status: 500 }
+      );
+    }
+
+    const result = rawResult as unknown as BuyoutRpcResult;
 
     if (!result.success) {
       const statusCode = result.code === 'LISTING_NOT_ACTIVE' ? 409 : (result.code === 'ROSTER_LOCKED' ? 422 : 400);
-      return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: statusCode });
+      return NextResponse.json(
+        { error: { code: result.code, message: result.message } },
+        { status: statusCode }
+      );
     }
 
     return NextResponse.json({

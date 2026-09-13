@@ -1,3 +1,4 @@
+//app/api/v1/circuits/[id]/standings/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
@@ -20,6 +21,11 @@ interface CircuitStandingRow {
   } | null;
 }
 
+interface CircuitRow {
+  id: string;
+  best_n_seasons: number | null;
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> | { id: string } }
@@ -28,21 +34,23 @@ export async function GET(
     const { id: circuitId } = await params;
     const supabase = await createClient();
 
-    const { data: circuit, error: circuitError } = await supabase
-      .from('circuits')
-      .select('best_n_seasons')
-      .eq('id', circuitId)
+    const { data: rawCircuit, error: circuitError } = await supabase
+      .from('circuits' as never)
+      .select('id, best_n_seasons')
+      .eq('id' as never, circuitId)
       .single();
 
-    if (circuitError || !circuit) {
+    if (circuitError || !rawCircuit) {
       return NextResponse.json(
         { error: { code: 'CIRCUIT_NOT_FOUND', message: 'ไม่พบข้อมูล Circuit ที่ระบุ' } },
         { status: 404 }
       );
     }
 
+    const circuit = rawCircuit as unknown as CircuitRow;
+
     const { data: rows, error } = await supabase
-      .from('circuit_standings')
+      .from('circuit_standings' as never)
       .select(`
         team_id,
         spring_zp,
@@ -61,8 +69,8 @@ export async function GET(
           tag
         )
       `)
-      .eq('circuit_id', circuitId)
-      .order('rank', { ascending: true, nullsFirst: false });
+      .eq('circuit_id' as never, circuitId)
+      .order('rank' as never, { ascending: true, nullsFirst: false });
 
     if (error) {
       return NextResponse.json(

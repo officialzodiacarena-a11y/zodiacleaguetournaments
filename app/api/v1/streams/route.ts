@@ -1,3 +1,4 @@
+//app/api/v1/streams/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
@@ -11,12 +12,12 @@ export async function GET(req: Request) {
 
     const supabase = await createClient();
 
-    let query = supabase.from('streams').select('*').order('created_at', { ascending: false });
+    let query = supabase.from('streams' as never).select('*').order('created_at' as never, { ascending: false });
 
-    if (type) query = query.eq('type', type);
-    if (status) query = query.eq('status', status);
-    if (isEarnEligible !== null) query = query.eq('is_earn_eligible', isEarnEligible === 'true');
-    if (tournamentId) query = query.eq('tournament_id', tournamentId);
+    if (type) query = query.eq('stream_type' as never, type as never);
+    if (status) query = query.eq('status' as never, status as never);
+    if (isEarnEligible !== null) query = query.eq('is_earn_eligible' as never, (isEarnEligible === 'true') as never);
+    if (tournamentId) query = query.eq('tournament_id' as never, tournamentId as never);
 
     const { data, error } = await query;
 

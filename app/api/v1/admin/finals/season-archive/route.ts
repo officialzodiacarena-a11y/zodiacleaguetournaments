@@ -1,13 +1,35 @@
+// app/api/v1/admin/finals/season-archive/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SeasonArchiveSchema, ZODIAC_SIGNS, type ZodiacDrawResult } from '@/types/finals';
+import type { Json } from '@/types/database.types';
+
+interface TournamentArchiveRow {
+  id: string;
+  season_id: string | null;
+  format_config?: Json | null;
+}
 
 interface GrandFinalNodeRow {
   id: string;
-  match_id: string | null;
+  stage_id: string;
   round_number: number;
   created_at: string;
+  team_a_id?: string | null;
+  team_b_id?: string | null;
+  match_id?: string | null;
+}
+
+interface StandingRow {
+  team_id: string;
+  finals_seed: number | null;
+  counted_zp: number;
+}
+
+interface TeamArchiveRow {
+  id: string;
+  name: string;
 }
 
 interface RosterMemberRow {
@@ -15,11 +37,43 @@ interface RosterMemberRow {
   players: { id: string; athlete_id: string; display_name: string } | null;
 }
 
+interface HallOfFameRow {
+  id: string;
+  year: number;
+  team_id: string;
+  team_name: string;
+  zodiac_sign: string;
+  total_zp: number;
+  roster_snapshot: Json;
+  finals_seed: number;
+  achievements: string[];
+  created_at: string;
+}
+
+interface DynamicTableClient {
+  from: (table: string) => {
+    insert: (values: Record<string, unknown>) => {
+      select: () => {
+        single: () => Promise<{ data: HallOfFameRow | null; error: { code?: string; message: string } | null }>;
+      };
+    };
+  };
+}
+
+interface DynamicAuditClient {
+  from: (table: string) => {
+    insert: (values: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
         { error: { code: 'UNAUTHORIZED', message: 'กรุณาเข้าสู่ระบบก่อนทำรายการ' } },
@@ -67,7 +121,13 @@ export async function POST(req: Request) {
     const parseResult = SeasonArchiveSchema.safeParse(body);
     if (!parseResult.success) {
       return NextResponse.json(
-        { error: { code: 'VALIDATION_ERROR', message: 'ข้อมูลไม่ตรงข้อกำหนด — ต้องระบุ tournament_id', details: parseResult.error.format() } },
+        {
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'ข้อมูลไม่ตรงข้อกำหนด — ต้องระบุ tournament_id',
+            details: parseResult.error.format(),
+          },
+        },
         { status: 400 }
       );
     }
@@ -76,24 +136,30 @@ export async function POST(req: Request) {
     const adminSupabase = createAdminClient();
 
     // 1. ทัวร์นาเมนต์ต้องผ่านพิธีจับสลากราศีล็อกแล้ว
-    const { data: tournament, error: tourError } = await adminSupabase
+    const { data: rawTournament, error: tourError } = await adminSupabase
       .from('tournaments')
-      .select('id, season_id, format_config')
+      .select('*')
       .eq('id', tournament_id)
       .single();
 
-    if (tourError || !tournament) {
+    if (tourError || !rawTournament) {
       return NextResponse.json(
         { error: { code: 'TOURNAMENT_NOT_FOUND', message: 'ไม่พบข้อมูลทัวร์นาเมนต์นี้บนระบบ' } },
         { status: 404 }
       );
     }
 
+    const tournament = rawTournament as unknown as TournamentArchiveRow;
     const formatConfig = (tournament.format_config ?? {}) as { zodiac_draw?: ZodiacDrawResult };
     const draw = formatConfig.zodiac_draw;
     if (!draw) {
       return NextResponse.json(
-        { error: { code: 'DRAW_NOT_LOCKED', message: 'ต้องรันพิธีจับสลากราศี (zodiac-draw) ให้ล็อกก่อนจึงจะ Archive ฤดูกาลได้' } },
+        {
+          error: {
+            code: 'DRAW_NOT_LOCKED',
+            message: 'ต้องรันพิธีจับสลากราศี (zodiac-draw) ให้ล็อกก่อนจึงจะ Archive ฤดูกาลได้',
+          },
+        },
         { status: 409 }
       );
     }
@@ -112,9 +178,9 @@ export async function POST(req: Request) {
     }
     const stageIds = stages.map((s) => s.id);
 
-    const { data: gfNodeRows, error: gfError } = await adminSupabase
+    const { data: rawGfNodeRows, error: gfError } = await adminSupabase
       .from('bracket_nodes')
-      .select('id, match_id, round_number, created_at')
+      .select('*')
       .in('stage_id', stageIds)
       .eq('bracket_type', 'GRAND_FINAL')
       .eq('status', 'COMPLETED')
@@ -126,19 +192,35 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code: 'QUERY_FAILED', message: gfError.message } }, { status: 500 });
     }
 
-    const gfNode = (gfNodeRows as GrandFinalNodeRow[] | null)?.[0];
-    if (!gfNode || !gfNode.match_id) {
+    const gfNodeRows = rawGfNodeRows as unknown as GrandFinalNodeRow[] | null;
+    const gfNode = gfNodeRows?.[0];
+
+    if (!gfNode) {
       return NextResponse.json(
-        { error: { code: 'GRAND_FINAL_NOT_COMPLETED', message: 'Grand Final ของทัวร์นาเมนต์นี้ยังไม่เสร็จสิ้น ไม่สามารถ Archive ได้' } },
+        {
+          error: {
+            code: 'GRAND_FINAL_NOT_COMPLETED',
+            message: 'Grand Final ของทัวร์นาเมนต์นี้ยังไม่เสร็จสิ้น ไม่สามารถ Archive ได้',
+          },
+        },
         { status: 409 }
       );
     }
 
-    const { data: match, error: matchError } = await adminSupabase
-      .from('matches')
-      .select('id, winner_team_id')
-      .eq('id', gfNode.match_id)
-      .single();
+    let matchQuery = adminSupabase.from('matches').select('id, winner_team_id');
+    if (gfNode.match_id) {
+      matchQuery = matchQuery.eq('id', gfNode.match_id);
+    } else if (gfNode.stage_id && gfNode.team_a_id && gfNode.team_b_id) {
+      matchQuery = matchQuery
+        .eq('stage_id', gfNode.stage_id)
+        .eq('team_a_id', gfNode.team_a_id)
+        .eq('team_b_id', gfNode.team_b_id);
+    } else if (gfNode.stage_id) {
+      matchQuery = matchQuery.eq('stage_id', gfNode.stage_id);
+    }
+
+    const { data: rawMatch, error: matchError } = await matchQuery.limit(1).maybeSingle();
+    const match = rawMatch as unknown as { id: string; winner_team_id: string | null } | null;
 
     if (matchError || !match || !match.winner_team_id) {
       return NextResponse.json(
@@ -149,12 +231,14 @@ export async function POST(req: Request) {
     const championTeamId = match.winner_team_id;
 
     // 3. ทวน finals_seed / total_zp จาก circuit_standings ของทีมแชมป์
-    const { data: standing, error: standingError } = await adminSupabase
+    const { data: rawStanding, error: standingError } = await adminSupabase
       .from('circuit_standings')
       .select('finals_seed, counted_zp, team_id')
       .eq('team_id', championTeamId)
       .eq('is_finals_qualified', true)
       .single();
+
+    const standing = rawStanding as unknown as StandingRow | null;
 
     if (standingError || !standing || standing.finals_seed === null) {
       return NextResponse.json(
@@ -173,11 +257,13 @@ export async function POST(req: Request) {
     }
 
     // 5. ดึง roster ACTIVE ของทีมแชมป์ ณ วันชิงแชมป์ (immutable snapshot)
-    const { data: teamRow, error: teamError } = await adminSupabase
+    const { data: rawTeamRow, error: teamError } = await adminSupabase
       .from('teams')
       .select('id, name')
       .eq('id', championTeamId)
       .single();
+
+    const teamRow = rawTeamRow as unknown as TeamArchiveRow | null;
 
     if (teamError || !teamRow) {
       return NextResponse.json(
@@ -186,9 +272,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: rosterRows, error: rosterError } = await adminSupabase
+    const { data: rawRosterRows, error: rosterError } = await adminSupabase
       .from('team_members')
-      .select('role, players!player_id(id, athlete_id, display_name)')
+      .select('role, players!team_members_player_id_fkey(id, athlete_id, display_name)')
       .eq('team_id', championTeamId)
       .eq('status', 'ACTIVE');
 
@@ -196,7 +282,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code: 'QUERY_FAILED', message: rosterError.message } }, { status: 500 });
     }
 
-    const rosterSnapshot = ((rosterRows as unknown as RosterMemberRow[]) ?? []).map((m) => ({
+    const rosterRows = rawRosterRows as unknown as RosterMemberRow[];
+    const rosterSnapshot = (rosterRows ?? []).map((m) => ({
       player_id: m.players?.id ?? null,
       athlete_id: m.players?.athlete_id ?? null,
       display_name: m.players?.display_name ?? null,
@@ -206,7 +293,8 @@ export async function POST(req: Request) {
     const resolvedYear = year ?? new Date().getFullYear();
 
     // 6. บันทึกลง Hall of Fame (append-only, immutable)
-    const { data: hofRow, error: hofInsertError } = await adminSupabase
+    const dynamicAdmin = adminSupabase as unknown as DynamicTableClient;
+    const { data: hofRow, error: hofInsertError } = await dynamicAdmin
       .from('hall_of_fame')
       .insert({
         year: resolvedYear,
@@ -214,7 +302,7 @@ export async function POST(req: Request) {
         team_name: teamRow.name,
         zodiac_sign: zodiacSign,
         total_zp: standing.counted_zp,
-        roster_snapshot: rosterSnapshot,
+        roster_snapshot: rosterSnapshot as unknown as Json,
         finals_seed: standing.finals_seed,
         achievements: ['CHAMPION'],
       })
@@ -232,20 +320,26 @@ export async function POST(req: Request) {
     }
 
     // 7. Freeze season → CONCLUDED (รันหลัง hall_of_fame commit สำเร็จเท่านั้น)
-    const { error: seasonUpdateError } = await adminSupabase
-      .from('seasons')
-      .update({ status: 'CONCLUDED' })
-      .eq('id', tournament.season_id);
+    if (tournament.season_id) {
+      const { error: seasonUpdateError } = await adminSupabase
+        .from('seasons')
+        .update({ status: 'CONCLUDED' })
+        .eq('id', tournament.season_id);
 
-    if (seasonUpdateError) {
-      return NextResponse.json({ error: { code: 'SEASON_FREEZE_FAILED', message: seasonUpdateError.message } }, { status: 500 });
+      if (seasonUpdateError) {
+        return NextResponse.json(
+          { error: { code: 'SEASON_FREEZE_FAILED', message: seasonUpdateError.message } },
+          { status: 500 }
+        );
+      }
     }
 
-    await adminSupabase.from('audit_logs').insert({
+    const auditAdmin = adminSupabase as unknown as DynamicAuditClient;
+    await auditAdmin.from('audit_logs').insert({
       actor_id: admin.id,
       action: 'CREATE',
       entity_type: 'hall_of_fame',
-      entity_id: hofRow.id,
+      entity_id: hofRow?.id ?? null,
       reason: 'SEASON_ARCHIVE',
       after_data: { season_id: tournament.season_id, hall_of_fame: hofRow },
     });

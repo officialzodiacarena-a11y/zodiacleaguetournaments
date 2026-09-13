@@ -2,6 +2,19 @@ import { revalidateTag } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { Database } from '@/types/database.types';
+
+type MatchUpdate = Database['public']['Tables']['matches']['Update'];
+type MatchOutcome = Database['public']['Tables']['matches']['Row']['outcome'];
+
+interface BracketNodeRow {
+  id: string;
+  winner_to_node_id: string | null;
+  loser_to_node_id: string | null;
+  bracket_type: string;
+  team_a_id?: string | null;
+  team_b_id?: string | null;
+}
 
 export async function POST(
   request: Request,
@@ -36,7 +49,7 @@ export async function POST(
     return NextResponse.json({ error: 'Player profile not found' }, { status: 404 });
   }
 
-  // 2.1 ตรวจสอบสิทธิ์ผู้พิจารณาชี้ขาดคะแนน (RBAC) — เฉพาะกรรมการ/แอดมินเท่านั้น
+  // 2.1 ตรวจสอบสิทธิ์ผู้พิจารณาชี้ขาดคะแนน (RBAC)
   const { data: userRole, error: roleError } = await supabase
     .from('user_roles')
     .select('role')
@@ -52,26 +65,19 @@ export async function POST(
     );
   }
 
-  const body = await request.json();
-  const {
-    winner_team_id,
-    outcome,
-    score_a,
-    score_b,
-    rounds_won_a,
-    rounds_won_b,
-    result_source,
-  } = body;
+  const body = (await request.json()) as Record<string, unknown>;
+  const winner_team_id = typeof body.winner_team_id === 'string' ? body.winner_team_id : null;
+  const outcome = (typeof body.outcome === 'string' ? body.outcome : 'NORMAL') as unknown as MatchOutcome;
+  const score_a = typeof body.score_a === 'number' ? body.score_a : 0;
+  const score_b = typeof body.score_b === 'number' ? body.score_b : 0;
+  const rounds_won_a = typeof body.rounds_won_a === 'number' ? body.rounds_won_a : 0;
+  const rounds_won_b = typeof body.rounds_won_b === 'number' ? body.rounds_won_b : 0;
+  const result_source = typeof body.result_source === 'string' ? body.result_source : 'REFEREE';
 
-  // 3. ดึงข้อมูล Match และ Bracket Node
+  // 3. ดึงข้อมูล Match
   const { data: match, error: matchErr } = await supabase
     .from('matches')
-    .select(`
-      *,
-      bracket_node:bracket_nodes(
-        id, winner_to_node_id, loser_to_node_id, bracket_type
-      )
-    `)
+    .select('*')
     .eq('id', matchId)
     .single();
 
@@ -86,9 +92,9 @@ export async function POST(
     );
   }
 
-  // 3.1 กันการยิงซ้ำด้วย Idempotency-Key เดิม (คืนผลลัพธ์เดิมโดยไม่ประมวลผลซ้ำ)
+  // 3.1 กันการยิงซ้ำด้วย Idempotency-Key เดิม
   const { data: duplicateTransition } = await supabase
-    .from('match_state_transitions')
+    .from('match_state_transitions' as never)
     .select('id, state_snapshot')
     .eq('match_id', matchId)
     .contains('state_snapshot', { idempotency_key: idempotencyKey })
@@ -117,22 +123,21 @@ export async function POST(
   const nowIso = new Date().toISOString();
 
   // 5. ปิด Match เป็น COMPLETED
+  const matchUpdatePayload: MatchUpdate = {
+    winner_team_id,
+    outcome,
+    score_a,
+    score_b,
+    rounds_won_a,
+    rounds_won_b,
+    status: 'COMPLETED',
+    ended_at: nowIso,
+    updated_at: nowIso,
+  };
+
   const { data: updatedMatch, error: updateErr } = await adminSupabase
     .from('matches')
-    .update({
-      winner_team_id,
-      outcome: outcome || 'NORMAL',
-      score_a: score_a ?? 0,
-      score_b: score_b ?? 0,
-      rounds_won_a: rounds_won_a ?? 0,
-      rounds_won_b: rounds_won_b ?? 0,
-      result_source: result_source || 'REFEREE',
-      result_reported_by: player?.id || null,
-      result_confirmed_at: nowIso,
-      status: 'COMPLETED',
-      ended_at: nowIso,
-      updated_at: nowIso,
-    })
+    .update(matchUpdatePayload)
     .eq('id', matchId)
     .select()
     .single();
@@ -142,74 +147,81 @@ export async function POST(
   }
 
   // 6. อัปเดต Bracket Node และส่งต่อผู้ชนะ/ผู้แพ้
-  if (match.bracket_node_id && match.bracket_node) {
-    const loserTeamId = winner_team_id === match.team_a_id ? match.team_b_id : match.team_a_id;
+  if (winner_team_id) {
+    const { data: bracketNodeRaw } = await adminSupabase
+      .from('bracket_nodes' as never)
+      .select('id, winner_to_node_id, loser_to_node_id, bracket_type')
+      .eq('match_id' as never, matchId)
+      .maybeSingle();
 
-    // อัปเดต Node ปัจจุบันเป็น COMPLETED
-    await adminSupabase
-      .from('bracket_nodes')
-      .update({
-        winner_team_id,
-        status: 'COMPLETED',
-        updated_at: nowIso,
-      })
-      .eq('id', match.bracket_node_id);
+    const bracketNode = bracketNodeRaw as unknown as BracketNodeRow | null;
 
-    // ส่งผู้ชนะไปยัง Node ถัดไป
-    if (match.bracket_node.winner_to_node_id) {
-      const { data: nextWinnerNode } = await adminSupabase
-        .from('bracket_nodes')
-        .select('id, team_a_id, team_b_id')
-        .eq('id', match.bracket_node.winner_to_node_id)
-        .single();
+    if (bracketNode) {
+      const loserTeamId = winner_team_id === match.team_a_id ? match.team_b_id : match.team_a_id;
 
-      if (nextWinnerNode) {
-        const assignA = !nextWinnerNode.team_a_id;
-        const newTeamA = assignA ? winner_team_id : nextWinnerNode.team_a_id;
-        const newTeamB = !assignA ? winner_team_id : nextWinnerNode.team_b_id;
-        const isReady = Boolean(newTeamA && newTeamB);
+      await adminSupabase
+        .from('bracket_nodes' as never)
+        .update({
+          winner_team_id,
+          status: 'COMPLETED',
+          updated_at: nowIso,
+        } as never)
+        .eq('id', bracketNode.id);
 
-        await adminSupabase
-          .from('bracket_nodes')
-          .update({
-            team_a_id: newTeamA,
-            team_b_id: newTeamB,
-            status: isReady ? 'READY' : 'PENDING',
-            updated_at: nowIso,
-          })
-          .eq('id', nextWinnerNode.id);
+      if (bracketNode.winner_to_node_id) {
+        const { data: nextWinnerRaw } = await adminSupabase
+          .from('bracket_nodes' as never)
+          .select('id, team_a_id, team_b_id')
+          .eq('id', bracketNode.winner_to_node_id)
+          .single();
+
+        const nextWinnerNode = nextWinnerRaw as unknown as BracketNodeRow | null;
+        if (nextWinnerNode) {
+          const assignA = !nextWinnerNode.team_a_id;
+          const newTeamA = assignA ? winner_team_id : nextWinnerNode.team_a_id;
+          const newTeamB = !assignA ? winner_team_id : nextWinnerNode.team_b_id;
+
+          await adminSupabase
+            .from('bracket_nodes' as never)
+            .update({
+              team_a_id: newTeamA,
+              team_b_id: newTeamB,
+              status: Boolean(newTeamA && newTeamB) ? 'READY' : 'PENDING',
+              updated_at: nowIso,
+            } as never)
+            .eq('id', nextWinnerNode.id);
+        }
       }
-    }
 
-    // ส่งผู้แพ้ไปยัง Lower Bracket Node (ถ้ามี)
-    if (match.bracket_node.loser_to_node_id && loserTeamId) {
-      const { data: nextLoserNode } = await adminSupabase
-        .from('bracket_nodes')
-        .select('id, team_a_id, team_b_id')
-        .eq('id', match.bracket_node.loser_to_node_id)
-        .single();
+      if (bracketNode.loser_to_node_id && loserTeamId) {
+        const { data: nextLoserRaw } = await adminSupabase
+          .from('bracket_nodes' as never)
+          .select('id, team_a_id, team_b_id')
+          .eq('id', bracketNode.loser_to_node_id)
+          .single();
 
-      if (nextLoserNode) {
-        const assignA = !nextLoserNode.team_a_id;
-        const newTeamA = assignA ? loserTeamId : nextLoserNode.team_a_id;
-        const newTeamB = !assignA ? loserTeamId : nextLoserNode.team_b_id;
-        const isReady = Boolean(newTeamA && newTeamB);
+        const nextLoserNode = nextLoserRaw as unknown as BracketNodeRow | null;
+        if (nextLoserNode) {
+          const assignA = !nextLoserNode.team_a_id;
+          const newTeamA = assignA ? loserTeamId : nextLoserNode.team_a_id;
+          const newTeamB = !assignA ? loserTeamId : nextLoserNode.team_b_id;
 
-        await adminSupabase
-          .from('bracket_nodes')
-          .update({
-            team_a_id: newTeamA,
-            team_b_id: newTeamB,
-            status: isReady ? 'READY' : 'PENDING',
-            updated_at: nowIso,
-          })
-          .eq('id', nextLoserNode.id);
+          await adminSupabase
+            .from('bracket_nodes' as never)
+            .update({
+              team_a_id: newTeamA,
+              team_b_id: newTeamB,
+              status: Boolean(newTeamA && newTeamB) ? 'READY' : 'PENDING',
+              updated_at: nowIso,
+            } as never)
+            .eq('id', nextLoserNode.id);
+        }
       }
     }
   }
 
   // 7. Audit Log
-  await adminSupabase.from('match_state_transitions').insert({
+  await adminSupabase.from('match_state_transitions' as never).insert({
     match_id: match.id,
     from_status: match.status,
     to_status: 'COMPLETED',
@@ -223,17 +235,14 @@ export async function POST(
       score_b,
       idempotency_key: idempotencyKey,
     },
-  });
+  } as never);
 
-  // Sprint 5.2 — Pro Analytics data freshness: refresh the concurrent
-  // materialized view and revalidate the Next.js cache tag so a subscriber's
-  // dashboard reflects this match within 5 seconds (QA Case 7). Best-effort —
-  // a refresh failure must never fail match finalization itself.
+  // 8. Refresh Materialized View & Cache Revalidation
   try {
-    await adminSupabase.rpc('refresh_team_analytics', {});
-    revalidateTag('team-analytics', 'seconds');
+    await adminSupabase.rpc('refresh_team_analytics' as never);
+    revalidateTag('team-analytics', 'default');
   } catch {
-    // swallow — analytics freshness is not allowed to block match completion
+    // swallow analytics freshness error
   }
 
   return NextResponse.json(updatedMatch);

@@ -1,6 +1,8 @@
+//app/api/v1/circuits/[id]/recalculate/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { Json } from '@/types/database.types';
 
 interface SeasonRow {
   id: string;
@@ -122,7 +124,6 @@ export async function POST(
     const { id: circuitId } = await params;
     const supabase = await createClient();
 
-    // Auth + role check
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
@@ -161,55 +162,58 @@ export async function POST(
 
     const adminSupabase = createAdminClient();
 
-    // 1. Get circuit config
-    const { data: circuit, error: circuitError } = await adminSupabase
-      .from('circuits')
+    const { data: rawCircuit, error: circuitError } = await adminSupabase
+      .from('circuits' as never)
       .select('id, best_n_seasons, finals_slots, tiebreaker_rules')
-      .eq('id', circuitId)
+      .eq('id' as never, circuitId)
       .single();
 
-    if (circuitError || !circuit) {
+    if (circuitError || !rawCircuit) {
       return NextResponse.json(
         { error: { code: 'CIRCUIT_NOT_FOUND', message: 'ไม่พบข้อมูล Circuit ที่ระบุ' } },
         { status: 404 }
       );
     }
 
-    const bestN = circuit.best_n_seasons as number | null;
-    const finalsSlots = (circuit.finals_slots as number | null) ?? 12;
-    const tiebreakerRules = (circuit.tiebreaker_rules as string[] | null) ??
+    const circuit = rawCircuit as unknown as {
+      best_n_seasons: number | null;
+      finals_slots: number | null;
+      tiebreaker_rules: string[] | null;
+    };
+
+    const bestN = circuit.best_n_seasons;
+    const finalsSlots = circuit.finals_slots ?? 12;
+    const tiebreakerRules = circuit.tiebreaker_rules ??
       ['head_to_head', 'best_placement', 'total_match_wins', 'round_differential', 'earliest_registration'];
 
-    // 2. Get all seasons for this circuit
-    const { data: seasons, error: seasonsError } = await adminSupabase
-      .from('seasons')
+    const { data: rawSeasons, error: seasonsError } = await adminSupabase
+      .from('seasons' as never)
       .select('id, split')
-      .eq('circuit_id', circuitId);
+      .eq('circuit_id' as never, circuitId);
 
-    if (seasonsError || !seasons || seasons.length === 0) {
+    if (seasonsError || !rawSeasons || (rawSeasons as unknown[]).length === 0) {
       return NextResponse.json(
         { error: { code: 'NO_SEASONS', message: 'ไม่พบซีซันใด ๆ ใน Circuit นี้' } },
         { status: 422 }
       );
     }
 
-    const seasonList = seasons as SeasonRow[];
+    const seasonList = rawSeasons as unknown as SeasonRow[];
     const seasonIds = seasonList.map((s) => s.id);
     const seasonSplitMap: Record<string, 'SPRING' | 'SUMMER' | 'FALL' | 'WINTER'> = {};
     for (const s of seasonList) {
       seasonSplitMap[s.id] = s.split;
     }
 
-    // 3. Get season_standings for all seasons in parallel with existing circuit_standings
     const [standingsRes, existingRes] = await Promise.all([
       adminSupabase
-        .from('season_standings')
+        .from('season_standings' as never)
         .select('season_id, team_id, total_zp, matches_won, rounds_won, rounds_lost, best_placement')
-        .in('season_id', seasonIds),
+        .in('season_id' as never, seasonIds),
       adminSupabase
-        .from('circuit_standings')
+        .from('circuit_standings' as never)
         .select('team_id, bonus_zp, penalty_zp')
-        .eq('circuit_id', circuitId),
+        .eq('circuit_id' as never, circuitId),
     ]);
 
     if (standingsRes.error) {
@@ -219,15 +223,14 @@ export async function POST(
       );
     }
 
-    const seasonStandings = (standingsRes.data ?? []) as SeasonStandingRow[];
-    const existingCircuit = (existingRes.data ?? []) as CircuitStandingExisting[];
+    const seasonStandings = (standingsRes.data ?? []) as unknown as SeasonStandingRow[];
+    const existingCircuit = (existingRes.data ?? []) as unknown as CircuitStandingExisting[];
 
     const existingMap: Record<string, { bonus_zp: number; penalty_zp: number }> = {};
     for (const row of existingCircuit) {
       existingMap[row.team_id] = { bonus_zp: row.bonus_zp, penalty_zp: row.penalty_zp };
     }
 
-    // 4. Aggregate per team
     const teamMap: Record<string, TeamData> = {};
 
     for (const row of seasonStandings) {
@@ -270,7 +273,6 @@ export async function POST(
       }
     }
 
-    // 5. Fill team metadata + compute total_zp / counted_zp
     const allTeamIds = Object.keys(teamMap);
     if (allTeamIds.length === 0) {
       return NextResponse.json({
@@ -306,7 +308,7 @@ export async function POST(
       const rawTotal = seasonZps.reduce((a, b) => a + b, 0);
       td.total_zp = rawTotal + td.bonus_zp + td.penalty_zp;
 
-      if (bestN !== null) {
+      if (bestN !== null && bestN !== undefined) {
         const topN = [...seasonZps].sort((a, b) => b - a).slice(0, bestN);
         td.counted_zp = topN.reduce((a, b) => a + b, 0) + td.bonus_zp + td.penalty_zp;
       } else {
@@ -314,7 +316,6 @@ export async function POST(
       }
     }
 
-    // 6. Build H2H data if needed
     let h2hMap: Record<string, Record<string, number>> = {};
     const needsH2H = tiebreakerRules.includes('head_to_head');
 
@@ -329,9 +330,7 @@ export async function POST(
       h2hMap = buildH2HMap((matchData ?? []) as MatchRow[], teamIdSet);
     }
 
-    // 7. Sort teams by counted_zp + tiebreakers → assign rank
     const teamList = Object.values(teamMap);
-
     const tiebreakerAppliedPerTeamVs: Record<string, Record<string, string>> = {};
 
     teamList.sort((a, b) => {
@@ -348,7 +347,6 @@ export async function POST(
       teamList[i].rank = i + 1;
     }
 
-    // 8. Record tiebreaker_applied per team
     for (const td of teamList) {
       const usedRules: string[] = [];
       for (const [key, val] of Object.entries(tiebreakerAppliedPerTeamVs)) {
@@ -359,7 +357,6 @@ export async function POST(
       td.tiebreakerApplied = usedRules.length > 0 ? { rules_applied: usedRules } : {};
     }
 
-    // 9. Assign finals seeds (top finalsSlots teams)
     const now = new Date().toISOString();
     const upsertRows = teamList.map((td) => {
       const isQualified = td.rank <= finalsSlots;
@@ -375,7 +372,7 @@ export async function POST(
         total_zp: td.total_zp,
         counted_zp: td.counted_zp,
         rank: td.rank,
-        tiebreaker_applied: td.tiebreakerApplied,
+        tiebreaker_applied: td.tiebreakerApplied as unknown as Json,
         is_finals_qualified: isQualified,
         finals_seed: isQualified ? td.rank : null,
         qualified_at: isQualified ? now : null,
@@ -384,8 +381,8 @@ export async function POST(
     });
 
     const { error: upsertError } = await adminSupabase
-      .from('circuit_standings')
-      .upsert(upsertRows, { onConflict: 'circuit_id,team_id' });
+      .from('circuit_standings' as never)
+      .upsert(upsertRows as never, { onConflict: 'circuit_id,team_id' } as never);
 
     if (upsertError) {
       return NextResponse.json(
