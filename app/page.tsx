@@ -1,8 +1,8 @@
 // app/page.tsx
-import AthletePassportCard from '@/components/landing/AthletePassportCard';
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import AthletePassportCard from '@/components/landing/AthletePassportCard';
 import { createClient } from '@/lib/supabase/server';
 import { 
   Radio, 
@@ -12,24 +12,11 @@ import {
   ArrowRight, 
   ExternalLink, 
   CheckCircle2, 
-  Activity,
   Flame,
 } from 'lucide-react';
-
-export const dynamic = 'force-dynamic';
-import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
 
-// ด้านใน return ของ component:
-<main className="min-h-screen bg-[#0D0E1A] text-[#F9EDD8] relative">
-  <SkyscraperTower position="LEFT_TOWER" />
-  <SkyscraperTower position="RIGHT_TOWER" />
-
-  <div className="max-w-7xl mx-auto px-4 py-6">
-    <SponsorSlot className="mb-8" />
-    {/* เนื้อหาหน้า Landing เดิม */}
-  </div>
-</main>
+export const dynamic = 'force-dynamic';
 
 interface LiveMatchRow {
   id: string;
@@ -57,7 +44,7 @@ interface UserProfileData {
 export default async function LandingPage() {
   const supabase = await createClient();
 
-  // 1. ตรวจสอบสถานะ Auth และข้อมูลผู้เล่นตาม Schema จริง (display_name, real_name, athlete_id)
+  // 1. ตรวจสอบสถานะ Auth และข้อมูลผู้เล่น
   const { data: { user } } = await supabase.auth.getUser();
 
   let athleteProfile: UserProfileData | null = null;
@@ -98,7 +85,7 @@ export default async function LandingPage() {
     }
   }
 
-  // 2. ดึงแมตช์กำลังแข่งสด (Fault-Tolerant ด้วย Promise.allSettled)
+  // 2. ดึงแมตช์กำลังแข่งสด
   const results = await Promise.allSettled([
     supabase
       .from('matches')
@@ -139,6 +126,10 @@ export default async function LandingPage() {
   return (
     <main className="min-h-screen bg-[#08090F] text-[#F9EDD8] font-sans relative overflow-x-hidden selection:bg-[#E8B429] selection:text-black select-none">
       
+      {/* สปอนเซอร์ปีกซ้าย-ขวา */}
+      <SkyscraperTower position="LEFT_TOWER" />
+      <SkyscraperTower position="RIGHT_TOWER" />
+
       {/* Background Faceoff Image & Cyber HUD Overlay */}
       <div className="fixed inset-0 -z-20 opacity-25 pointer-events-none">
         <Image
@@ -161,56 +152,54 @@ export default async function LandingPage() {
       />
       <div className="pointer-events-none fixed -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[350px] bg-gradient-to-b from-[#E8B429]/15 via-[#00D4FF]/5 to-transparent rounded-full blur-[140px]" />
 
-      {/* ====================================================================
-          SECTION 1: TOP LIVE TELEMETRY STRIP
-      ==================================================================== */}
-      <div className="border-b border-white/5 bg-[#0D0E1A]/80 backdrop-blur-md px-4 py-2">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+      {/* SECTION 1: TOP LIVE TELEMETRY STRIP */}
+      <div className="relative z-20 w-full bg-[#090A12]/90 border-b border-white/10 backdrop-blur-md px-4 py-2 flex items-center justify-between text-[11px] font-mono">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+          <span className="text-red-500 font-bold uppercase tracking-wider whitespace-nowrap">LIVE TELEMETRY:</span>
+          <span className="w-2 h-2 rounded-full bg-amber-400 inline-block animate-pulse shrink-0" />
           
-          <div className="flex items-center gap-2">
-            <span className="flex h-2 w-2 rounded-full bg-[#E3322F] animate-ping" />
-            <span className="font-black text-[#E3322F] uppercase tracking-wider">LIVE TELEMETRY:</span>
-          </div>
-
-          <div className="flex-1 overflow-x-auto flex items-center gap-6 no-scrollbar py-0.5">
-            {liveMatches.length > 0 ? (
-              liveMatches.map((match) => (
+          {liveMatches.length > 0 ? (
+            <div className="flex items-center gap-4 whitespace-nowrap">
+              {liveMatches.map((match) => (
                 <Link
                   key={match.id}
                   href={`/matches/${match.id}/lobby`}
-                  className="flex items-center gap-2 hover:text-[#E8B429] transition-colors whitespace-nowrap"
+                  className="flex items-center gap-1.5 hover:text-amber-400 transition-colors"
                 >
                   <span className="font-bold text-white">[{match.teamATag}]</span>
-                  <span className="text-[#E8B429] font-black">{match.scoreA} : {match.scoreB}</span>
+                  <span className="text-amber-400 font-black">{match.scoreA}:{match.scoreB}</span>
                   <span className="font-bold text-white">[{match.teamBTag}]</span>
-                  <span className="text-[10px] text-zinc-500 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">
-                    WATCH LIVE
-                  </span>
                 </Link>
-              ))
-            ) : (
-              <div className="flex items-center gap-2 text-zinc-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#E8B429]" />
-                <span>ALL CIRCUITS STANDBY · NEXT TOURNAMENT SOON ({openTournamentsCount} OPEN FOR REGISTRATION)</span>
-              </div>
-            )}
-          </div>
-
-          <div className="hidden md:flex items-center gap-3 text-[11px] text-[#94A3B8]">
-            <span className="flex items-center gap-1">
-              <Activity className="w-3.5 h-3.5 text-[#4CAF50]" />
-              <span>SERVER: ASIA-BANGKOK</span>
+              ))}
+            </div>
+          ) : (
+            <span className="text-zinc-400 whitespace-nowrap">
+              ALL CIRCUITS STANDBY · NEXT TOURNAMENT SOON ({openTournamentsCount} OPEN FOR REGISTRATION)
             </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-6 shrink-0">
+          <div className="flex items-center gap-2 text-amber-400/90 font-semibold">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+            <span>S2 SUMMER CIRCUIT: ACTIVE</span>
           </div>
 
+          <div className="flex items-center gap-4 text-zinc-400 border-l border-white/10 pl-6">
+            <div className="flex items-center gap-1.5 text-emerald-400">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+              </svg>
+              <span>18ms</span>
+            </div>
+            <span className="text-[10px] text-zinc-500">SERVER: ASIA-BANGKOK</span>
+          </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-16">
         
-        {/* ====================================================================
-            SECTION 2: HERO CYBER-HUD SECTION
-        ==================================================================== */}
+        {/* SECTION 2: HERO CYBER-HUD SECTION */}
         <section className="text-center space-y-6 pt-6 md:pt-12">
           
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-[#E8B429]/30 bg-[#E8B429]/10 text-xs font-mono font-bold text-[#E8B429]">
@@ -251,9 +240,7 @@ export default async function LandingPage() {
 
         </section>
 
-        {/* ====================================================================
-            SECTION 3: DYNAMIC ONBOARDING / PASSPORT STRIP
-        ==================================================================== */}
+        {/* SECTION 3: DYNAMIC ONBOARDING / PASSPORT STRIP */}
         <section className="rounded-2xl border border-white/10 bg-[#101223]/90 backdrop-blur-md p-6 md:p-8 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-[#E8B429]/5 rounded-full blur-3xl pointer-events-none" />
           
@@ -312,6 +299,16 @@ export default async function LandingPage() {
                   >
                     ดูพาสปอร์ต
                   </Link>
+
+                  {/* ปุ่มออกจากระบบ */}
+                  <form action="/auth/signout" method="post" className="inline-block">
+                    <button
+                      type="submit"
+                      className="ml-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs font-bold text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all cursor-pointer"
+                    >
+                      ออกจากระบบ
+                    </button>
+                  </form>
                 </div>
               ) : (
                 <Link
@@ -327,9 +324,7 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* ====================================================================
-            SECTION 4: 4-PILLAR ECOSYSTEM GRID (WITH 3D FLIP CARD)
-        ==================================================================== */}
+        {/* SECTION 4: 4-PILLAR ECOSYSTEM GRID */}
         <section className="space-y-6">
           <div className="flex items-center justify-between border-b border-white/5 pb-4">
             <div>
@@ -372,8 +367,9 @@ export default async function LandingPage() {
               </div>
             </Link>
 
-            {/* Pillar 2: ATHLETE PASSPORT & MARKET (Interactive Card) */}
+            {/* Pillar 2: ATHLETE PASSPORT & MARKET */}
             <AthletePassportCard />
+
             {/* Pillar 3: Watch-to-Earn AP */}
             <Link
               href="/schedule"
@@ -399,7 +395,7 @@ export default async function LandingPage() {
               </div>
             </Link>
 
-            {/* Pillar 4: ZODIAC MARKETPLACE (UPDATED NAME) */}
+            {/* Pillar 4: ZODIAC MARKETPLACE */}
             <Link
               href="/store"
               className="group relative overflow-hidden rounded-xl border border-white/5 bg-[#101223] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#4CAF50]/40 hover:shadow-[0_10px_30px_rgba(76,175,80,0.12)] flex flex-col justify-between h-[300px]"
@@ -427,9 +423,7 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* ====================================================================
-            FOOTER STRIP
-        ==================================================================== */}
+        {/* FOOTER STRIP */}
         <footer className="border-t border-white/5 pt-8 pb-4 text-center text-xs text-zinc-500 font-mono space-y-2">
           <p>© 2026 ZODIAC ARENA. ALL RIGHTS RESERVED. POWERED BY AI CASING & ESPORTS TELEMETRY.</p>
           <div className="flex items-center justify-center gap-4 text-[11px]">

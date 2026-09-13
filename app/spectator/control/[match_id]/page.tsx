@@ -100,7 +100,6 @@ export default function SpectatorHUDControlPanel({
   useEffect(() => {
     let isMounted = true;
 
-    // 1. ตรวจสอบสิทธิ์แบบ Single Run เมื่อ Mount
     const initializeAuth = async () => {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -140,7 +139,6 @@ export default function SpectatorHUDControlPanel({
       }
     };
 
-    // 2. แยกฟังก์ชัน Polling เฉพาะ Match & Telemetry Data
     const pollTelemetryAndMatch = async () => {
       try {
         const { data: matchData, error: matchError } = await supabase
@@ -212,7 +210,6 @@ export default function SpectatorHUDControlPanel({
 
     runInit();
 
-    // 3. Realtime Channel
     const channelName = `match-realtime-${matchId}`;
     const channel = supabase.channel(channelName);
 
@@ -222,7 +219,6 @@ export default function SpectatorHUDControlPanel({
       }
     });
 
-    // Polling Interval เฉพาะข้อมูล Match & Telemetry ทุก 5 วินาที
     const intervalId = setInterval(pollTelemetryAndMatch, 5000);
 
     return () => {
@@ -306,7 +302,6 @@ export default function SpectatorHUDControlPanel({
     }
   };
 
-  // Safe JSONB Merge Update (format_config -> lobby_code)
   const updateLobbyRoomCode = async () => {
     if (!lobbyCodeInput.trim() || !match) return;
 
@@ -391,8 +386,26 @@ export default function SpectatorHUDControlPanel({
       )}
 
       <div className="grid grid-cols-12 gap-6">
-        {/* PANEL A: TELEMETRY & ROOM CONFIG */}
+        {/* PANEL A: TELEMETRY, CASTER LIVE STREAM & ROOM CONFIG */}
         <section className="col-span-12 lg:col-span-4 space-y-6">
+          {/* CASTER LIVE STREAM MONITOR */}
+          <div className="bg-[#12121A] border border-white/5 rounded-xl p-5 relative overflow-hidden">
+            <h2 className="font-mono text-sm font-black text-[#00D4FF] uppercase tracking-wider mb-3 border-b border-white/5 pb-2 flex items-center justify-between">
+              <span>📡 Caster Broadcast Monitor</span>
+              <span className="text-[10px] text-red-500 animate-pulse">● LIVE</span>
+            </h2>
+            <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-white/10 bg-black shadow-inner">
+              <iframe
+                className="w-full h-full"
+                src="https://www.youtube-nocookie.com/embed/4T8fqMG0cDA?autoplay=1&mute=0"
+                title="Caster Broadcast Feed"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
+          </div>
+
+          {/* TELEMETRY STATUS */}
           <div className="bg-[#12121A] border border-white/5 rounded-xl p-5 relative overflow-hidden">
             <h2 className="font-mono text-sm font-black text-[#00D4FF] uppercase tracking-wider mb-4 border-b border-white/5 pb-2">
               📊 Stream Telemetry Status
@@ -433,6 +446,7 @@ export default function SpectatorHUDControlPanel({
             </div>
           </div>
 
+          {/* MATCH ROOM CONFIG */}
           <div className="bg-[#12121A] border border-white/5 rounded-xl p-5">
             <h2 className="font-mono text-sm font-black text-[#00D4FF] uppercase tracking-wider mb-4 border-b border-white/5 pb-2">
               🔑 Match Room Config
