@@ -17,4 +17,6 @@ export const TrackBannerEventSchema = z.object({
   event_type: z.enum(['IMPRESSION', 'CLICK']),
 });
 
+export const BannerIdParamSchema = z.string().uuid({ message: 'Invalid Banner UUID format' });
+
 export type TrackBannerEventInput = z.infer<typeof TrackBannerEventSchema>;

@@ -5,6 +5,7 @@ import type { SponsorBannerPublic, SponsorSlotPosition } from '@/types/sponsor';
 
 export const dynamic = 'force-dynamic';
 
+// ✅ รับเฉพาะ request ไม่ต้องมี { params }
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

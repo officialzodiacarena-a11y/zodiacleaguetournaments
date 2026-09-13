@@ -17,7 +17,6 @@ export function SponsorSlot({ className = '' }: SponsorSlotProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 1. Fetch Active Top Leaderboard Banner
   useEffect(() => {
     let isCancelled = false;
 
@@ -43,21 +42,26 @@ export function SponsorSlot({ className = '' }: SponsorSlotProps) {
     };
   }, []);
 
-  // 2. Track Event Function
   const trackEvent = useCallback((bannerId: string, eventType: 'IMPRESSION' | 'CLICK') => {
     try {
-      fetch(`/api/v1/banners/${bannerId}/track`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_type: eventType }),
-        keepalive: true,
-      }).catch((err) => console.error(`[SponsorSlot] Track ${eventType} failed:`, err));
+      if (typeof window !== 'undefined' && navigator.sendBeacon && eventType === 'CLICK') {
+        const blob = new Blob([JSON.stringify({ event_type: eventType })], {
+          type: 'application/json',
+        });
+        navigator.sendBeacon(`/api/v1/banners/${bannerId}/track`, blob);
+      } else {
+        fetch(`/api/v1/banners/${bannerId}/track`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_type: eventType }),
+          keepalive: true,
+        }).catch((err) => console.error(`[SponsorSlot] Track ${eventType} failed:`, err));
+      }
     } catch (err) {
       console.error(`[SponsorSlot] Track ${eventType} error:`, err);
     }
   }, []);
 
-  // 3. Telemetry Debounce: IntersectionObserver (Visible > 50% for > 1,000ms)
   useEffect(() => {
     if (!banner || hasTrackedImpression || !containerRef.current) return;
 
@@ -94,10 +98,13 @@ export function SponsorSlot({ className = '' }: SponsorSlotProps) {
   if (loading) {
     return (
       <div className={`w-full max-w-5xl mx-auto ${className}`}>
-        <div className="w-full aspect-[970/120] max-h-28 rounded-xl border border-white/5 bg-[#121424] animate-pulse flex items-center justify-center">
-          <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-600">
-            SPONSOR SPOTLIGHT LOADING...
-          </span>
+        <div className="relative w-full aspect-[970/120] max-h-28 rounded-xl border border-white/5 bg-[#121424] overflow-hidden">
+          <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent" />
+          <div className="flex h-full items-center justify-center">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-600">
+              SPONSOR SPOTLIGHT LOADING...
+            </span>
+          </div>
         </div>
       </div>
     );
@@ -116,7 +123,6 @@ export function SponsorSlot({ className = '' }: SponsorSlotProps) {
           src={banner.image_url}
           alt={banner.title}
           fill
-          unoptimized
           sizes="(max-width: 1024px) 100vw, 1024px"
           className="object-cover group-hover:scale-[1.01] transition-transform duration-500"
           priority

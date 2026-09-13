@@ -18,6 +18,8 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
   const containerRef = useRef<HTMLDivElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const isLeft = position === 'LEFT_TOWER';
+
   useEffect(() => {
     let isCancelled = false;
 
@@ -45,12 +47,19 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
 
   const trackEvent = useCallback((bannerId: string, eventType: 'IMPRESSION' | 'CLICK') => {
     try {
-      fetch(`/api/v1/banners/${bannerId}/track`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_type: eventType }),
-        keepalive: true,
-      }).catch((err) => console.error(`[SkyscraperTower] Track ${eventType} failed:`, err));
+      if (typeof window !== 'undefined' && navigator.sendBeacon && eventType === 'CLICK') {
+        const blob = new Blob([JSON.stringify({ event_type: eventType })], {
+          type: 'application/json',
+        });
+        navigator.sendBeacon(`/api/v1/banners/${bannerId}/track`, blob);
+      } else {
+        fetch(`/api/v1/banners/${bannerId}/track`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_type: eventType }),
+          keepalive: true,
+        }).catch((err) => console.error(`[SkyscraperTower] Track ${eventType} failed:`, err));
+      }
     } catch (err) {
       console.error(`[SkyscraperTower] Track ${eventType} error:`, err);
     }
@@ -94,25 +103,40 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
   return (
     <aside
       ref={containerRef}
-      className={`hidden 2xl:block fixed top-24 z-30 w-40 select-none ${
-        position === 'LEFT_TOWER' ? 'left-4' : 'right-4'
+      aria-label={`Sponsor Skyscraper ${isLeft ? 'Left' : 'Right'}`}
+      className={`hidden 2xl:block fixed top-28 z-30 w-40 select-none ${
+        isLeft ? 'left-4' : 'right-4'
       } ${className}`}
     >
       <Link
         href={banner.target_url}
         onClick={() => trackEvent(banner.id, 'CLICK')}
-        className="group relative block w-40 h-[600px] rounded-xl overflow-hidden border border-white/10 bg-[#121424] hover:border-[#E8B429]/60 shadow-2xl transition-all duration-300"
+        className={`group relative block w-40 h-[600px] rounded-xl overflow-hidden bg-[#121424] border transition-all duration-300 ${
+          isLeft
+            ? 'border-[#00D4FF]/30 shadow-[0_0_25px_rgba(0,212,255,0.12)] hover:border-[#00D4FF] hover:shadow-[0_0_30px_rgba(0,212,255,0.3)]'
+            : 'border-[#E8B429]/30 shadow-[0_0_25px_rgba(232,180,41,0.12)] hover:border-[#E8B429] hover:shadow-[0_0_30px_rgba(232,180,41,0.3)]'
+        }`}
       >
         <Image
           src={banner.image_url}
           alt={banner.title}
           fill
-          unoptimized
           sizes="160px"
-          className="object-cover group-hover:scale-105 transition-transform duration-500"
+          className="object-cover group-hover:scale-105 group-hover:brightness-110 transition-all duration-500"
         />
-        <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm border border-white/10 rounded px-1.5 py-0.5 text-[8px] font-mono font-bold text-[#E8B429]">
-          AD
+
+        {/* Shine Sweep Overlay */}
+        <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
+
+        {/* Minimalist Cyber Badge */}
+        <div
+          className={`absolute top-2 right-2 rounded px-1.5 py-0.5 text-[8px] font-mono font-bold tracking-widest backdrop-blur-md border ${
+            isLeft
+              ? 'bg-[#0A0A0F]/80 text-[#00D4FF] border-[#00D4FF]/40'
+              : 'bg-[#0A0A0F]/80 text-[#E8B429] border-[#E8B429]/40'
+          }`}
+        >
+          {banner.brand_name ? banner.brand_name.toUpperCase() : 'SPONSOR'}
         </div>
       </Link>
     </aside>
