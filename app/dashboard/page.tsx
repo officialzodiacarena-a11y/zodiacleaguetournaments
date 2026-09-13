@@ -5,39 +5,11 @@ import { PerformanceRadar } from '@/components/dashboard/PerformanceRadar';
 import { OracleReportCard } from '@/components/dashboard/OracleReportCard';
 import { ZodiacBuffCard } from '@/components/dashboard/ZodiacBuffCard';
 import { ApQuestCard } from '@/components/dashboard/ApQuestCard';
-import { AthleteProfile, CoreKpiMetrics, RadarPerformanceData } from '@/types/dashboard';
+import { getAthleteDashboardData } from '@/lib/actions/dashboard';
 
-export default function AthleteDashboardPage() {
-  const profile: AthleteProfile = {
-    id: 'usr_01',
-    displayName: 'NOVA_LEO',
-    riotId: 'ren george#333',
-    isVerified: true,
-    divisionTier: 'CELESTIAL',
-    zodiacSign: 'LEO',
-    role: 'DUELIST',
-    teamName: 'ARIES ESPORTS',
-    zpBalance: 1450,
-    apBalance: 850,
-  };
-
-  const kpi: CoreKpiMetrics = {
-    acs: 268,
-    kdRatio: 1.45,
-    winRatePct: 68,
-    kastPct: 74.2,
-    headshotPct: 33.3,
-    adr: 153.8,
-    recentRecord: '14W - 6L',
-  };
-
-  const radar: RadarPerformanceData = {
-    aim: 85,
-    acs: 92,
-    firstKills: 84,
-    clutchPct: 78,
-    utility: 88,
-  };
+export default async function AthleteDashboardPage() {
+  // ⚡ ดึงข้อมูลตรงจาก Supabase RPC
+  const { profile, kpi, radar } = await getAthleteDashboardData();
 
   return (
     <div className="min-h-screen bg-[#080811] text-slate-100 flex flex-col font-sans selection:bg-[#F59E0B] selection:text-black">
@@ -64,7 +36,7 @@ export default function AthleteDashboardPage() {
             <span className="text-slate-300">SERVER: AP-BANGKOK</span>
           </div>
           <div className="w-9 h-9 rounded-full bg-[#15182A] border border-[#F59E0B]/40 flex items-center justify-center text-xs text-[#F59E0B] font-bold">
-            ♌
+            {profile.zodiacSign === 'LEO' ? '♌' : '♈'}
           </div>
         </div>
       </header>
@@ -78,7 +50,7 @@ export default function AthleteDashboardPage() {
         {/* 2. Grid Body (3-Column Layout) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           
-          {/* ==================== LEFT COLUMN (3 Cols) ==================== */}
+          {/* Left Column (3 Cols) */}
           <div className="lg:col-span-3 space-y-5">
             
             {/* Live Match Check-in Card */}
@@ -176,12 +148,11 @@ export default function AthleteDashboardPage() {
 
           </div>
 
-          {/* ==================== CENTER COLUMN (6 Cols) ==================== */}
+          {/* Center Column (6 Cols) */}
           <div className="lg:col-span-6 space-y-5">
-            {/* 5-Axis Radar Chart */}
             <PerformanceRadar data={radar} />
 
-            {/* Recent Match History (Last 3 Matches) */}
+            {/* Recent Match History */}
             <div className="bg-[#0F111E]/88 backdrop-blur-2xl border border-white/[0.08] rounded-[18px] p-5 shadow-xl">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-orbitron font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
@@ -194,7 +165,6 @@ export default function AthleteDashboardPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {/* Match 1: WIN */}
                 <div className="bg-[#0F111E]/90 border border-[#10B981]/40 rounded-xl p-3.5 relative overflow-hidden hover:border-[#10B981] transition-all">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-orbitron font-black text-[#10B981]">MATCH 1: WIN</span>
@@ -207,7 +177,6 @@ export default function AthleteDashboardPage() {
                   </div>
                 </div>
 
-                {/* Match 2: LOSS */}
                 <div className="bg-[#0F111E]/90 border border-[#EF4444]/40 rounded-xl p-3.5 relative overflow-hidden hover:border-[#EF4444] transition-all">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-orbitron font-black text-[#EF4444]">MATCH 2: LOSS</span>
@@ -220,7 +189,6 @@ export default function AthleteDashboardPage() {
                   </div>
                 </div>
 
-                {/* Match 3: WIN */}
                 <div className="bg-[#0F111E]/90 border border-[#10B981]/40 rounded-xl p-3.5 relative overflow-hidden hover:border-[#10B981] transition-all">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-orbitron font-black text-[#10B981]">MATCH 3: WIN</span>
@@ -236,7 +204,7 @@ export default function AthleteDashboardPage() {
             </div>
           </div>
 
-          {/* ==================== RIGHT COLUMN (3 Cols) ==================== */}
+          {/* Right Column (3 Cols) */}
           <div className="lg:col-span-3 space-y-5">
             <OracleReportCard />
             <ZodiacBuffCard />

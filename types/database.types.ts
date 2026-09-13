@@ -4331,6 +4331,12 @@ export type Database = {
       }
     }
     Functions: {
+      get_athlete_telemetry_dashboard: {
+        Args: {
+          p_player_id: string
+        }
+        Returns: Json
+      }
       increment_banner_metric: {
         Args: {
           p_banner_id: string
