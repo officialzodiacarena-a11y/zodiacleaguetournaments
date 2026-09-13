@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { cleanIds } from '@/types/supabase-helpers';
 
 export async function POST(
   request: Request,
@@ -74,7 +75,7 @@ export async function POST(
     .select('team_id, role')
     .eq('player_id', player.id)
     .eq('status', 'ACTIVE')
-    .in('team_id', [match.team_a_id, match.team_b_id])
+    .in('team_id', cleanIds(match.team_a_id, match.team_b_id))
     .in('role', ['CAPTAIN', 'MANAGER']);
 
   if (!memberships || memberships.length === 0) {

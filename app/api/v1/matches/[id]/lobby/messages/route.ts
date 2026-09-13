@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { cleanIds } from '@/types/supabase-helpers';
 
 const CreateMessageSchema = z.object({
   message: z.string().min(1, { message: 'ข้อความห้ามว่าง' }).max(500, { message: 'ข้อความยาวเกินกำหนด 500 ตัวอักษร' }),
@@ -80,11 +81,11 @@ export async function POST(
       .select('team_id')
       .eq('player_id', player.id)
       .eq('status', 'ACTIVE')
-      .in('team_id', [match.team_a_id, match.team_b_id]);
+      .in('team_id', cleanIds(match.team_a_id, match.team_b_id));
 
     const teamIds = new Set((memberships || []).map((m) => m.team_id));
-    if (teamIds.has(match.team_a_id)) senderRole = 'TEAM_A';
-    else if (teamIds.has(match.team_b_id)) senderRole = 'TEAM_B';
+    if (teamIds.has(match.team_a_id ?? '')) senderRole = 'TEAM_A';
+    else if (teamIds.has(match.team_b_id ?? '')) senderRole = 'TEAM_B';
   }
 
   if (!senderRole) {

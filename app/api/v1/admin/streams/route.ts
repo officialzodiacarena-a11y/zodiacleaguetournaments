@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { CreateStreamSchema } from '@/types/watch-to-earn';
+import { asInsert } from '@/types/supabase-helpers';
 
 export async function POST(req: Request) {
   try {
@@ -68,17 +69,17 @@ export async function POST(req: Request) {
 
     const { data: stream, error: insertError } = await adminSupabase
       .from('streams')
-      .insert({
+      .insert(asInsert<'streams'>({
         title,
         match_id: matchId ?? null,
         tournament_id: tournamentId ?? null,
         type,
-        stream_url: streamUrl ?? null,
+        stream_url: streamUrl ?? '',
         is_earn_eligible: isEarnEligible,
         earning_rule_id: earningRuleId ?? null,
         ap_budget_total: apBudgetTotal ?? null,
         status: 'SCHEDULED',
-      })
+      }))
       .select()
       .single();
 

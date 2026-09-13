@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { cleanIds } from '@/types/supabase-helpers';
 
 const TeamResultReportSchema = z.object({
   winnerTeamId: z.string().uuid({ message: 'winnerTeamId ต้องเป็น UUID ที่ถูกต้อง' }),
@@ -86,7 +87,7 @@ export async function POST(
       .select('team_id, role')
       .eq('player_id', player.id)
       .eq('status', 'ACTIVE')
-      .in('team_id', [match.team_a_id, match.team_b_id])
+      .in('team_id', cleanIds(match.team_a_id, match.team_b_id))
       .in('role', ['CAPTAIN', 'MANAGER', 'OWNER']);
 
     if (memberError || !member || member.length === 0) {

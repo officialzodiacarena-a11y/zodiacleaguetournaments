@@ -278,7 +278,7 @@ export async function POST(
     // Sprint 5.2 — same data-freshness hook as the normal result route; a
     // dispute-resolved match also completes and must refresh Pro Analytics.
     try {
-      await adminSupabase.rpc('refresh_team_analytics', {});
+      await adminSupabase.rpc('refresh_team_analytics');
       revalidateTag('team-analytics', 'seconds');
     } catch {
       // swallow — analytics freshness is not allowed to block dispute resolution

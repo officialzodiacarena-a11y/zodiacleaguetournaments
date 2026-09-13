@@ -56,6 +56,9 @@ export async function POST(req: Request) {
     }
 
     if (sub.subscriber_type === 'TEAM') {
+      if (!sub.team_id) {
+        return NextResponse.json({ error: { code: 'FORBIDDEN', message: 'ต้องเป็นหัวหน้าทีมของ subscription นี้เท่านั้น' } }, { status: 403 });
+      }
       const { data: isLeader } = await supabase.rpc('is_team_leader', { p_team_id: sub.team_id });
       if (!isLeader) {
         return NextResponse.json({ error: { code: 'FORBIDDEN', message: 'ต้องเป็นหัวหน้าทีมของ subscription นี้เท่านั้น' } }, { status: 403 });

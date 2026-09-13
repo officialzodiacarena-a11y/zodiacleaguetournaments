@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdminRole, MARKETPLACE_ADMIN_ROLES } from '@/lib/admin/requireAdminRole';
 import { UpdateStoreItemSchema } from '@/types/store';
+import { asUpdate } from '@/types/supabase-helpers';
 
 export async function PATCH(
   req: Request,
@@ -43,7 +44,7 @@ export async function PATCH(
     const adminSupabase = createAdminClient();
     const { data: item, error: updateError } = await adminSupabase
       .from('store_items')
-      .update(updatePayload)
+      .update(asUpdate<'store_items'>(updatePayload))
       .eq('id', itemId)
       .select()
       .single();

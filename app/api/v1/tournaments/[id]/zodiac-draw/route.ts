@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ZODIAC_SIGNS, ZodiacDrawRequestSchema, type ZodiacDrawEntry, type ZodiacDrawResult } from '@/types/finals';
+import { toJson } from '@/types/supabase-helpers';
 
 const DEFAULT_SALT = 'ZODIAC_ARENA_SALT_2026';
 
@@ -12,27 +13,35 @@ interface QualifiedRow {
   teams: { name: string } | null;
 }
 
+interface TournamentRecord {
+  id: string;
+  name?: string;
+  format_config?: Record<string, unknown> | null;
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const { id: tournamentId } = await params;
+    const resolvedParams = await params;
+    const tournamentId = resolvedParams.id;
     const supabase = await createClient();
 
-    const { data: tournament, error: tourError } = await supabase
-      .from('tournaments')
-      .select('id, name, format_config')
-      .eq('id', tournamentId)
+    const { data, error: tourError } = await supabase
+      .from('tournaments' as never)
+      .select('*')
+      .eq('id' as never, tournamentId)
       .single();
 
-    if (tourError || !tournament) {
+    if (tourError || !data) {
       return NextResponse.json(
         { error: { code: 'TOURNAMENT_NOT_FOUND', message: 'ไม่พบข้อมูลทัวร์นาเมนต์นี้บนระบบ' } },
         { status: 404 }
       );
     }
 
+    const tournament = data as unknown as TournamentRecord;
     const formatConfig = (tournament.format_config ?? {}) as { zodiac_draw?: ZodiacDrawResult };
     const draw = formatConfig.zodiac_draw ?? null;
 
@@ -52,7 +61,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const { id: tournamentId } = await params;
+    const resolvedParams = await params;
+    const tournamentId = resolvedParams.id;
     const supabase = await createClient();
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -112,19 +122,20 @@ export async function POST(
 
     const adminSupabase = createAdminClient();
 
-    const { data: tournament, error: tourError } = await adminSupabase
-      .from('tournaments')
-      .select('id, format_config')
-      .eq('id', tournamentId)
+    const { data, error: tourError } = await adminSupabase
+      .from('tournaments' as never)
+      .select('*')
+      .eq('id' as never, tournamentId)
       .single();
 
-    if (tourError || !tournament) {
+    if (tourError || !data) {
       return NextResponse.json(
         { error: { code: 'TOURNAMENT_NOT_FOUND', message: 'ไม่พบข้อมูลทัวร์นาเมนต์นี้บนระบบ' } },
         { status: 404 }
       );
     }
 
+    const tournament = data as unknown as TournamentRecord;
     const existingConfig = (tournament.format_config ?? {}) as { zodiac_draw?: ZodiacDrawResult };
     if (existingConfig.zodiac_draw) {
       return NextResponse.json(
@@ -135,10 +146,10 @@ export async function POST(
 
     // ดึง 12 ทีมที่ล็อก finals_seed ไว้แล้วจาก /admin/finals/circuit-lock
     const { data: qualifiedRows, error: teamsError } = await adminSupabase
-      .from('circuit_standings')
+      .from('circuit_standings' as never)
       .select('team_id, finals_seed, teams!team_id(name)')
-      .eq('is_finals_qualified', true)
-      .order('finals_seed', { ascending: true });
+      .eq('is_finals_qualified' as never, true)
+      .order('finals_seed' as never, { ascending: true });
 
     if (teamsError) {
       return NextResponse.json({ error: { code: 'QUERY_FAILED', message: teamsError.message } }, { status: 500 });
@@ -176,23 +187,30 @@ export async function POST(
       results,
     };
 
+    const updatePayload = {
+      format_config: {
+        ...existingConfig,
+        zodiac_draw: drawResult,
+      },
+    };
+
     const { error: updateError } = await adminSupabase
-      .from('tournaments')
-      .update({ format_config: { ...existingConfig, zodiac_draw: drawResult } })
-      .eq('id', tournamentId);
+      .from('tournaments' as never)
+      .update(updatePayload as never)
+      .eq('id' as never, tournamentId);
 
     if (updateError) {
       return NextResponse.json({ error: { code: 'DATABASE_UPDATE_FAILED', message: updateError.message } }, { status: 500 });
     }
 
-    await adminSupabase.from('audit_logs').insert({
+    await adminSupabase.from('audit_logs' as never).insert({
       actor_id: admin.id,
       action: 'CREATE',
       entity_type: 'tournaments',
       entity_id: tournamentId,
       reason: 'ZODIAC_DRAW_PUBLISHED',
-      after_data: drawResult,
-    });
+      after_data: toJson(drawResult),
+    } as never);
 
     return NextResponse.json({
       success: true,

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { checkRateLimit } from '@/lib/rateLimit';
 import type { CheckoutOrderResult } from '@/types/store';
+import { asRpcResult } from '@/types/supabase-helpers';
 
 const CHECKOUT_RATE_LIMIT = 3;
 const CHECKOUT_RATE_WINDOW_SECONDS = 60;
@@ -69,7 +70,7 @@ export async function POST(
       return NextResponse.json({ error: { code: 'CHECKOUT_FAILED', message: msg } }, { status: 500 });
     }
 
-    const result = rpcResult as CheckoutOrderResult;
+    const result = asRpcResult<CheckoutOrderResult>(rpcResult);
 
     return NextResponse.json({
       success: true,

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { CreateListingSchema, LISTING_CURRENCIES } from '@/types/marketplace';
+import { CreateListingSchema, LISTING_CURRENCIES, type ListingCurrency } from '@/types/marketplace';
 
 // Zero-Leak: this GET handler's SELECT explicitly lists columns and never
 // includes floor_price — do not change this to select('*').
@@ -24,7 +24,9 @@ export async function GET(req: Request) {
       .range(from, to);
 
     if (vendorId) query = query.eq('vendor_id', vendorId);
-    if (currencyType && LISTING_CURRENCIES.includes(currencyType as never)) query = query.eq('currency_type', currencyType);
+    if (currencyType && LISTING_CURRENCIES.includes(currencyType as ListingCurrency)) {
+      query = query.eq('currency_type', currencyType as ListingCurrency);
+    }
 
     const { data, error, count } = await query;
 
@@ -96,7 +98,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code: 'INVALID_VENDOR', message: 'vendor_id ไม่ใช่ของตัวเอง' } }, { status: 403 });
     }
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('create_marketplace_listing', {
+    const rpcPayload = {
       p_vendor_id: vendor_id,
       p_item_title: item_title,
       p_description: description ?? null,
@@ -106,13 +108,18 @@ export async function POST(req: Request) {
       p_buyout_price: buyout_price ?? null,
       p_is_paid_slot: is_paid_slot ?? false,
       p_auction_ends_at: auction_ends_at ?? null,
-    });
+    };
+
+    const { data: rpcResult, error: rpcError } = await supabase.rpc(
+      'create_marketplace_listing' as never,
+      rpcPayload as never
+    );
 
     if (rpcError) {
       return NextResponse.json({ error: { code: 'RPC_FAILED', message: rpcError.message } }, { status: 500 });
     }
 
-    const result = rpcResult as {
+    const result = rpcResult as unknown as {
       success: boolean;
       error?: string;
       listing_id?: string;

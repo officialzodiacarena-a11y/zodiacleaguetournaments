@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { CreateOrderSchema } from '@/types/store';
+import { toJson } from '@/types/supabase-helpers';
 
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
-    const idempotencyKey = req.headers.get('idempotency-key') || req.headers.get('Idempotency-Key') || null;
+    const idempotencyKey = req.headers.get('idempotency-key') || req.headers.get('Idempotency-Key') || undefined;
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -35,11 +36,14 @@ export async function POST(req: Request) {
 
     const { shippingAddressId, items } = parseResult.data;
 
-    const { data: orderId, error: rpcError } = await supabase.rpc('create_store_order', {
-      p_items_json: items,
-      p_address_id: shippingAddressId ?? null,
-      p_idempotency_key: idempotencyKey,
-    });
+    const { data: orderId, error: rpcError } = await supabase.rpc(
+      'create_store_order' as never,
+      {
+        p_items_json: toJson(items),
+        p_address_id: shippingAddressId ?? undefined,
+        p_idempotency_key: idempotencyKey,
+      } as never
+    );
 
     if (rpcError) {
       const msg = rpcError.message;

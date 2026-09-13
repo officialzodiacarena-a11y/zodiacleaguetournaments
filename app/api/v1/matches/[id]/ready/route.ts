@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { asUpdate, cleanIds } from '@/types/supabase-helpers';
+import type { Database } from '@/types/database.types';
 
 interface MatchReadyUpdatePayload {
   updated_at: string;
   team_a_ready_at?: string;
   team_b_ready_at?: string;
-  status?: 'SCHEDULED' | 'READY_CHECK' | 'VETO' | 'LIVE';
+  status?: Database['public']['Enums']['match_status_type'];
   started_at?: string;
   forfeit_deadline_at?: string;
 }
@@ -63,7 +65,7 @@ export async function POST(
     .select('team_id, role')
     .eq('player_id', player.id)
     .eq('status', 'ACTIVE')
-    .in('team_id', [match.team_a_id, match.team_b_id])
+    .in('team_id', cleanIds(match.team_a_id, match.team_b_id))
     .in('role', ['CAPTAIN', 'MANAGER', 'OWNER']);
 
   if (!memberships || memberships.length === 0) {
@@ -90,7 +92,7 @@ export async function POST(
   const teamAReady = isTeamA ? true : Boolean(match.team_a_ready_at);
   const teamBReady = !isTeamA ? true : Boolean(match.team_b_ready_at);
 
-  let nextStatus = match.status;
+  let nextStatus: Database['public']['Enums']['match_status_type'] = match.status;
 
   // 5. State Machine Transition Logic
   if (teamAReady && teamBReady) {
@@ -114,7 +116,7 @@ export async function POST(
   const adminSupabase = await createAdminClient();
   const { data: updatedMatch, error: updateErr } = await adminSupabase
     .from('matches')
-    .update(updatePayload)
+    .update(asUpdate<'matches'>(updatePayload))
     .eq('id', matchId)
     .select()
     .single();

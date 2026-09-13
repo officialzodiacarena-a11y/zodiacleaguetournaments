@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { asInsert } from '@/types/supabase-helpers';
 
 interface ParticipantItem {
   player_id: string;
@@ -50,6 +51,7 @@ export async function POST(
   }
 
   const payload = participants.map((p) => ({
+    match_id: matchId,
     match_game_id: game.id,
     player_id: p.player_id,
     team_id: p.team_id,
@@ -68,7 +70,7 @@ export async function POST(
   const adminSupabase = await createAdminClient();
   const { data, error } = await adminSupabase
     .from('match_participants')
-    .upsert(payload, { onConflict: 'match_game_id,player_id' })
+    .upsert(asInsert<'match_participants'>(payload), { onConflict: 'match_game_id,player_id' })
     .select();
 
   if (error) {

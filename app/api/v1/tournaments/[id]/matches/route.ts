@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { Constants, type Database } from '@/types/database.types';
+
+type MatchStatus = Database['public']['Enums']['match_status_type'];
+const MATCH_STATUSES = Constants.public.Enums.match_status_type as readonly MatchStatus[];
 
 export async function GET(
   request: Request,
@@ -28,7 +32,9 @@ export async function GET(
     .eq('tournament_id', tournamentId);
 
   if (stageId) query = query.eq('stage_id', stageId);
-  if (status) query = query.eq('status', status);
+  if (status && MATCH_STATUSES.includes(status as MatchStatus)) {
+    query = query.eq('status', status as MatchStatus);
+  }
   if (teamId) {
     query = query.or(`team_a_id.eq.${teamId},team_b_id.eq.${teamId}`);
   }

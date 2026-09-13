@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { VERIFICATION_STATUS_VALUES } from '@/types/verification';
+import { VERIFICATION_STATUS_VALUES, type VerificationStatus } from '@/types/verification';
 
 async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -52,8 +52,9 @@ export async function GET(req: Request) {
     const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
     const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit') ?? '20') || 20));
     const statusParam = (searchParams.get('status') ?? 'PENDING').toUpperCase();
+    const verificationStatus = statusParam as VerificationStatus;
 
-    if (!VERIFICATION_STATUS_VALUES.includes(statusParam as typeof VERIFICATION_STATUS_VALUES[number])) {
+    if (!VERIFICATION_STATUS_VALUES.includes(verificationStatus)) {
       return NextResponse.json(
         { error: { code: 'INVALID_STATUS', message: `status ต้องเป็นหนึ่งใน ${VERIFICATION_STATUS_VALUES.join(', ')}` } },
         { status: 400 }
@@ -66,7 +67,7 @@ export async function GET(req: Request) {
     const { data, error, count } = await supabase
       .from('game_accounts')
       .select('id, player_id, game_name, tag_line, region, evidence_url, rejection_reason, verification_status, created_at, players!inner(athlete_id, display_name)', { count: 'exact' })
-      .eq('verification_status', statusParam)
+      .eq('verification_status', verificationStatus)
       .is('deleted_at', null)
       .order('created_at', { ascending: true })
       .range(from, to);

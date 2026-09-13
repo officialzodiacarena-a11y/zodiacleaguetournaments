@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { UpdateStreamSchema } from '@/types/watch-to-earn';
+import { asUpdate } from '@/types/supabase-helpers';
 
 export async function PATCH(
   req: Request,
@@ -76,7 +77,7 @@ export async function PATCH(
 
     const { data: stream, error: updateError } = await adminSupabase
       .from('streams')
-      .update(updatePayload)
+      .update(asUpdate<'streams'>(updatePayload))
       .eq('id', streamId)
       .select()
       .single();

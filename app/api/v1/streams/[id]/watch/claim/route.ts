@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { ClaimWatchRewardResult } from '@/types/watch-to-earn';
+import { asRpcResult } from '@/types/supabase-helpers';
 
 export async function POST(
   req: Request,
@@ -72,7 +73,7 @@ export async function POST(
       );
     }
 
-    const result = rpcResult as ClaimWatchRewardResult;
+    const result = asRpcResult<ClaimWatchRewardResult>(rpcResult);
 
     if (!result.success) {
       if (result.error === 'ALREADY_CLAIMED') {

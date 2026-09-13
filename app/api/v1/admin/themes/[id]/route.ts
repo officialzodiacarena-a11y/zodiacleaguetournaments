@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { UpdateThemeSchema } from '@/types/themes';
+import { asUpdate } from '@/types/supabase-helpers';
 
 export async function PATCH(
   req: Request,
@@ -80,7 +81,7 @@ export async function PATCH(
     const adminSupabase = createAdminClient();
     const { data: theme, error: updateError } = await adminSupabase
       .from('brand_themes')
-      .update(updatePayload)
+      .update(asUpdate<'brand_themes'>(updatePayload))
       .eq('id', themeId)
       .select()
       .single();

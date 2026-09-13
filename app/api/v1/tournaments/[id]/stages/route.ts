@@ -6,6 +6,8 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import type { Database } from '@/types/database.types';
+import { asInsert, toJson } from '@/types/supabase-helpers';
 
 interface BracketSummary {
   total_nodes: number;
@@ -74,7 +76,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   return NextResponse.json({ data }, { status: 200 });
 }
 
-const VALID_FORMATS = [
+type StageFormat = Database['public']['Enums']['stage_format_type'];
+
+const VALID_FORMATS: StageFormat[] = [
   'SINGLE_ELIMINATION',
   'DOUBLE_ELIMINATION',
   'SWISS',
@@ -127,7 +131,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       { status: 400 }
     );
   }
-  if (typeof format !== 'string' || !VALID_FORMATS.includes(format)) {
+  if (typeof format !== 'string' || !VALID_FORMATS.includes(format as StageFormat)) {
     return NextResponse.json(
       { error: { code: 'VALIDATION_ERROR', message: `format must be one of: ${VALID_FORMATS.join(', ')}` } },
       { status: 400 }
@@ -179,19 +183,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const { data: stage, error } = await supabase
     .from('tournament_stages')
-    .insert({
+    .insert(asInsert<'tournament_stages'>({
       tournament_id: tournamentId,
       name,
       stage_order,
-      format,
+      format: format as StageFormat,
       teams_in: teams_in ?? null,
       teams_advancing: teams_advancing ?? null,
-      format_config: format_config ?? {},
-      best_of_config: best_of_config ?? { default: 1 },
-      map_pool: map_pool ?? null,
-      veto_format: veto_format ?? {},
-      start_at: start_at ?? null,
-    })
+      format_config: toJson(format_config ?? {}),
+      best_of_config: toJson(best_of_config ?? { default: 1 }),
+      map_pool: Array.isArray(map_pool) && map_pool.every((item) => typeof item === 'string')
+        ? map_pool
+        : null,
+      veto_format: toJson(veto_format ?? {}),
+      start_at: typeof start_at === 'string' ? start_at : null,
+    }))
     .select('*')
     .single();
 

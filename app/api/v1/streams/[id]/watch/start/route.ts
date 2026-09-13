@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { EarningRuleRow, WatchSessionRow } from '@/types/watch-to-earn';
+import { asRpcResult } from '@/types/supabase-helpers';
 
 const DEFAULT_DAILY_CAP_AP = 100;
 
@@ -108,7 +109,7 @@ export async function POST(
       .eq('id', stream.earning_rule_id)
       .single();
 
-    if (ruleError || !earningRule || !(earningRule as EarningRuleRow).is_active) {
+    if (ruleError || !earningRule || !asRpcResult<EarningRuleRow>(earningRule).is_active) {
       return NextResponse.json(
         { error: { code: 'EARNING_RULE_INACTIVE', message: 'กติกาการให้ AP ของสตรีมนี้ไม่พร้อมใช้งาน' } },
         { status: 422 }
@@ -137,7 +138,7 @@ export async function POST(
     }
 
     // 4. ตรวจ daily cap
-    const rule = earningRule as EarningRuleRow;
+    const rule = asRpcResult<EarningRuleRow>(earningRule);
     const todayBkk = bangkokDateString(new Date());
     const dailyCap = rule.daily_cap_ap ?? DEFAULT_DAILY_CAP_AP;
 

@@ -79,6 +79,12 @@ export async function POST(req: Request) {
     let finalAmountThb = amountThb;
 
     if (purpose === 'ORDER') {
+      if (!orderId) {
+        return NextResponse.json(
+          { error: { code: 'ORDER_NOT_FOUND', message: 'ไม่พบคำสั่งซื้อนี้' } },
+          { status: 404 }
+        );
+      }
       const { data: order, error: orderError } = await adminSupabase
         .from('orders')
         .select('id, player_id, status, total_price_thb')

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { asUpdate } from '@/types/supabase-helpers';
 
 // อนุญาตเฉพาะสถานะที่กรรมการ/แอดมินสั่งเปลี่ยนมือได้เอง (READY_CHECK/VETO/WALKOVER
 // ล้วนเป็นผลลัพธ์อัตโนมัติของ engine อื่น ไม่ใช่คำสั่ง manual จากพอร์ตนี้)
@@ -100,7 +101,7 @@ export async function PATCH(
     const adminSupabase = createAdminClient();
     const { data: updatedMatch, error: updateError } = await adminSupabase
       .from('matches')
-      .update(updatePayload)
+      .update(asUpdate<'matches'>(updatePayload))
       .eq('id', matchId)
       .select()
       .single();

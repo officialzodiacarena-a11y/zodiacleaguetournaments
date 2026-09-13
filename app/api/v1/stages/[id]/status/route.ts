@@ -8,8 +8,9 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import type { Database } from '@/types/database.types';
 
-type StageStatus = 'PENDING' | 'SEEDING' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+type StageStatus = Database['public']['Enums']['stage_status_type'];
 
 const ALLOWED_TRANSITIONS: Record<StageStatus, StageStatus[]> = {
   PENDING: ['SEEDING', 'CANCELLED'],
@@ -50,6 +51,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       { status: 400 }
     );
   }
+  const requestedStatus = nextStatus as StageStatus;
 
   const { data: stage } = await supabase
     .from('tournament_stages')
@@ -66,13 +68,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const currentStatus = stage.status as StageStatus;
   const allowed = ALLOWED_TRANSITIONS[currentStatus] ?? [];
-  if (!allowed.includes(nextStatus as StageStatus)) {
+  if (!allowed.includes(requestedStatus)) {
     return NextResponse.json(
       {
         error: {
           code: 'INVALID_STATUS_TRANSITION',
-          message: `ไปจาก ${currentStatus} เป็น ${nextStatus} ไม่ได้`,
-          details: { current_status: currentStatus, requested_status: nextStatus, allowed_next: allowed },
+          message: `ไปจาก ${currentStatus} เป็น ${requestedStatus} ไม่ได้`,
+          details: { current_status: currentStatus, requested_status: requestedStatus, allowed_next: allowed },
         },
       },
       { status: 422 }
@@ -81,7 +83,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const { data: updated, error } = await supabase
     .from('tournament_stages')
-    .update({ status: nextStatus })
+    .update({ status: requestedStatus })
     .eq('id', stageId)
     .select('id, status, updated_at')
     .single();

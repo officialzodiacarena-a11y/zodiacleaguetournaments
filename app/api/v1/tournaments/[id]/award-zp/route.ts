@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { AwardZpPayloadSchema, type AwardZpRpcResult } from '@/types/zp-engine';
+import { asRpcResult } from '@/types/supabase-helpers';
 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const { id: tournamentId } = await params;
+    const resolvedParams = await params;
+    const tournamentId = resolvedParams.id;
     const supabase = await createClient();
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -72,7 +74,7 @@ export async function POST(
 
     const { teamId, amount, reason, placement, idempotencyKey } = parseResult.data;
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('award_zp', {
+    const rpcPayload = {
       p_team_id: teamId,
       p_tournament_id: tournamentId,
       p_amount: amount,
@@ -80,7 +82,12 @@ export async function POST(
       p_placement: placement ?? null,
       p_idempotency_key: idempotencyKey,
       p_awarded_by: player.id,
-    });
+    };
+
+    const { data: rpcResult, error: rpcError } = await supabase.rpc(
+      'award_zp' as never,
+      rpcPayload as never
+    );
 
     if (rpcError) {
       return NextResponse.json(
@@ -89,7 +96,7 @@ export async function POST(
       );
     }
 
-    const result = rpcResult as AwardZpRpcResult;
+    const result = asRpcResult<AwardZpRpcResult>(rpcResult);
 
     if (!result.success) {
       if (result.error === 'DUPLICATE_KEY') {

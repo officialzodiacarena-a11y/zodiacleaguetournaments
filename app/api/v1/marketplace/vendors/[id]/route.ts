@@ -24,7 +24,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       const { data: player } = await supabase.from('players').select('id').eq('user_id', user.id).maybeSingle();
       if (player?.id === vendor.player_id) isOwnerOrAdmin = true;
       if (!isOwnerOrAdmin) {
-        const { data: isAdmin } = await supabase.rpc('is_admin', {});
+        const { data: isAdmin } = await supabase.rpc('is_admin');
         isOwnerOrAdmin = Boolean(isAdmin);
       }
     }
