@@ -22,16 +22,19 @@ export default async function MarketplaceAdminDashboardPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-[#F9EDD8]">Marketplace Admin</h1>
-          <p className="text-sm text-[#94A3B8]">{role} · จัดการ Catalog / หมวดหมู่ / การจัดส่งเท่านั้น</p>
+          <p className="text-sm text-[#94A3B8]">{role} · จัดการ Catalog / หมวดหมู่ / การจัดส่ง / แบนเนอร์</p>
         </div>
         <nav className="flex gap-2 text-xs font-bold">
-          <Link href="/admin/marketplace/catalog" className="rounded-lg bg-[#1A1C2E] px-3 py-2 text-[#F9EDD8] hover:bg-[#252842]">
+          <Link href="/admin/marketplace/banners" className="rounded-lg bg-[#E8B429]/15 border border-[#E8B429]/30 px-3 py-2 text-[#E8B429] hover:bg-[#E8B429]/30 transition-colors">
+            Banners
+          </Link>
+          <Link href="/admin/marketplace/catalog" className="rounded-lg bg-[#1A1C2E] px-3 py-2 text-[#F9EDD8] hover:bg-[#252842] transition-colors">
             Catalog
           </Link>
-          <Link href="/admin/marketplace/categories" className="rounded-lg bg-[#1A1C2E] px-3 py-2 text-[#F9EDD8] hover:bg-[#252842]">
+          <Link href="/admin/marketplace/categories" className="rounded-lg bg-[#1A1C2E] px-3 py-2 text-[#F9EDD8] hover:bg-[#252842] transition-colors">
             Categories
           </Link>
-          <Link href="/admin/marketplace/shipments" className="rounded-lg bg-[#1A1C2E] px-3 py-2 text-[#F9EDD8] hover:bg-[#252842]">
+          <Link href="/admin/marketplace/shipments" className="rounded-lg bg-[#1A1C2E] px-3 py-2 text-[#F9EDD8] hover:bg-[#252842] transition-colors">
             Shipments
           </Link>
         </nav>
