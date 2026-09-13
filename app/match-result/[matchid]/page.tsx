@@ -1,5 +1,18 @@
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
+import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
+
+// ด้านใน return:
+<main className="min-h-screen bg-[#0D0E1A] relative">
+  <SkyscraperTower position="LEFT_TOWER" />
+  <SkyscraperTower position="RIGHT_TOWER" />
+
+  <div className="max-w-7xl mx-auto p-6">
+    <SponsorSlot className="mb-6" />
+    {/* เนื้อหา Match Result & VLR Stats */}
+  </div>
+</main>
 
 interface PageProps {
   params: Promise<{ matchid: string }>;

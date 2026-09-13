@@ -3,6 +3,19 @@ import { notFound } from 'next/navigation';
 import type { TournamentBracketPageData, BracketMatchNode, BracketTeamParticipant } from '@/types/bracket';
 import { TournamentBracketView } from '@/components/tournament-bracket-view';
 import { createClient } from '@/lib/supabase/server';
+import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
+import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
+
+// ด้านใน return:
+<main className="min-h-screen bg-[#0D0E1A] relative">
+  <SkyscraperTower position="LEFT_TOWER" />
+  <SkyscraperTower position="RIGHT_TOWER" />
+
+  <div className="max-w-7xl mx-auto p-6">
+    <SponsorSlot className="mb-6" />
+    {/* เนื้อหา Tournament Bracket View */}
+  </div>
+</main>
 
 interface PageProps {
   params: Promise<{ tournamentId: string }>;

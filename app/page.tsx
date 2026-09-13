@@ -17,6 +17,19 @@ import {
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
+import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
+import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
+
+// ด้านใน return ของ component:
+<main className="min-h-screen bg-[#0D0E1A] text-[#F9EDD8] relative">
+  <SkyscraperTower position="LEFT_TOWER" />
+  <SkyscraperTower position="RIGHT_TOWER" />
+
+  <div className="max-w-7xl mx-auto px-4 py-6">
+    <SponsorSlot className="mb-8" />
+    {/* เนื้อหาหน้า Landing เดิม */}
+  </div>
+</main>
 
 interface LiveMatchRow {
   id: string;

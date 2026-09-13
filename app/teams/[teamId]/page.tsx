@@ -4,6 +4,13 @@ import { notFound } from 'next/navigation';
 import type { TeamProfileData, PlayerSlot, TeamRoleType } from '@/types/team';
 import { lockRosterAction } from '@/actions/team';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
+
+// ด้านใน return:
+<div className="max-w-7xl mx-auto p-6">
+  <SponsorSlot className="mb-6" />
+  {/* ข้อมูลทีม และ Roster List */}
+</div>
 
 interface PageProps {
   params: Promise<{ teamId: string }>;

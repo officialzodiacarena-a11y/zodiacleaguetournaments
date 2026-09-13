@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      sponsor_banners: {
+        Row: {
+          brand_name: string | null
+          click_count: number
+          created_at: string
+          ends_at: string | null
+          id: string
+          image_url: string
+          impression_count: number
+          is_active: boolean
+          priority: number
+          slot_position: 'TOP_LEADERBOARD' | 'LEFT_TOWER' | 'RIGHT_TOWER'
+          starts_at: string
+          target_url: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          brand_name?: string | null
+          click_count?: number
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          image_url: string
+          impression_count?: number
+          is_active?: boolean
+          priority?: number
+          slot_position: 'TOP_LEADERBOARD' | 'LEFT_TOWER' | 'RIGHT_TOWER'
+          starts_at?: string
+          target_url: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          brand_name?: string | null
+          click_count?: number
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          image_url?: string
+          impression_count?: number
+          is_active?: boolean
+          priority?: number
+          slot_position?: 'TOP_LEADERBOARD' | 'LEFT_TOWER' | 'RIGHT_TOWER'
+          starts_at?: string
+          target_url?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       abuse_flags: {
         Row: {
           clawback_amount: number | null
@@ -4280,6 +4331,13 @@ export type Database = {
       }
     }
     Functions: {
+      increment_banner_metric: {
+        Args: {
+          p_banner_id: string
+          p_metric_type: string
+        }
+        Returns: undefined
+      }
       admin_revert_prediction_pool: {
         Args: { p_admin_id: string; p_pool_id: string }
         Returns: Json
