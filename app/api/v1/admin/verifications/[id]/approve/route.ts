@@ -93,6 +93,15 @@ export async function PATCH(
       .update({ unverified_data: false, updated_at: nowIso })
       .eq('id', gameAccount.player_id);
 
+    // Daily Quest & Affiliate V6.02: KYC ผ่านแล้ว = จุดที่ referrer (ถ้ามี) จะได้รับ
+    // +50 AP Tier 1 KYC Bonus — เรียกผ่าน service_role RPC ไม่ block การอนุมัติหลักถ้าพลาด
+    const { error: kycBonusError } = await adminSupabase.rpc('process_affiliate_kyc_bonus', {
+      p_referee_id: gameAccount.player_id,
+    });
+    if (kycBonusError) {
+      console.error('[Verification Approve] process_affiliate_kyc_bonus failed:', kycBonusError.message);
+    }
+
     await adminSupabase.from('audit_logs').insert({
       actor_id: admin.id,
       action: 'APPROVE',

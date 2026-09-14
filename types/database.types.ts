@@ -157,6 +157,243 @@ export type Database = {
           },
         ]
       }
+      daily_quests: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          is_active: boolean
+          quest_type: Database["public"]["Enums"]["quest_type_enum"]
+          reward_ap: number
+          target_count: number
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id: string
+          is_active?: boolean
+          quest_type: Database["public"]["Enums"]["quest_type_enum"]
+          reward_ap: number
+          target_count?: number
+          title: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_active?: boolean
+          quest_type?: Database["public"]["Enums"]["quest_type_enum"]
+          reward_ap?: number
+          target_count?: number
+          title?: string
+        }
+        Relationships: []
+      }
+      player_daily_quests: {
+        Row: {
+          claimed_at: string | null
+          created_at: string
+          current_count: number
+          id: string
+          is_claimed: boolean
+          is_completed: boolean
+          player_id: string
+          quest_date: string
+          quest_id: string
+          updated_at: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          created_at?: string
+          current_count?: number
+          id?: string
+          is_claimed?: boolean
+          is_completed?: boolean
+          player_id: string
+          quest_date?: string
+          quest_id: string
+          updated_at?: string
+        }
+        Update: {
+          claimed_at?: string | null
+          created_at?: string
+          current_count?: number
+          id?: string
+          is_claimed?: boolean
+          is_completed?: boolean
+          player_id?: string
+          quest_date?: string
+          quest_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_daily_quests_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_daily_quests_quest_id_fkey"
+            columns: ["quest_id"]
+            isOneToOne: false
+            referencedRelation: "daily_quests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliate_codes: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          player_id: string
+          total_ap_earned: number
+          total_referrals: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          player_id: string
+          total_ap_earned?: number
+          total_referrals?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          player_id?: string
+          total_ap_earned?: number
+          total_referrals?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_codes_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: true
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliate_referrals: {
+        Row: {
+          affiliate_code: string
+          created_at: string
+          device_id_hash: string | null
+          flag_reason: string | null
+          id: string
+          ip_address_hash: string | null
+          kyc_reward_claimed: boolean
+          referee_id: string
+          referrer_id: string
+          status: Database["public"]["Enums"]["affiliate_status_enum"]
+          updated_at: string
+        }
+        Insert: {
+          affiliate_code: string
+          created_at?: string
+          device_id_hash?: string | null
+          flag_reason?: string | null
+          id?: string
+          ip_address_hash?: string | null
+          kyc_reward_claimed?: boolean
+          referee_id: string
+          referrer_id: string
+          status?: Database["public"]["Enums"]["affiliate_status_enum"]
+          updated_at?: string
+        }
+        Update: {
+          affiliate_code?: string
+          created_at?: string
+          device_id_hash?: string | null
+          flag_reason?: string | null
+          id?: string
+          ip_address_hash?: string | null
+          kyc_reward_claimed?: boolean
+          referee_id?: string
+          referrer_id?: string
+          status?: Database["public"]["Enums"]["affiliate_status_enum"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_referrals_affiliate_code_fkey"
+            columns: ["affiliate_code"]
+            isOneToOne: false
+            referencedRelation: "affiliate_codes"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "affiliate_referrals_referee_id_fkey"
+            columns: ["referee_id"]
+            isOneToOne: true
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_referrals_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliate_rewards_ledger: {
+        Row: {
+          amount_ap: number
+          created_at: string
+          id: string
+          idempotency_key: string
+          reference_tx_id: string | null
+          referee_id: string
+          referrer_id: string
+          reward_type: Database["public"]["Enums"]["affiliate_reward_type_enum"]
+          tier_level: number
+        }
+        Insert: {
+          amount_ap: number
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          reference_tx_id?: string | null
+          referee_id: string
+          referrer_id: string
+          reward_type: Database["public"]["Enums"]["affiliate_reward_type_enum"]
+          tier_level: number
+        }
+        Update: {
+          amount_ap?: number
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          reference_tx_id?: string | null
+          referee_id?: string
+          referrer_id?: string
+          reward_type?: Database["public"]["Enums"]["affiliate_reward_type_enum"]
+          tier_level?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_rewards_ledger_referee_id_fkey"
+            columns: ["referee_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_rewards_ledger_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ap_earning_rules: {
         Row: {
           ap_amount: number
@@ -4909,6 +5146,26 @@ export type Database = {
         Args: { p_otp_code_hash: string; p_sender_id: string }
         Returns: Json
       }
+      claim_daily_quest_reward: {
+        Args: {
+          p_idempotency_key: string
+          p_player_id: string
+          p_quest_id: string
+        }
+        Returns: Json
+      }
+      process_affiliate_kyc_bonus: {
+        Args: { p_referee_id: string }
+        Returns: Json
+      }
+      process_affiliate_spend_cashback: {
+        Args: {
+          p_buyer_id: string
+          p_reference_tx_id: string
+          p_spend_amount_ap: number
+        }
+        Returns: Json
+      }
     }
     Enums: {
       account_status_type:
@@ -5129,6 +5386,17 @@ export type Database = {
         | "REJECTED"
         | "REVOKED"
       veto_action_type: "BAN" | "PICK" | "DECIDER" | "SIDE_PICK"
+      quest_type_enum:
+        | "LOGIN"
+        | "WATCH_STREAM"
+        | "PLAY_MATCH"
+        | "PREDICT_POOL"
+        | "STREAK_7DAY"
+      affiliate_status_enum: "PENDING_KYC" | "ACTIVE" | "FLAGGED" | "BLOCKED"
+      affiliate_reward_type_enum:
+        | "KYC_BONUS"
+        | "STORE_CASHBACK"
+        | "TOURNAMENT_CASHBACK"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -5483,6 +5751,19 @@ export const Constants = {
         "REVOKED",
       ],
       veto_action_type: ["BAN", "PICK", "DECIDER", "SIDE_PICK"],
+      quest_type_enum: [
+        "LOGIN",
+        "WATCH_STREAM",
+        "PLAY_MATCH",
+        "PREDICT_POOL",
+        "STREAK_7DAY",
+      ],
+      affiliate_status_enum: ["PENDING_KYC", "ACTIVE", "FLAGGED", "BLOCKED"],
+      affiliate_reward_type_enum: [
+        "KYC_BONUS",
+        "STORE_CASHBACK",
+        "TOURNAMENT_CASHBACK",
+      ],
     },
   },
 } as const

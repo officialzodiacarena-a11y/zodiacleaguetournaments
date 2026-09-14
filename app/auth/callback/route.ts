@@ -62,6 +62,55 @@ export async function GET(request: Request) {
             console.error('❌ Unexpected error backfilling OAuth email:', backfillErr);
           }
         }
+
+        // Daily Quest & Affiliate V6.02 (Gap 1): bind referrer <-> referee ถ้ามาจากลิงก์ชวนเพื่อน
+        // ?ref=CODE (เก็บไว้ใน cookie โดย middleware.ts เพราะ query param เดิมหายไปแล้วตอน
+        // OAuth provider redirect กลับมา) — ไม่ block การ login หลักถ้าขั้นตอนนี้ล้มเหลว
+        if (user) {
+          const refCode = (
+            cookieStore.get('zodiac_affiliate_ref')?.value ||
+            (user.user_metadata?.referral_code as string | undefined) ||
+            ''
+          ).trim();
+
+          if (refCode) {
+            try {
+              const admin = createAdminClient();
+
+              const { data: refereePlayer } = await admin
+                .from('players')
+                .select('id')
+                .eq('user_id', user.id)
+                .maybeSingle();
+
+              const { data: codeRow } = await admin
+                .from('affiliate_codes')
+                .select('player_id, code')
+                .eq('code', refCode)
+                .maybeSingle();
+
+              if (refereePlayer && codeRow && codeRow.player_id !== refereePlayer.id) {
+                const { error: insertError } = await admin.from('affiliate_referrals').insert({
+                  referrer_id: codeRow.player_id,
+                  referee_id: refereePlayer.id,
+                  affiliate_code: codeRow.code,
+                  status: 'PENDING_KYC',
+                });
+
+                // 23505 = unique_violation บน referee_id — ผู้เล่นคนนี้เคยถูกผูก referral
+                // มาแล้ว (เช่น login ซ้ำโดย cookie ยังไม่หมดอายุ) ถือเป็นเรื่องปกติ ไม่ใช่ error
+                if (insertError && insertError.code !== '23505') {
+                  console.error('❌ Failed to bind affiliate referral:', insertError.message);
+                }
+              }
+            } catch (refErr) {
+              console.error('❌ Unexpected error binding affiliate referral:', refErr);
+            } finally {
+              cookieStore.set('zodiac_affiliate_ref', '', { path: '/', maxAge: 0 });
+            }
+          }
+        }
+
         return NextResponse.redirect(`${origin}${next}`);
       } else {
         console.error('❌ Supabase Exchange Error:', error.message);

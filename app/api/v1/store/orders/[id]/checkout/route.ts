@@ -72,6 +72,27 @@ export async function POST(
 
     const result = asRpcResult<CheckoutOrderResult>(rpcResult);
 
+    // Daily Quest & Affiliate V6.02: Tier 1 5% / Tier 2 2% AP cashback to whoever
+    // referred this buyer — non-blocking, checkout already succeeded above
+    if (result.ap_deducted && result.ap_deducted > 0) {
+      const { data: player } = await supabase
+        .from('players')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (player) {
+        const { error: cashbackError } = await supabase.rpc('process_affiliate_spend_cashback', {
+          p_buyer_id: player.id,
+          p_spend_amount_ap: result.ap_deducted,
+          p_reference_tx_id: orderId,
+        });
+        if (cashbackError) {
+          console.error('[Checkout] process_affiliate_spend_cashback failed:', cashbackError.message);
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       order_id: result.order_id,

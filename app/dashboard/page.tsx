@@ -1,20 +1,97 @@
 // app/dashboard/page.tsx
-import React from 'react';
+import { createClient } from '@/lib/supabase/server';
+import DashboardClientAction from './DashboardClientAction';
+import { LogIn, ShieldAlert } from 'lucide-react';
+import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
+import ApQuestCard from '@/components/dashboard/ApQuestCard';
+import AffiliateWidget from '@/components/dashboard/AffiliateWidget';
 import { PassportHeroCard } from '@/components/dashboard/PassportHeroCard';
 import { PerformanceRadar } from '@/components/dashboard/PerformanceRadar';
 import { OracleReportCard } from '@/components/dashboard/OracleReportCard';
 import { ZodiacBuffCard } from '@/components/dashboard/ZodiacBuffCard';
-import { ApQuestCard } from '@/components/dashboard/ApQuestCard';
 import { QuickScrimFlipCard } from '@/components/dashboard/QuickScrimFlipCard';
 import { getAthleteDashboardData } from '@/lib/actions/dashboard';
 
-export default async function AthleteDashboardPage() {
-  // ⚡ ดึงข้อมูลตรงจาก Supabase RPC
+interface GameAccountQueryResult {
+  id: string;
+  game_name: string | null;
+  tag_line: string | null;
+  region: string | null;
+  verification_status: string;
+}
+
+interface PlayerQueryResult {
+  id: string;
+  game_accounts: GameAccountQueryResult | GameAccountQueryResult[] | null;
+}
+
+export const dynamic = 'force-dynamic';
+
+export default async function DashboardPage() {
+  const supabase = await createClient();
+
+  // 1. ตรวจสอบ Session ผู้ใช้
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#07090E] text-white flex flex-col items-center justify-center p-4 font-mono">
+        <div className="bg-[#12121A] border border-red-500/30 p-8 rounded-2xl max-w-md text-center space-y-4 shadow-2xl">
+          <ShieldAlert className="w-12 h-12 text-red-400 mx-auto" />
+          <h2 className="text-xl font-bold text-white uppercase">กรุณาเข้าสู่ระบบ</h2>
+          <p className="text-xs text-zinc-400">คุณต้องลงชื่อเข้าใช้ก่อนจึงจะสามารถเข้าถึง Athlete Dashboard ได้</p>
+          <a
+            href="/login"
+            className="inline-flex items-center justify-center gap-2 w-full py-3 bg-[#E8B429] text-black font-black text-xs rounded-xl hover:bg-[#f5c84c] transition-all"
+          >
+            <LogIn className="w-4 h-4" />
+            <span>เข้าสู่ระบบทันที</span>
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. ⚡ ดึงข้อมูล Telemetry HUD ตรงจาก Supabase RPC
   const { profile, kpi, radar } = await getAthleteDashboardData();
+
+  // 3. ดึงข้อมูล Player + Game Account (Riot ID) สำหรับ Verification Banner
+  const { data: rawPlayer } = await supabase
+    .from('players')
+    .select(`
+      id,
+      game_accounts (
+        id,
+        game_name,
+        tag_line,
+        region,
+        verification_status
+      )
+    `)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  const player = rawPlayer as unknown as PlayerQueryResult | null;
+  const rawAccount = player?.game_accounts;
+  const rawGameAccount = Array.isArray(rawAccount) ? rawAccount[0] : rawAccount;
+
+  const gameAccount = rawGameAccount
+    ? {
+        id: rawGameAccount.id,
+        game_name: rawGameAccount.game_name ?? '',
+        tag_line: rawGameAccount.tag_line ?? '',
+        region: rawGameAccount.region ?? '',
+        verification_status: rawGameAccount.verification_status,
+      }
+    : null;
+
+  const playerId = player?.id ?? user.id;
 
   return (
     <div className="min-h-screen bg-[#080811] text-slate-100 flex flex-col font-sans selection:bg-[#F59E0B] selection:text-black">
-      
+
       {/* 🧭 RESERVED NAVBAR CONTAINER (72px) */}
       <header className="w-full h-[72px] border-b border-white/[0.08] bg-[#0F111E]/60 backdrop-blur-md sticky top-0 z-50 px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -44,16 +121,21 @@ export default async function AthleteDashboardPage() {
 
       {/* 🎮 DASHBOARD MAIN VIEWPORT */}
       <main className="flex-1 max-w-[1600px] w-full mx-auto p-4 lg:p-6 space-y-5">
-        
+
+        <SponsorSlot />
+
+        {/* BANNER: เชื่อมต่อ Riot ID / สถานะการตรวจสอบ */}
+        <DashboardClientAction playerId={playerId} gameAccount={gameAccount} />
+
         {/* 1. Hero Passport Header */}
         <PassportHeroCard profile={profile} kpi={kpi} />
 
         {/* 2. Grid Body (3-Column Layout) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          
+
           {/* Left Column (3 Cols) */}
           <div className="lg:col-span-3 space-y-5">
-            
+
             {/* Live Match Check-in Card */}
             <div className="bg-[#0F111E]/88 backdrop-blur-2xl border border-white/[0.08] rounded-[18px] p-5 border-t-2 border-t-[#EF4444] shadow-xl">
               <div className="flex items-center justify-between mb-3">
@@ -85,7 +167,7 @@ export default async function AthleteDashboardPage() {
               <span className="text-xs font-orbitron font-bold text-[#8B5CF6] uppercase tracking-wider block mb-2">
                 UPCOMING MATCH
               </span>
-              
+
               <div className="text-center py-3">
                 <span className="text-[10px] font-mono text-slate-500 uppercase block tracking-widest">OPPONENT</span>
                 <h3 className="text-xl font-black font-orbitron text-white tracking-wide mt-0.5">
@@ -188,7 +270,10 @@ export default async function AthleteDashboardPage() {
           <div className="lg:col-span-3 space-y-5">
             <OracleReportCard />
             <ZodiacBuffCard />
+
+            {/* Daily Quests & 2-Tier Affiliate Referral */}
             <ApQuestCard />
+            <AffiliateWidget />
           </div>
 
         </div>
