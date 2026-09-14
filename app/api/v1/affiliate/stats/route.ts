@@ -5,8 +5,9 @@ import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { origin } = new URL(req.url);
     const supabase = await createClient();
 
     const {
@@ -65,7 +66,7 @@ export async function GET() {
       success: true,
       data: {
         affiliate_code: affCode?.code || 'ZODIAC-VIP',
-        referral_url: `https://zodiac.arena/register?ref=${affCode?.code}`,
+        referral_url: `${origin}/login?ref=${affCode?.code}`,
         total_referrals: affCode?.total_referrals || 0,
         total_ap_earned: Number(affCode?.total_ap_earned || 0),
         tier1_active_count: tier1Count || 0,
