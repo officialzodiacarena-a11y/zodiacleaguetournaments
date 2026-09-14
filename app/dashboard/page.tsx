@@ -5,6 +5,7 @@ import { PerformanceRadar } from '@/components/dashboard/PerformanceRadar';
 import { OracleReportCard } from '@/components/dashboard/OracleReportCard';
 import { ZodiacBuffCard } from '@/components/dashboard/ZodiacBuffCard';
 import { ApQuestCard } from '@/components/dashboard/ApQuestCard';
+import { QuickScrimFlipCard } from '@/components/dashboard/QuickScrimFlipCard';
 import { getAthleteDashboardData } from '@/lib/actions/dashboard';
 
 export default async function AthleteDashboardPage() {
@@ -122,29 +123,8 @@ export default async function AthleteDashboardPage() {
               </div>
             </div>
 
-            {/* Quick Match Finder */}
-            <div className="bg-[#0F111E]/88 backdrop-blur-2xl border border-white/[0.08] rounded-[18px] p-5 shadow-xl border-t-2 border-t-[#06B6D4]">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-orbitron font-bold text-[#06B6D4] uppercase tracking-wider flex items-center gap-1.5">
-                  <span>⚡</span> QUICK MATCH FINDER
-                </span>
-                <span className="text-[10px] font-mono font-bold text-[#10B981] bg-[#10B981]/15 px-2 py-0.5 rounded">
-                  ONLINE
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2.5">
-                <button className="py-2.5 px-3 bg-[#080811] hover:bg-[#06B6D4]/20 border border-[#06B6D4]/40 text-[#06B6D4] rounded-xl text-xs font-orbitron font-bold transition-all flex flex-col items-center gap-1 shadow-md">
-                  <span>⚔️ SCRIM MATCH</span>
-                  <span className="text-[9px] text-slate-400 font-mono font-normal">MERCY 5v5 / FILL</span>
-                </button>
-
-                <button className="py-2.5 px-3 bg-[#080811] hover:bg-[#F59E0B]/20 border border-[#F59E0B]/40 text-[#F59E0B] rounded-xl text-xs font-orbitron font-bold transition-all flex flex-col items-center gap-1 shadow-md">
-                  <span>🏆 TOURNAMENT</span>
-                  <span className="text-[9px] text-slate-400 font-mono font-normal">CIRCUIT SPLIT 2</span>
-                </button>
-              </div>
-            </div>
+            {/* Quick Match Finder — Patch V7.01 Match Room & Mercy Scrim System */}
+            <QuickScrimFlipCard />
 
           </div>
 
