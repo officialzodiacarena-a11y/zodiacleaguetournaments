@@ -4,12 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import DashboardClientAction from './DashboardClientAction';
 import { LogIn, ShieldAlert } from 'lucide-react';
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
-
-// ด้านใน return:
-<div className="max-w-7xl mx-auto p-6">
-  <SponsorSlot className="mb-6" />
-  {/* Athlete Passport & Daily Quests */}
-</div>
+import ApQuestCard from '@/components/dashboard/ApQuestCard';
+import AffiliateWidget from '@/components/dashboard/AffiliateWidget';
 
 interface TeamInfo {
   id: string;
@@ -227,9 +223,16 @@ export default async function DashboardPage() {
       </header>
 
       <div className="w-full max-w-6xl space-y-6 z-10">
-        
+        <SponsorSlot className="mb-2" />
+
         {/* BANNER: เชื่อมต่อ Riot ID / สถานะการตรวจสอบ */}
         <DashboardClientAction playerId={currentPlayer.id} gameAccount={gameAccount} />
+
+        {/* Daily Quests & 2-Tier Affiliate Referral */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ApQuestCard />
+          <AffiliateWidget />
+        </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
