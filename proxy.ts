@@ -79,6 +79,20 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // 5. Affiliate Ref Cookie (Daily Quest & Affiliate V6.02) — capture ?ref=CODE
+  // on any page hit so it survives the OAuth provider round-trip (the ?ref=
+  // query param on the original landing page is gone by the time
+  // /auth/callback runs). app/auth/callback/route.ts reads this cookie.
+  const refCode = request.nextUrl.searchParams.get('ref')?.trim();
+  if (refCode) {
+    response.cookies.set('zodiac_affiliate_ref', refCode, {
+      maxAge: 60 * 60 * 24 * 30,
+      path: '/',
+      sameSite: 'lax',
+      httpOnly: true,
+    });
+  }
+
   return response;
 }
 
