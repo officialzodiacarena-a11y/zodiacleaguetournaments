@@ -1,6 +1,6 @@
 # 🌳 Zpdoac Arena Master Data Tree & Schema Map (V1.06)
 
-> 💎 **Last Updated:** เวลา 15:12:57 เสาร์ 12/09/2026
+> 💎 **Last Updated:** เวลา 22:45:08 อาทิตย์ 13/09/2026
 
 ีวิธีใช้ = node update-tree.mjs
 
@@ -35,10 +35,14 @@ zodiac-arena/
 ```text
 zodiac/
 ├── app/
+│   ├── actions/
+│   │   └── roster.ts
 │   ├── admin/
 │   │   ├── command-room/
 │   │   │   └── page.tsx
 │   │   ├── marketplace/
+│   │   │   ├── banners/
+│   │   │   │   └── page.tsx
 │   │   │   ├── catalog/
 │   │   │   │   └── page.tsx
 │   │   │   ├── categories/
@@ -82,6 +86,10 @@ zodiac/
 │   │   │       └── route.ts
 │   │   └── v1/
 │   │       ├── admin/
+│   │       │   ├── banners/
+│   │       │   │   ├── [id]/
+│   │       │   │   │   └── route.ts
+│   │       │   │   └── route.ts
 │   │       │   ├── earning-rules/
 │   │       │   │   ├── [id]/
 │   │       │   │   │   └── route.ts
@@ -93,6 +101,7 @@ zodiac/
 │   │       │   │   │   └── route.ts
 │   │       │   │   └── season-reset/
 │   │       │   │       └── route.ts
+│   │       │   ├── marketplace/
 │   │       │   ├── matches/
 │   │       │   │   └── [id]/
 │   │       │   │       └── void/
@@ -163,6 +172,18 @@ zodiac/
 │   │       │       │   └── route.ts
 │   │       │       └── verify-2fa/
 │   │       │           └── route.ts
+│   │       ├── athlete-market/
+│   │       │   ├── bid/
+│   │       │   │   └── route.ts
+│   │       │   ├── buyout/
+│   │       │   │   └── route.ts
+│   │       │   └── listings/
+│   │       │       └── route.ts
+│   │       ├── banners/
+│   │       │   ├── [id]/
+│   │       │   │   └── track/
+│   │       │   │       └── route.ts
+│   │       │   └── route.ts
 │   │       ├── bracket-nodes/
 │   │       │   └── [id]/
 │   │       │       ├── void/
@@ -355,6 +376,11 @@ zodiac/
 │   │       │   │   ├── award-weekly/
 │   │       │   │   │   └── route.ts
 │   │       │   │   └── evaluate-monthly-qualifiers/
+│   │       │   │       └── route.ts
+│   │       │   ├── [id]/
+│   │       │   │   ├── stages/
+│   │       │   │   │   └── route.ts
+│   │       │   │   └── zodiac-draw/
 │   │       │   │       └── route.ts
 │   │       │   └── prize/
 │   │       │       └── settle/

@@ -2028,6 +2028,330 @@ export type Database = {
           },
         ]
       }
+      match_room_messages: {
+        Row: {
+          created_at: string
+          id: string
+          is_system: boolean
+          message: string
+          room_id: string
+          sender_id: string | null
+          sender_role: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          message: string
+          room_id: string
+          sender_id?: string | null
+          sender_role: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          message?: string
+          room_id?: string
+          sender_id?: string | null
+          sender_role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_room_messages_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "match_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_room_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_room_participants: {
+        Row: {
+          agent_role_preference:
+            | Database["public"]["Enums"]["valorant_agent_role_enum"]
+            | null
+          ap_staked: number
+          has_paid_escrow: boolean
+          id: string
+          is_mercy_ringer: boolean
+          is_ready_confirmed: boolean
+          joined_at: string
+          player_id: string
+          role_type: Database["public"]["Enums"]["scrim_participant_role_enum"]
+          room_id: string
+          team_side: string
+        }
+        Insert: {
+          agent_role_preference?:
+            | Database["public"]["Enums"]["valorant_agent_role_enum"]
+            | null
+          ap_staked?: number
+          has_paid_escrow?: boolean
+          id?: string
+          is_mercy_ringer?: boolean
+          is_ready_confirmed?: boolean
+          joined_at?: string
+          player_id: string
+          role_type?: Database["public"]["Enums"]["scrim_participant_role_enum"]
+          room_id: string
+          team_side: string
+        }
+        Update: {
+          agent_role_preference?:
+            | Database["public"]["Enums"]["valorant_agent_role_enum"]
+            | null
+          ap_staked?: number
+          has_paid_escrow?: boolean
+          id?: string
+          is_mercy_ringer?: boolean
+          is_ready_confirmed?: boolean
+          joined_at?: string
+          player_id?: string
+          role_type?: Database["public"]["Enums"]["scrim_participant_role_enum"]
+          room_id?: string
+          team_side?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_room_participants_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "match_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_room_participants_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_room_staff: {
+        Row: {
+          assigned_at: string
+          id: string
+          is_active_monitoring: boolean
+          room_id: string
+          staff_player_id: string
+          staff_role: string
+        }
+        Insert: {
+          assigned_at?: string
+          id?: string
+          is_active_monitoring?: boolean
+          room_id: string
+          staff_player_id: string
+          staff_role?: string
+        }
+        Update: {
+          assigned_at?: string
+          id?: string
+          is_active_monitoring?: boolean
+          room_id?: string
+          staff_player_id?: string
+          staff_role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_room_staff_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "match_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_room_staff_staff_player_id_fkey"
+            columns: ["staff_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_rooms: {
+        Row: {
+          auto_audit_approved: boolean
+          created_at: string
+          creator_player_id: string
+          forfeit_deadline_at: string | null
+          id: string
+          mercy_beacon_active: boolean
+          mercy_beacon_triggered_at: string | null
+          min_ap_stake: number
+          riot_lobby_code: string | null
+          scheduled_at: string
+          status: Database["public"]["Enums"]["scrim_room_status_enum"]
+          target_tier_max: string | null
+          target_tier_min: string | null
+          team_a_id: string | null
+          team_b_id: string | null
+          title: string
+          total_escrow_ap: number
+          updated_at: string
+        }
+        Insert: {
+          auto_audit_approved?: boolean
+          created_at?: string
+          creator_player_id: string
+          forfeit_deadline_at?: string | null
+          id?: string
+          mercy_beacon_active?: boolean
+          mercy_beacon_triggered_at?: string | null
+          min_ap_stake?: number
+          riot_lobby_code?: string | null
+          scheduled_at: string
+          status?: Database["public"]["Enums"]["scrim_room_status_enum"]
+          target_tier_max?: string | null
+          target_tier_min?: string | null
+          team_a_id?: string | null
+          team_b_id?: string | null
+          title: string
+          total_escrow_ap?: number
+          updated_at?: string
+        }
+        Update: {
+          auto_audit_approved?: boolean
+          created_at?: string
+          creator_player_id?: string
+          forfeit_deadline_at?: string | null
+          id?: string
+          mercy_beacon_active?: boolean
+          mercy_beacon_triggered_at?: string | null
+          min_ap_stake?: number
+          riot_lobby_code?: string | null
+          scheduled_at?: string
+          status?: Database["public"]["Enums"]["scrim_room_status_enum"]
+          target_tier_max?: string | null
+          target_tier_min?: string | null
+          team_a_id?: string | null
+          team_b_id?: string | null
+          title?: string
+          total_escrow_ap?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_rooms_creator_player_id_fkey"
+            columns: ["creator_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_rooms_team_a_id_fkey"
+            columns: ["team_a_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_rooms_team_b_id_fkey"
+            columns: ["team_b_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mercy_fill_tickets: {
+        Row: {
+          created_at: string
+          filled_by_player_id: string | null
+          id: string
+          missing_team_side: string
+          required_role: Database["public"]["Enums"]["valorant_agent_role_enum"]
+          room_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          filled_by_player_id?: string | null
+          id?: string
+          missing_team_side: string
+          required_role?: Database["public"]["Enums"]["valorant_agent_role_enum"]
+          room_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          filled_by_player_id?: string | null
+          id?: string
+          missing_team_side?: string
+          required_role?: Database["public"]["Enums"]["valorant_agent_role_enum"]
+          room_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mercy_fill_tickets_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "match_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mercy_fill_tickets_filled_by_player_id_fkey"
+            columns: ["filled_by_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mercy_sub_pool: {
+        Row: {
+          ap_stake_budget: number
+          id: string
+          is_on_call: boolean
+          last_beacon_notified_at: string | null
+          player_id: string
+          preferred_role: Database["public"]["Enums"]["valorant_agent_role_enum"]
+          rank_tier: string
+          updated_at: string
+        }
+        Insert: {
+          ap_stake_budget?: number
+          id?: string
+          is_on_call?: boolean
+          last_beacon_notified_at?: string | null
+          player_id: string
+          preferred_role?: Database["public"]["Enums"]["valorant_agent_role_enum"]
+          rank_tier?: string
+          updated_at?: string
+        }
+        Update: {
+          ap_stake_budget?: number
+          id?: string
+          is_on_call?: boolean
+          last_beacon_notified_at?: string | null
+          player_id?: string
+          preferred_role?: Database["public"]["Enums"]["valorant_agent_role_enum"]
+          rank_tier?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mercy_sub_pool_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: true
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_state_transitions: {
         Row: {
           actor_id: string | null
@@ -4568,6 +4892,12 @@ export type Database = {
       }
     }
     Functions: {
+      get_athlete_telemetry_dashboard: {
+        Args: {
+          p_player_id: string
+        }
+        Returns: Json
+      }
       increment_banner_metric: {
         Args: {
           p_banner_id: string
@@ -4619,6 +4949,14 @@ export type Database = {
         Returns: boolean
       }
       checkout_order: { Args: { p_order_id: string }; Returns: Json }
+      claim_mercy_sub_slot: {
+        Args: {
+          p_idempotency_key: string
+          p_ringer_player_id: string
+          p_ticket_id: string
+        }
+        Returns: Json
+      }
       claim_watch_reward: { Args: { p_session_id: string }; Returns: Json }
       clean_expired_orders: { Args: never; Returns: number }
       confirm_shelf_payment: { Args: { p_listing_id: string }; Returns: Json }
@@ -4637,6 +4975,18 @@ export type Database = {
           p_is_paid_slot: boolean
           p_item_title: string
           p_vendor_id: string
+        }
+        Returns: Json
+      }
+      create_scrim_room: {
+        Args: {
+          p_creator_player_id: string
+          p_idempotency_key?: string
+          p_min_ap_stake: number
+          p_scheduled_at: string
+          p_target_tier_max?: string
+          p_target_tier_min?: string
+          p_title: string
         }
         Returns: Json
       }
@@ -4958,6 +5308,20 @@ export type Database = {
         | "PLAYER_REPORT"
         | "REFEREE"
         | "ADMIN_OVERRIDE"
+      scrim_participant_role_enum:
+        | "TEAM_A_STARTER"
+        | "TEAM_B_STARTER"
+        | "RESERVE_SUB"
+        | "STAFF_OBSERVER"
+      scrim_room_status_enum:
+        | "PENDING_APPROVAL"
+        | "APPROVED"
+        | "LOBBY_PREPARING"
+        | "READY_CHECK"
+        | "LIVE"
+        | "RESOLVED"
+        | "DISPUTED"
+        | "CANCELLED"
       stage_format_type:
         | "SINGLE_ELIMINATION"
         | "DOUBLE_ELIMINATION"
@@ -5008,6 +5372,12 @@ export type Database = {
         | "ADMIN"
         | "SUPER_ADMIN"
         | "MARKETPLACE_ADMIN"
+      valorant_agent_role_enum:
+        | "DUELIST"
+        | "INITIATOR"
+        | "CONTROLLER"
+        | "SENTINEL"
+        | "FLEX"
       verification_status_type:
         | "UNVERIFIED"
         | "PENDING"
@@ -5298,6 +5668,22 @@ export const Constants = {
         "REFEREE",
         "ADMIN_OVERRIDE",
       ],
+      scrim_participant_role_enum: [
+        "TEAM_A_STARTER",
+        "TEAM_B_STARTER",
+        "RESERVE_SUB",
+        "STAFF_OBSERVER",
+      ],
+      scrim_room_status_enum: [
+        "PENDING_APPROVAL",
+        "APPROVED",
+        "LOBBY_PREPARING",
+        "READY_CHECK",
+        "LIVE",
+        "RESOLVED",
+        "DISPUTED",
+        "CANCELLED",
+      ],
       stage_format_type: [
         "SINGLE_ELIMINATION",
         "DOUBLE_ELIMINATION",
@@ -5355,6 +5741,7 @@ export const Constants = {
         "SUPER_ADMIN",
         "MARKETPLACE_ADMIN",
       ],
+      valorant_agent_role_enum: ["DUELIST", "INITIATOR", "CONTROLLER", "SENTINEL", "FLEX"],
       verification_status_type: [
         "UNVERIFIED",
         "PENDING",
