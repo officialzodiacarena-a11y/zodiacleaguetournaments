@@ -69,7 +69,8 @@ export interface TelemetryHudCompositePayload {
     tagLine: string | null;
     isVerified: boolean;
     zodiacSign: string | null;
-    apBalance: number;
+    isSelf: boolean;
+    apBalance: number | null;
     zpBalance: number | null;
     zpBalanceAvailable: boolean;
     currentRankTier: string | null;

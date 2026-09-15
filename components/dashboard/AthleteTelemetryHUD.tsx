@@ -27,7 +27,13 @@ function fmt(value: number | null | undefined, digits = 1): string {
   return value === null || value === undefined ? 'N/A' : value.toFixed(digits);
 }
 
-export default function AthleteTelemetryHUD() {
+/**
+ * Pass `playerId` to view another athlete's public HUD (e.g. from a profile
+ * page); omit it to show the signed-in user's own telemetry. Balance-type
+ * fields (AP) only render when `overview.isSelf` is true — see the RPC's
+ * migration header for why (public stats page, private balance).
+ */
+export default function AthleteTelemetryHUD({ playerId }: { playerId?: string }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'roles-weapons' | 'matches'>('overview');
   const [hudData, setHudData] = useState<TelemetryHudCompositePayload | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -38,7 +44,10 @@ export default function AthleteTelemetryHUD() {
     async function fetchTelemetryData() {
       try {
         setIsLoading(true);
-        const response = await fetch('/api/v1/players/me/telemetry-hud');
+        const url = playerId
+          ? `/api/v1/players/me/telemetry-hud?playerId=${encodeURIComponent(playerId)}`
+          : '/api/v1/players/me/telemetry-hud';
+        const response = await fetch(url);
         const result = await response.json();
         if (result.success && result.data) {
           setHudData(result.data);
@@ -50,7 +59,7 @@ export default function AthleteTelemetryHUD() {
       }
     }
     fetchTelemetryData();
-  }, []);
+  }, [playerId]);
 
   if (isLoading || !hudData) {
     return (
@@ -100,10 +109,12 @@ export default function AthleteTelemetryHUD() {
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
             <span className="text-neutral-400">AP-BANGKOK</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-[#E8B429]/10 border border-[#E8B429]/30 px-3 py-1.5 rounded-lg text-[#E8B429] font-bold">
-            <span>{overview.apBalance} AP</span>
-          </div>
-          {overview.zpBalanceAvailable && (
+          {overview.isSelf && overview.apBalance !== null && (
+            <div className="flex items-center gap-1.5 bg-[#E8B429]/10 border border-[#E8B429]/30 px-3 py-1.5 rounded-lg text-[#E8B429] font-bold">
+              <span>{overview.apBalance} AP</span>
+            </div>
+          )}
+          {overview.isSelf && overview.zpBalanceAvailable && (
             <div className="flex items-center gap-1.5 bg-[#9184D9]/10 border border-[#9184D9]/30 px-3 py-1.5 rounded-lg text-[#9184D9] font-bold">
               <span>{overview.zpBalance} ZP</span>
             </div>

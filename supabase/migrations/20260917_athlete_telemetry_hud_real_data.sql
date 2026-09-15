@@ -41,6 +41,17 @@
 --      พบ endpoint ไหนเขียนค่าลงคอลัมน์นี้ในโค้ดปัจจุบัน (open question ที่ QA
 --      ทิ้งไว้ให้พี่หยัดตัดสินใจภายหลังว่าจะแก้ flow การกรอกผลแมตช์ตอนไหน) —
 --      ไม่ block การรัน migration นี้ แค่ผลลัพธ์จะว่างเปล่าจนกว่าจะมีข้อมูลจริง
+--
+--   7. [พบหลัง QA ผ่าน ตอนวางแผนว่าจะเอา HUD นี้ไปแปะหน้าไหน] anti-BOLA guard
+--      เดิมเทียบ p_player_id (players.id) ตรงๆ กับ auth.uid() — สองค่านี้คนละ
+--      UUID space กัน (players.id เป็น PK ของตัวเอง, players.user_id ถึงจะตรงกับ
+--      auth.uid() ตามแพทเทิร์นเดียวกับ create_scrim_room()/claim_mercy_sub_slot()
+--      ใน 20260914_match_room_mercy_scrim_v7_01.sql) เดิมเลยจะโดน
+--      UNAUTHORIZED_ACCESS ทุกครั้งแม้แต่ตอนดูของตัวเอง แก้โดย lookup
+--      players.user_id มาเทียบแทน และขยายสิทธิ์ให้ดูของคนอื่นได้ด้วย (พี่หยัด
+--      อยากให้ HUD นี้โผล่ได้ทุกหน้าที่กดดูโปรไฟล์ใครก็ตามในระบบ ไม่ใช่แค่ของ
+--      ตัวเอง) — ยังคงต้อง sign in อยู่ (auth.uid() ต้องไม่ NULL) แต่ apBalance
+--      จะโชว์เฉพาะตอน isSelf = true เท่านั้น ข้อมูลอื่นทั้งหมดเป็น public stats
 -- =============================================================================
 
 BEGIN;
@@ -102,6 +113,8 @@ SET search_path = public
 AS $$
 DECLARE
     v_player RECORD;
+    v_owner_auth_id UUID;
+    v_is_self BOOLEAN;
     v_verification RECORD;
     v_stats RECORD;
     v_zodiac_sign TEXT;
@@ -117,13 +130,25 @@ DECLARE
 BEGIN
     SET LOCAL lock_timeout = '3s';
 
-    IF p_player_id <> auth.uid() AND auth.role() <> 'service_role' THEN
-        RAISE EXCEPTION 'UNAUTHORIZED_ACCESS: You cannot access telemetry for another athlete.' USING ERRCODE = '42501';
+    -- Fix 7 [bug found before merge]: the check below originally compared
+    -- p_player_id (players.id, the row's own primary key) directly against
+    -- auth.uid() (the auth user id, stored separately as players.user_id) —
+    -- those are two different UUID spaces in this schema (see the same
+    -- lookup pattern in create_scrim_room()/claim_mercy_sub_slot() in
+    -- 20260914_match_room_mercy_scrim_v7_01.sql), so the old check raised
+    -- UNAUTHORIZED_ACCESS on every real call, including a player viewing
+    -- their own telemetry. Also broadened per พี่หยัด: this HUD is meant to
+    -- show up on any athlete's profile view system-wide (Tracker.gg-style
+    -- public passport), not just the signed-in player's own page — so this
+    -- now requires only that *some* user is signed in, and exposes
+    -- balance-type fields (AP) only when the viewer is the profile owner.
+    IF auth.uid() IS NULL AND auth.role() <> 'service_role' THEN
+        RAISE EXCEPTION 'UNAUTHORIZED_ACCESS: Sign in to view athlete telemetry.' USING ERRCODE = '42501';
     END IF;
 
     -- 1. Player Base Profile (Fix 1: dropped zodiac_sign/zp_balance columns —
     -- neither exists; zodiac computed below, zp_balance omitted)
-    SELECT p.id, p.athlete_id, p.display_name, p.avatar_url, p.ap_balance, p.date_of_birth
+    SELECT p.id, p.athlete_id, p.display_name, p.avatar_url, p.ap_balance, p.date_of_birth, p.user_id
     INTO v_player
     FROM public.players p
     WHERE p.id = p_player_id;
@@ -131,6 +156,9 @@ BEGIN
     IF v_player.id IS NULL THEN
         RAISE EXCEPTION 'PLAYER_NOT_FOUND' USING ERRCODE = 'P0001';
     END IF;
+
+    v_owner_auth_id := v_player.user_id;
+    v_is_self := (v_owner_auth_id = auth.uid()) OR (auth.role() = 'service_role');
 
     -- Fix 1: zodiac sign computed from date_of_birth (no stored column) —
     -- casing matches the existing CHECK constraint on public.hall_of_fame
@@ -310,7 +338,8 @@ BEGIN
             'tagLine', v_verification.tag_line,
             'isVerified', (v_verification.verification_status = 'VERIFIED'),
             'zodiacSign', v_zodiac_sign,
-            'apBalance', v_player.ap_balance,
+            'isSelf', v_is_self,
+            'apBalance', CASE WHEN v_is_self THEN v_player.ap_balance ELSE NULL END,
             'zpBalance', NULL,
             'zpBalanceAvailable', false,
             'currentRankTier', v_verification.rank_snapshot->>'tier',
