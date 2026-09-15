@@ -1,6 +1,6 @@
 # 🌳 Zpdoac Arena Master Data Tree & Schema Map (V1.06)
 
-> 💎 **Last Updated:** เวลา 22:45:08 อาทิตย์ 13/09/2026
+> 💎 **Last Updated:** เวลา 07:56:31 อังคาร 15/09/2026
 
 ีวิธีใช้ = node update-tree.mjs
 
@@ -50,7 +50,6 @@ zodiac/
 │   │   │   ├── shipments/
 │   │   │   │   └── page.tsx
 │   │   │   └── page.tsx
-│   │   ├── store/
 │   │   ├── valorant-tracker/
 │   │   │   ├── page.tsx
 │   │   │   └── ValorantTrackerClient.tsx
@@ -86,6 +85,8 @@ zodiac/
 │   │   │       └── route.ts
 │   │   └── v1/
 │   │       ├── admin/
+│   │       │   ├── affiliates/
+│   │       │   │   └── route.ts
 │   │       │   ├── banners/
 │   │       │   │   ├── [id]/
 │   │       │   │   │   └── route.ts
@@ -101,7 +102,6 @@ zodiac/
 │   │       │   │   │   └── route.ts
 │   │       │   │   └── season-reset/
 │   │       │   │       └── route.ts
-│   │       │   ├── marketplace/
 │   │       │   ├── matches/
 │   │       │   │   └── [id]/
 │   │       │   │       └── void/
@@ -153,6 +153,9 @@ zodiac/
 │   │       │       │   │   └── route.ts
 │   │       │       │   └── revoke/
 │   │       │       │       └── route.ts
+│   │       │       └── route.ts
+│   │       ├── affiliate/
+│   │       │   └── stats/
 │   │       │       └── route.ts
 │   │       ├── analytics/
 │   │       │   └── team/
@@ -312,6 +315,11 @@ zodiac/
 │   │       │   └── [id]/
 │   │       │       └── approve/
 │   │       │           └── route.ts
+│   │       ├── quests/
+│   │       │   └── daily/
+│   │       │       ├── claim/
+│   │       │       │   └── route.ts
+│   │       │       └── route.ts
 │   │       ├── rewards/
 │   │       │   └── redeem/
 │   │       │       └── route.ts
@@ -430,7 +438,6 @@ zodiac/
 │   │   └── page.tsx
 │   ├── leaderboard/
 │   │   └── page.tsx
-│   ├── lobby/
 │   ├── login/
 │   │   └── page.tsx
 │   ├── matches/
@@ -484,6 +491,10 @@ zodiac/
 │   │   ├── weekly/
 │   │   │   └── page.tsx
 │   │   └── page.tsx
+│   ├── tournaments/
+│   │   └── room/
+│   │       └── [id]/
+│   │           └── page.tsx
 │   ├── waiting-room/
 │   │   └── [lobbyId]/
 │   │       └── page.tsx
@@ -492,6 +503,9 @@ zodiac/
 │   ├── layout.tsx
 │   └── page.tsx
 ├── lib/
+│   ├── actions/
+│   │   ├── dashboard.ts
+│   │   └── match-room.ts
 │   ├── admin/
 │   │   ├── requireAdminRole.ts
 │   │   ├── requireMarketplaceAdminPage.ts
@@ -502,7 +516,6 @@ zodiac/
 │   ├── billing/
 │   │   ├── checkAccessGate.ts
 │   │   └── retryOnLockTimeout.ts
-│   ├── matchmaking/
 │   ├── p2p/
 │   │   └── transferToken.ts
 │   ├── payments/

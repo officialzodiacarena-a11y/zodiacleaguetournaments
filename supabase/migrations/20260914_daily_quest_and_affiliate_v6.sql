@@ -145,20 +145,41 @@ ALTER TABLE public.affiliate_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.affiliate_referrals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.affiliate_rewards_ledger ENABLE ROW LEVEL SECURITY;
 
+-- Fix (same class of bug as 20260914_match_room_mercy_scrim_v7_01.sql):
+-- CREATE POLICY has no IF NOT EXISTS guard, unlike CREATE TABLE IF NOT EXISTS
+-- / the DO-block enum checks above, so re-running this file after a prior
+-- successful run fails with 42710 "policy already exists". DROP POLICY IF
+-- EXISTS before each CREATE POLICY makes the whole migration safe to re-run.
+DROP POLICY IF EXISTS "Public Read Quests Catalog" ON public.daily_quests;
 CREATE POLICY "Public Read Quests Catalog" ON public.daily_quests FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Owner Read Quest Progress" ON public.player_daily_quests;
 CREATE POLICY "Owner Read Quest Progress" ON public.player_daily_quests FOR SELECT USING (auth.uid() IN (SELECT user_id FROM public.players WHERE id = player_id));
+
+DROP POLICY IF EXISTS "Public Read Affiliate Codes" ON public.affiliate_codes;
 CREATE POLICY "Public Read Affiliate Codes" ON public.affiliate_codes FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Referrer Read Referrals" ON public.affiliate_referrals;
 CREATE POLICY "Referrer Read Referrals" ON public.affiliate_referrals FOR SELECT USING (auth.uid() IN (SELECT user_id FROM public.players WHERE id = referrer_id OR id = referee_id));
+
+DROP POLICY IF EXISTS "Referrer Read Rewards Ledger" ON public.affiliate_rewards_ledger;
 CREATE POLICY "Referrer Read Rewards Ledger" ON public.affiliate_rewards_ledger FOR SELECT USING (auth.uid() IN (SELECT user_id FROM public.players WHERE id = referrer_id));
 
 -- -----------------------------------------------------------------------------
 -- 5. ap_ledger: allow the new QUEST_REWARD / REFERRAL reasons
 --    (เก็บค่าเดิมทั้งหมดจาก 20260910020000_t71_phase7_predictions_watch_v2.sql ไว้ครบ
 --    แล้วเพิ่มสองค่าใหม่ท้ายรายการ — verify แล้วว่านี่คือ constraint เวอร์ชันล่าสุดของจริง)
+--
+--    Fix [23514 check constraint violated]: 20260914_match_room_mercy_scrim_v7_01.sql
+--    (คนละ feature branch, พัฒนาพร้อมกัน) ก็ DROP/ADD constraint นี้เหมือนกัน แล้วเพิ่ม
+--    'SCRIM_ESCROW_LOCK'/'SCRIM_MERCY_RINGER_STAKE' ของมันเองแทน — ถ้า migration นั้น
+--    รันไปก่อนแล้วและมีแถวจริงที่ใช้ reason พวกนั้น (เช่น มีคนสร้างห้อง scrim ไปแล้ว) การ
+--    ADD CONSTRAINT ด้วยลิสต์ที่ไม่มีค่าพวกนั้นตรงนี้จะชนแถวเก่าทันที (23514) ต้องใส่ทั้ง
+--    สองชุดรวมกันเป็น union เดียว ไม่ว่าจะรัน migration ไหนก่อน-หลังก็ปลอดภัย
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.ap_ledger DROP CONSTRAINT IF EXISTS ap_ledger_reason_check;
 ALTER TABLE public.ap_ledger ADD CONSTRAINT ap_ledger_reason_check
-    CHECK (reason IN ('WATCH_REWARD', 'CLAWBACK', 'ADMIN_ADJUSTMENT', 'STORE_REDEEM', 'TOP_UP', 'REFUND_AP_CREDIT', 'PENALTY_FINE', 'SUBSCRIPTION_RENEWAL', 'MARKETPLACE_BID', 'MARKETPLACE_REFUND', 'MARKETPLACE_SOLD', 'ESCROW_LOCK', 'ESCROW_SETTLED', 'ESCROW_AUTO_RELEASE', 'PREDICTION_BUY', 'PREDICTION_PAYOUT', 'PREDICTION_REFUND_VOID', 'PREDICTION_HOUSE_FEE_BURN', 'WATCH_EARN', 'PREDICTION_JACKPOT_PAYOUT', 'QUEST_REWARD', 'REFERRAL'));
+    CHECK (reason IN ('WATCH_REWARD', 'CLAWBACK', 'ADMIN_ADJUSTMENT', 'STORE_REDEEM', 'TOP_UP', 'REFUND_AP_CREDIT', 'PENALTY_FINE', 'SUBSCRIPTION_RENEWAL', 'MARKETPLACE_BID', 'MARKETPLACE_REFUND', 'MARKETPLACE_SOLD', 'ESCROW_LOCK', 'ESCROW_SETTLED', 'ESCROW_AUTO_RELEASE', 'PREDICTION_BUY', 'PREDICTION_PAYOUT', 'PREDICTION_REFUND_VOID', 'PREDICTION_HOUSE_FEE_BURN', 'WATCH_EARN', 'PREDICTION_JACKPOT_PAYOUT', 'QUEST_REWARD', 'REFERRAL', 'SCRIM_ESCROW_LOCK', 'SCRIM_MERCY_RINGER_STAKE'));
 
 -- -----------------------------------------------------------------------------
 -- 6. ATOMIC RPC PROCEDURES WITH SAFETY GUARDS
