@@ -8,6 +8,7 @@ import { PerformanceRadar } from '@/components/dashboard/PerformanceRadar';
 import { OracleReportCard } from '@/components/dashboard/OracleReportCard';
 import { ZodiacBuffCard } from '@/components/dashboard/ZodiacBuffCard';
 import { QuickScrimFlipCard } from '@/components/dashboard/QuickScrimFlipCard';
+import { MercySubBeaconClaimWidget } from '@/components/dashboard/MercySubBeaconClaimWidget';
 import { getAthleteDashboardData } from '@/lib/actions/dashboard';
 
 export const dynamic = 'force-dynamic';
@@ -155,6 +156,9 @@ export default async function DashboardPage() {
 
             {/* Quick Match Finder — Patch V7.01 Match Room & Mercy Scrim System */}
             <QuickScrimFlipCard />
+
+            {/* Ringer Claim Feed — Patch V7.01 Fixes (SPEC-MRS-FIX04 §4.2) */}
+            <MercySubBeaconClaimWidget />
 
           </div>
 

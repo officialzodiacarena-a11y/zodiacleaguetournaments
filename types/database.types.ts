@@ -5166,6 +5166,26 @@ export type Database = {
         }
         Returns: Json
       }
+      approve_scrim_room: {
+        Args: { p_room_id: string }
+        Returns: Json
+      }
+      settle_scrim_escrow: {
+        Args: {
+          p_idempotency_key?: string
+          p_room_id: string
+          p_winner_team_side?: string | null
+        }
+        Returns: Json
+      }
+      trigger_mercy_beacon: {
+        Args: {
+          p_missing_team_side: string
+          p_required_role?: Database["public"]["Enums"]["valorant_agent_role_enum"]
+          p_room_id: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       account_status_type:

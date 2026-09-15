@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, use } from "react";
 import { Shield, MessageSquare, UserCheck, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { getRoomDetails, sendRoomMessage, triggerMercySubBeacon } from "@/lib/actions/match-room";
+import { MercySubBeaconClaimWidget } from "@/components/dashboard/MercySubBeaconClaimWidget";
 
 const supabase = createClient();
 
@@ -179,6 +180,9 @@ export default function CustomMatchRoomPage({ params }: { params: Promise<{ id: 
               </div>
             </div>
           </div>
+
+          {/* Ringer Claim Feed — Patch V7.01 Fixes (SPEC-MRS-FIX04 §4.2) */}
+          <MercySubBeaconClaimWidget roomId={roomId} />
         </div>
 
         {/* RIGHT: TACTICAL CHATBOX WITH GRANULAR PERMISSIONS (4 COLS) */}
