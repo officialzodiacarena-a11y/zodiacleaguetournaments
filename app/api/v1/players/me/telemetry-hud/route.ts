@@ -13,6 +13,8 @@ interface TelemetryHudRpcArgs {
   p_player_id: string;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient();
@@ -27,6 +29,14 @@ export async function GET(req: NextRequest) {
     }
 
     const requestedPlayerId = req.nextUrl.searchParams.get('playerId');
+
+    if (requestedPlayerId && !UUID_RE.test(requestedPlayerId)) {
+      return NextResponse.json(
+        { success: false, error: 'INVALID_PLAYER_ID' },
+        { status: 400 }
+      );
+    }
+
     let targetPlayerId = requestedPlayerId;
 
     if (!targetPlayerId) {

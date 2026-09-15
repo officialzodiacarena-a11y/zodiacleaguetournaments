@@ -1,13 +1,11 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Star } from 'lucide-react';
 import AthleteTelemetryHUD from '@/components/dashboard/AthleteTelemetryHUD';
-
-const supabase = createClient();
 
 interface PlayerIdentity {
   id: string;
@@ -26,6 +24,7 @@ interface PlayerIdentity {
 export default function AthleteProfilePage() {
   const params = useParams();
   const playerId = params?.userId as string;
+  const supabase = useMemo(() => createClient(), []);
 
   const [player, setPlayer] = useState<PlayerIdentity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,7 +57,7 @@ export default function AthleteProfilePage() {
     return () => {
       isMounted = false;
     };
-  }, [playerId]);
+  }, [playerId, supabase]);
 
   if (loading) {
     return (
