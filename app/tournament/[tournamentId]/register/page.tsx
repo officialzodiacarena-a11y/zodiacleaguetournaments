@@ -229,7 +229,7 @@ export default async function TournamentRegistrationPage({ params }: PageProps) 
         </div>
         <div className="flex items-center gap-6 text-[13px] font-medium text-[#b2b6ca]">
           <Link href="/profile" className="hover:text-[#E8B429] transition-colors">นักกีฬา</Link>
-          <Link href="/teams" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
+          <Link href="/tournament" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
           <Link href="/tournament" className="text-[#E8B429] font-bold">ลีก</Link>
           <Link href="/schedule" className="hover:text-[#E8B429] transition-colors">Rankings</Link>
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#9184d9] to-[#E8B429] font-bold text-xs text-[#0D0E1A]">

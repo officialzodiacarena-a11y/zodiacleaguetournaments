@@ -255,12 +255,10 @@ export default async function MatchSchedulePage() {
           <Link href="/profile" className="hover:text-[#E8B429] transition-colors">
             นักกีฬา
           </Link>
-          <Link href="/home" className="hover:text-[#E8B429] transition-colors">
+          <Link href="/tournament" className="hover:text-[#E8B429] transition-colors">
             ทีม
-          {/* แก้ไขจากเดิมที่ชี้ไป /home ให้เปลี่ยนเป็น /teams หรือเรียกใช้ Navbar กลาง */}
-<Link href="/teams" className="hover:text-[#E8B429] transition-colors">
-  ทีม
-</Link>
+          </Link>
+          <Link href="/tournament" className="hover:text-[#E8B429] transition-colors">
             ลีก
           </Link>
           <Link href="/schedule" className="text-[#E8B429] font-bold">
