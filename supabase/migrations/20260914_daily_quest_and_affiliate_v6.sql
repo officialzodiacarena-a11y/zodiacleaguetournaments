@@ -145,10 +145,24 @@ ALTER TABLE public.affiliate_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.affiliate_referrals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.affiliate_rewards_ledger ENABLE ROW LEVEL SECURITY;
 
+-- Fix (same class of bug as 20260914_match_room_mercy_scrim_v7_01.sql):
+-- CREATE POLICY has no IF NOT EXISTS guard, unlike CREATE TABLE IF NOT EXISTS
+-- / the DO-block enum checks above, so re-running this file after a prior
+-- successful run fails with 42710 "policy already exists". DROP POLICY IF
+-- EXISTS before each CREATE POLICY makes the whole migration safe to re-run.
+DROP POLICY IF EXISTS "Public Read Quests Catalog" ON public.daily_quests;
 CREATE POLICY "Public Read Quests Catalog" ON public.daily_quests FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Owner Read Quest Progress" ON public.player_daily_quests;
 CREATE POLICY "Owner Read Quest Progress" ON public.player_daily_quests FOR SELECT USING (auth.uid() IN (SELECT user_id FROM public.players WHERE id = player_id));
+
+DROP POLICY IF EXISTS "Public Read Affiliate Codes" ON public.affiliate_codes;
 CREATE POLICY "Public Read Affiliate Codes" ON public.affiliate_codes FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Referrer Read Referrals" ON public.affiliate_referrals;
 CREATE POLICY "Referrer Read Referrals" ON public.affiliate_referrals FOR SELECT USING (auth.uid() IN (SELECT user_id FROM public.players WHERE id = referrer_id OR id = referee_id));
+
+DROP POLICY IF EXISTS "Referrer Read Rewards Ledger" ON public.affiliate_rewards_ledger;
 CREATE POLICY "Referrer Read Rewards Ledger" ON public.affiliate_rewards_ledger FOR SELECT USING (auth.uid() IN (SELECT user_id FROM public.players WHERE id = referrer_id));
 
 -- -----------------------------------------------------------------------------
