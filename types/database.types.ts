@@ -5186,6 +5186,10 @@ export type Database = {
         }
         Returns: Json
       }
+      get_athlete_telemetry_dashboard_v26: {
+        Args: { p_player_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       account_status_type:
