@@ -43,9 +43,9 @@ export function TournamentBracketView({ data }: TournamentBracketViewProps) {
           </span>
         </div>
         <div className="flex gap-7 text-[13px] font-medium text-[#9397ab]">
-          <Link href="/athletes" className="hover:text-white transition-colors">นักกีฬา</Link>
-          <Link href="/teams" className="hover:text-white transition-colors">ทีม</Link>
-          <Link href="/tournaments" className="hover:text-white transition-colors">ลีก</Link>
+          <Link href="/leaderboard" className="hover:text-white transition-colors">นักกีฬา</Link>
+          <Link href="/tournament" className="hover:text-white transition-colors">ทีม</Link>
+          <Link href="/tournament" className="hover:text-white transition-colors">ลีก</Link>
           <Link href="/schedule" className="text-[#E8B429]">Rankings</Link>
         </div>
       </nav>

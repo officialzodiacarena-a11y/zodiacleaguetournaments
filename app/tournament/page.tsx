@@ -274,7 +274,7 @@ export default async function TournamentRegistryPage() {
         </div>
         <div className="hidden md:flex gap-8 text-[13px] font-medium text-[#e9e9ed]/55">
           <Link href="/profile" className="hover:text-[#E8B429] transition-colors">นักกีฬา</Link>
-          <Link href="/teams" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
+          <Link href="/tournament" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
           <Link href="/tournament" className="text-[#E8B429] font-semibold border-b-2 border-[#E8B429] pb-0.5">ลีก</Link>
           <Link href="/schedule" className="hover:text-[#E8B429] transition-colors">Rankings</Link>
         </div>
