@@ -66,6 +66,26 @@ export interface OpenMercyTicket {
 }
 
 /**
+ * Shape of the JSONB payload every match-room RPC returns. The generated
+ * Supabase types only cover Args/Returns=Json for these functions, so the
+ * `success`/`error`/`ticket_id` fields inside that Json need a local type
+ * instead of `any` to satisfy @typescript-eslint/no-explicit-any.
+ */
+interface RpcJsonResult {
+  success: boolean;
+  error?: string;
+  [key: string]: unknown;
+}
+
+interface MercyTicketRow {
+  id: string;
+  room_id: string;
+  missing_team_side: string;
+  required_role: string;
+  match_rooms: { title: string } | null;
+}
+
+/**
  * Shared staff gate for admin-only room actions (approve / settle).
  * Fix (see migration header, item 7): approve_scrim_room()/settle_scrim_escrow()
  * carry no auth.uid() check of their own since they run via the service-role
@@ -152,8 +172,9 @@ export async function createScheduledMatchRoom(input: CreateScrimRoomInput) {
   // failures like insufficient AP — `error` above stays null in that case, so
   // it must be checked separately or the caller reports success on a room
   // that was never created.
-  if (!data || (data as any)?.success === false) {
-    return { success: false, error: (data as any)?.error || 'FAILED_TO_CREATE_SCRIM_ROOM' };
+  const createResult = data as RpcJsonResult | null;
+  if (!createResult || createResult.success === false) {
+    return { success: false, error: createResult?.error || 'FAILED_TO_CREATE_SCRIM_ROOM' };
   }
 
   revalidatePath('/dashboard');
@@ -291,11 +312,12 @@ export async function triggerMercySubBeacon(input: TriggerMercyBeaconInput) {
   });
 
   if (error) return { success: false, error: error.message };
-  if (!data || (data as any)?.success === false) {
-    return { success: false, error: (data as any)?.error || 'FAILED_TO_TRIGGER_BEACON' };
+  const beaconResult = data as RpcJsonResult | null;
+  if (!beaconResult || beaconResult.success === false) {
+    return { success: false, error: beaconResult?.error || 'FAILED_TO_TRIGGER_BEACON' };
   }
 
-  const ticketId = (data as any).ticket_id as string;
+  const ticketId = beaconResult.ticket_id as string;
 
   // Broadcast Mercy Beacon to All Standby Ringers
   await adminClient.channel('mercy-global-beacon').send({
@@ -351,8 +373,9 @@ export async function claimMercySubSlot(ticketId: string, idempotencyKey?: strin
 
   // Fix (False-Positive Success Bug): same JSONB-level failure as
   // create_scrim_room() above — must check data.success, not just `error`.
-  if (!data || (data as any)?.success === false) {
-    return { success: false, error: (data as any)?.error || 'FAILED_TO_CLAIM_MERCY_SLOT' };
+  const claimResult = data as RpcJsonResult | null;
+  if (!claimResult || claimResult.success === false) {
+    return { success: false, error: claimResult?.error || 'FAILED_TO_CLAIM_MERCY_SLOT' };
   }
 
   revalidatePath('/dashboard');
@@ -373,8 +396,9 @@ export async function approveScrimRoom(roomId: string) {
   });
 
   if (error) return { success: false, error: error.message };
-  if (!data || (data as any)?.success === false) {
-    return { success: false, error: (data as any)?.error || 'FAILED_TO_APPROVE_ROOM' };
+  const approveResult = data as RpcJsonResult | null;
+  if (!approveResult || approveResult.success === false) {
+    return { success: false, error: approveResult?.error || 'FAILED_TO_APPROVE_ROOM' };
   }
 
   revalidatePath(`/tournaments/room/${roomId}`);
@@ -398,8 +422,9 @@ export async function settleScrimEscrow(roomId: string, winnerTeamSide?: 'TEAM_A
   });
 
   if (error) return { success: false, error: error.message };
-  if (!data || (data as any)?.success === false) {
-    return { success: false, error: (data as any)?.error || 'FAILED_TO_SETTLE_ESCROW' };
+  const settleResult = data as RpcJsonResult | null;
+  if (!settleResult || settleResult.success === false) {
+    return { success: false, error: settleResult?.error || 'FAILED_TO_SETTLE_ESCROW' };
   }
 
   revalidatePath(`/tournaments/room/${roomId}`);
@@ -430,7 +455,7 @@ export async function getOpenMercyTickets(roomId?: string) {
     return { success: false, error: error.message };
   }
 
-  const tickets: OpenMercyTicket[] = (data || []).map((t: any) => ({
+  const tickets: OpenMercyTicket[] = ((data as MercyTicketRow[]) || []).map((t) => ({
     id: t.id,
     roomId: t.room_id,
     roomTitle: t.match_rooms?.title || 'CUSTOM MATCH ROOM',

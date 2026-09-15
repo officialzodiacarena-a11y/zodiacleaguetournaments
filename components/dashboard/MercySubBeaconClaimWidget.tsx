@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Siren, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { claimMercySubSlot, getOpenMercyTickets, type OpenMercyTicket } from "@/lib/actions/match-room";
@@ -14,6 +15,7 @@ const supabase = createClient();
  * it for a global feed (Dashboard).
  */
 export function MercySubBeaconClaimWidget({ roomId }: { roomId?: string }) {
+  const router = useRouter();
   const [tickets, setTickets] = useState<OpenMercyTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [claimingId, setClaimingId] = useState<string | null>(null);
@@ -51,7 +53,7 @@ export function MercySubBeaconClaimWidget({ roomId }: { roomId?: string }) {
       setFeedback({ id: ticket.id, msg: "🎉 CLAIMED! REDIRECTING TO MATCH ROOM...", isError: false });
       setTickets((prev) => prev.filter((t) => t.id !== ticket.id));
       setTimeout(() => {
-        window.location.href = `/tournaments/room/${ticket.roomId}`;
+        router.push(`/tournaments/room/${ticket.roomId}`);
       }, 1200);
     } else {
       setFeedback({ id: ticket.id, msg: `❌ ${res.error || "SLOT_TAKEN"}`, isError: true });
