@@ -194,7 +194,7 @@ export async function getRoomDetails(roomId: string) {
 
   const { data, error } = await supabase
     .from('match_rooms')
-    .select('*, match_room_participants(*), match_room_staff(*)')
+    .select('*, match_room_participants(*, players(display_name)), match_room_staff(*)')
     .eq('id', roomId)
     .single();
 

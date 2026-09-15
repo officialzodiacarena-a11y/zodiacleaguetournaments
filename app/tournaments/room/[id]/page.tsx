@@ -18,7 +18,11 @@ interface RoomParticipant {
   has_paid_escrow: boolean;
   is_ready_confirmed: boolean;
   is_mercy_ringer: boolean;
+  players: { display_name: string } | null;
 }
+
+const AGENT_ROLES = ["DUELIST", "INITIATOR", "CONTROLLER", "SENTINEL", "FLEX"] as const;
+type AgentRole = (typeof AGENT_ROLES)[number];
 
 interface RoomStaffMember {
   id: string;
@@ -53,6 +57,8 @@ export default function CustomMatchRoomPage({ params }: { params: Promise<{ id: 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [loading, setLoading] = useState(true);
+  const [beaconRole, setBeaconRole] = useState<AgentRole>("FLEX");
+  const [beaconBusy, setBeaconBusy] = useState(false);
 
   // Alis Flag 2: was a direct `supabase.from('match_rooms')...` call from this
   // client component — moved into the getRoomDetails() Server Action in
@@ -85,12 +91,14 @@ export default function CustomMatchRoomPage({ params }: { params: Promise<{ id: 
     if (res.success) setChatInput("");
   };
 
-  const handleMercyBeacon = async () => {
+  const handleMercyBeacon = async (side: "TEAM_A" | "TEAM_B", role: AgentRole) => {
+    setBeaconBusy(true);
     await triggerMercySubBeacon({
       roomId,
-      missingTeamSide: "TEAM_B",
-      requiredRole: "DUELIST",
+      missingTeamSide: side,
+      requiredRole: role,
     });
+    setBeaconBusy(false);
     fetchRoomDetails();
   };
 
@@ -137,34 +145,62 @@ export default function CustomMatchRoomPage({ params }: { params: Promise<{ id: 
               ROSTER SLOTS (12 CAPACITY)
             </h2>
 
-            <div className="grid grid-cols-2 gap-4">
-              {/* TEAM A (5 SLOTS) */}
-              <div className="space-y-2">
-                <h3 className="font-mono text-xs font-bold text-emerald-400">TEAM A (STARTERS)</h3>
-                {[1, 2, 3, 4, 5].map((idx) => (
-                  <div key={idx} className="p-3 bg-black/40 border border-white/5 rounded-xl flex justify-between items-center font-mono text-xs">
-                    <span className="text-gray-400">SLOT #{idx}</span>
-                    <span className="text-emerald-400 font-bold">READY ✓</span>
-                  </div>
+            {/* Fix (Live Roster Sync, SPEC-MRP-FIX02): rosters below render from
+                room.match_room_participants instead of a hardcoded [1..5] mock —
+                scrims don't require a full 5v5 to proceed (3-2, 2-2 etc. are
+                valid), so this must reflect the real headcount per side. */}
+            <div className="flex items-center gap-2 mb-3 font-mono text-[10px]">
+              <span className="text-gray-500 uppercase">ตำแหน่งที่จะขอ ringer:</span>
+              <select
+                value={beaconRole}
+                onChange={(e) => setBeaconRole(e.target.value as AgentRole)}
+                className="bg-black/60 border border-white/10 rounded px-2 py-1 text-white"
+              >
+                {AGENT_ROLES.map((r) => (
+                  <option key={r} value={r}>{r}</option>
                 ))}
-              </div>
+              </select>
+            </div>
 
-              {/* TEAM B (5 SLOTS) */}
-              <div className="space-y-2">
-                <h3 className="font-mono text-xs font-bold text-rose-400">TEAM B (STARTERS)</h3>
-                {[1, 2, 3, 4, 5].map((idx) => (
-                  <div key={idx} className="p-3 bg-black/40 border border-white/5 rounded-xl flex justify-between items-center font-mono text-xs">
-                    <span className="text-gray-400">SLOT #{idx}</span>
-                    {idx === 5 && room?.mercy_beacon_active ? (
-                      <button onClick={handleMercyBeacon} className="px-2 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded text-[10px] animate-pulse">
-                        CALL RINGER
-                      </button>
-                    ) : (
-                      <span className="text-gray-500">EMPTY</span>
-                    )}
+            <div className="grid grid-cols-2 gap-4">
+              {(["TEAM_A", "TEAM_B"] as const).map((side) => {
+                const roster = (room?.match_room_participants || []).filter((p) => p.team_side === side);
+                const emptySlots = Math.max(0, 5 - roster.length);
+                const headingClass = side === "TEAM_A" ? "text-emerald-400" : "text-rose-400";
+
+                return (
+                  <div key={side} className="space-y-2">
+                    <h3 className={`font-mono text-xs font-bold ${headingClass}`}>
+                      {side.replace("_", " ")} ({roster.length}/5)
+                    </h3>
+
+                    {roster.map((p) => (
+                      <div key={p.id} className="p-3 bg-black/40 border border-white/5 rounded-xl flex justify-between items-center font-mono text-xs">
+                        <span className="text-gray-200 truncate">
+                          {p.players?.display_name || p.player_id.slice(0, 8)}
+                          {p.is_mercy_ringer && <span className="text-rose-400 ml-1">[RINGER]</span>}
+                        </span>
+                        <span className={p.is_ready_confirmed ? "text-emerald-400 font-bold" : "text-yellow-400"}>
+                          {p.is_ready_confirmed ? "READY ✓" : "PENDING"}
+                        </span>
+                      </div>
+                    ))}
+
+                    {Array.from({ length: emptySlots }).map((_, i) => (
+                      <div key={`empty-${side}-${i}`} className="p-3 bg-black/20 border border-dashed border-white/10 rounded-xl flex justify-between items-center font-mono text-xs">
+                        <span className="text-gray-600">EMPTY SLOT</span>
+                        <button
+                          onClick={() => handleMercyBeacon(side, beaconRole)}
+                          disabled={beaconBusy}
+                          className="px-2 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded text-[10px] hover:bg-rose-500/30 disabled:opacity-50"
+                        >
+                          CALL RINGER
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
 
             {/* DEDICATED STAFF OVERSIGHT BOX */}
