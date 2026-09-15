@@ -52,6 +52,21 @@
 --      แปลว่า nested select `match_room_staff(*)` ใน getRoomDetails() จะว่างเปล่า
 --      เสมอ (กระทบ Staff Oversight Box บนหน้า UI โดยตรง) เพิ่ม public read policy
 --      ให้ทั้งสองตาราง ให้สอดคล้องกับตารางอื่นในแพตช์นี้ที่เปิดอ่านสาธารณะหมด
+--
+--   8. [พบตอนรันซ้ำ — 42710 policy already exists] CREATE POLICY ไม่มี
+--      IF NOT EXISTS ให้ใช้ (ต่างจาก CREATE TABLE IF NOT EXISTS / DO-block
+--      enum check ด้านบนที่กันไว้แล้ว) รันไฟล์นี้ซ้ำครั้งที่สองเลยพังที่ policy
+--      แรกสุดทันที เพิ่ม DROP POLICY IF EXISTS นำหน้าทุก CREATE POLICY ในหมวด 4
+--      ให้รันซ้ำได้ปลอดภัยเหมือนส่วนอื่นของไฟล์
+--
+--   9. [พบตอนรัน daily_quest_and_affiliate_v6.sql ทีหลัง — 23514 check
+--      constraint violated] ไฟล์นั้น (คนละ feature branch, พัฒนาพร้อมกัน) ก็
+--      DROP/ADD ap_ledger_reason_check เหมือนกัน แต่ใส่แค่ 'QUEST_REWARD'/
+--      'REFERRAL' ของตัวเอง ไม่มี 'SCRIM_ESCROW_LOCK'/'SCRIM_MERCY_RINGER_STAKE'
+--      — พอรันไฟล์นั้นทับ constraint ของไฟล์นี้ทิ้ง แถวเก่าที่มี reason แบบ
+--      SCRIM_* (จากการสร้างห้อง scrim จริง) เลยชน constraint ใหม่ทันที แก้โดยใส่
+--      'QUEST_REWARD'/'REFERRAL' รวมเข้ามาในหมวด 5 ด้านล่างด้วย ให้เป็น union
+--      เดียวกันทั้งสองไฟล์ ไม่ว่าจะรันไฟล์ไหนก่อน-หลังก็ปลอดภัย
 -- =============================================================================
 
 BEGIN;
@@ -202,41 +217,59 @@ ALTER TABLE public.mercy_sub_pool ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mercy_fill_tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.match_room_messages ENABLE ROW LEVEL SECURITY;
 
+-- Fix 8: CREATE POLICY has no IF NOT EXISTS guard (unlike the CREATE TABLE
+-- IF NOT EXISTS / DO-block enum checks above), so re-running this migration
+-- after a prior successful run fails with 42710 "policy already exists" on
+-- the very first one. DROP POLICY IF EXISTS before each CREATE POLICY makes
+-- the whole file safe to run more than once.
+
 -- Public Read Match Rooms
+DROP POLICY IF EXISTS "Public Read Match Rooms" ON public.match_rooms;
 CREATE POLICY "Public Read Match Rooms" ON public.match_rooms FOR SELECT USING (true);
 
 -- Participant Read Match Room Members
+DROP POLICY IF EXISTS "Participants Read Room Members" ON public.match_room_participants;
 CREATE POLICY "Participants Read Room Members" ON public.match_room_participants FOR SELECT USING (true);
 
 -- Fix 7: match_room_staff had RLS enabled but zero SELECT policy in the
 -- original spec — nested `match_room_staff(*)` reads always returned empty.
+DROP POLICY IF EXISTS "Public Read Match Room Staff" ON public.match_room_staff;
 CREATE POLICY "Public Read Match Room Staff" ON public.match_room_staff FOR SELECT USING (true);
 
 -- Mercy Sub Pool Public Read
+DROP POLICY IF EXISTS "Public Read Mercy Sub Pool" ON public.mercy_sub_pool;
 CREATE POLICY "Public Read Mercy Sub Pool" ON public.mercy_sub_pool FOR SELECT USING (true);
 
 -- Mercy Sub Pool Owner Update
+DROP POLICY IF EXISTS "Owner Manage Mercy Sub Pool" ON public.mercy_sub_pool;
 CREATE POLICY "Owner Manage Mercy Sub Pool" ON public.mercy_sub_pool
     FOR ALL USING (auth.uid() IN (SELECT user_id FROM public.players WHERE id = player_id));
 
 -- Fix 7: same default-deny trap as match_room_staff — mercy beacons are
 -- broadcast to everyone, ticket visibility should be public too.
+DROP POLICY IF EXISTS "Public Read Mercy Fill Tickets" ON public.mercy_fill_tickets;
 CREATE POLICY "Public Read Mercy Fill Tickets" ON public.mercy_fill_tickets FOR SELECT USING (true);
 
 -- Tactical Lobby Chat: readable by anyone (mirrors the other room tables in
 -- this patch); writes only ever happen server-side via the admin client in
 -- lib/actions/match-room.ts, which bypasses RLS, so no INSERT policy is
 -- required for the app to function — still documented as read-only here.
+DROP POLICY IF EXISTS "Public Read Match Room Messages" ON public.match_room_messages;
 CREATE POLICY "Public Read Match Room Messages" ON public.match_room_messages FOR SELECT USING (true);
 
 -- -----------------------------------------------------------------------------
 -- 5. ap_ledger: allow the new Scrim Escrow reasons (Fix 3)
 --    (เก็บค่าเดิมทั้งหมดจาก 20260910020000_t71_phase7_predictions_watch_v2.sql
 --    ไว้ครบ แล้วเพิ่มสองค่าใหม่ท้ายรายการ)
+--
+--    Fix 9 [23514 check constraint violated]: 20260914_daily_quest_and_affiliate_v6.sql
+--    (คนละ feature branch, พัฒนาพร้อมกัน) ก็ DROP/ADD constraint นี้เหมือนกัน แล้วเพิ่ม
+--    'QUEST_REWARD'/'REFERRAL' ของมันเองแทน — เพิ่มสองค่านั้นเข้ามาด้วยที่นี่ ให้เป็น union
+--    เดียวกัน ไม่ว่าจะรัน migration ไหนก่อน-หลังก็ไม่ไปเขี่ยค่าของอีกไฟล์ทิ้ง
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.ap_ledger DROP CONSTRAINT IF EXISTS ap_ledger_reason_check;
 ALTER TABLE public.ap_ledger ADD CONSTRAINT ap_ledger_reason_check
-    CHECK (reason IN ('WATCH_REWARD', 'CLAWBACK', 'ADMIN_ADJUSTMENT', 'STORE_REDEEM', 'TOP_UP', 'REFUND_AP_CREDIT', 'PENALTY_FINE', 'SUBSCRIPTION_RENEWAL', 'MARKETPLACE_BID', 'MARKETPLACE_REFUND', 'MARKETPLACE_SOLD', 'ESCROW_LOCK', 'ESCROW_SETTLED', 'ESCROW_AUTO_RELEASE', 'PREDICTION_BUY', 'PREDICTION_PAYOUT', 'PREDICTION_REFUND_VOID', 'PREDICTION_HOUSE_FEE_BURN', 'WATCH_EARN', 'PREDICTION_JACKPOT_PAYOUT', 'SCRIM_ESCROW_LOCK', 'SCRIM_MERCY_RINGER_STAKE'));
+    CHECK (reason IN ('WATCH_REWARD', 'CLAWBACK', 'ADMIN_ADJUSTMENT', 'STORE_REDEEM', 'TOP_UP', 'REFUND_AP_CREDIT', 'PENALTY_FINE', 'SUBSCRIPTION_RENEWAL', 'MARKETPLACE_BID', 'MARKETPLACE_REFUND', 'MARKETPLACE_SOLD', 'ESCROW_LOCK', 'ESCROW_SETTLED', 'ESCROW_AUTO_RELEASE', 'PREDICTION_BUY', 'PREDICTION_PAYOUT', 'PREDICTION_REFUND_VOID', 'PREDICTION_HOUSE_FEE_BURN', 'WATCH_EARN', 'PREDICTION_JACKPOT_PAYOUT', 'SCRIM_ESCROW_LOCK', 'SCRIM_MERCY_RINGER_STAKE', 'QUEST_REWARD', 'REFERRAL'));
 
 -- -----------------------------------------------------------------------------
 -- 6. ATOMIC RPC PROCEDURES WITH ACID & SAFETY GUARDS
