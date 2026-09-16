@@ -1,5 +1,4 @@
 import React from 'react';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { TeamProfileData, PlayerSlot, TeamRoleType } from '@/types/team';
 import { lockRosterAction } from '@/actions/team';
@@ -226,22 +225,6 @@ export default async function TeamProfilePage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 select-none">
-      {/* 1. TOP NAV */}
-      <nav className="sticky top-0 z-50 flex h-[60px] items-center justify-between border-b border-[#E8B429]/20 bg-[#0D0E1A]/95 px-6 md:px-12 backdrop-blur-md">
-        <div className="flex items-center gap-2.5 font-bold tracking-[2px] text-[#E8B429]">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md border-2 border-[#E8B429] font-black text-sm text-[#E8B429]">
-            Z
-          </div>
-          <span className="text-base tracking-widest">ZODIAC ARENA</span>
-        </div>
-        <div className="hidden md:flex gap-8 text-[13px] font-medium text-[#b2b6ca]">
-          <Link href="/profile" className="hover:text-[#E8B429] transition-colors">นักกีฬา</Link>
-          <span className="text-[#E8B429]">ทีม</span>
-          <Link href="/tournament" className="hover:text-[#E8B429] transition-colors">ลีก</Link>
-          <Link href="/schedule" className="hover:text-[#E8B429] transition-colors">Rankings</Link>
-        </div>
-      </nav>
-
       <main className="max-w-[1280px] mx-auto px-6 md:px-12 pt-9">
         {/* 2. TEAM BANNER */}
         <div className="relative mb-7 overflow-hidden rounded-2xl border border-[#E8B429]/25 bg-[#1A1C2E]">

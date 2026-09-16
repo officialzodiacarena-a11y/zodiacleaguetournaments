@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
 import type { BracketMatchNode, TournamentBracketPageData } from '@/types/bracket';
 
 export type BracketRoundTab = 'all' | 'upper' | 'lower' | 'gf';
@@ -32,24 +31,6 @@ export function TournamentBracketView({ data }: TournamentBracketViewProps) {
 
   return (
     <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-16 select-none">
-      {/* 1. TOP NAVBAR */}
-      <nav className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-[#E8B429]/20 bg-[#0D0E1A]/95 px-6 md:px-8 backdrop-blur-md">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#E8B429] font-black text-sm text-[#0D0E1A]">
-            ZA
-          </div>
-          <span className="font-extrabold text-sm tracking-wider text-white">
-            ZODIAC<span className="text-[#E8B429]">ARENA</span>
-          </span>
-        </div>
-        <div className="flex gap-7 text-[13px] font-medium text-[#9397ab]">
-          <Link href="/athletes" className="hover:text-white transition-colors">นักกีฬา</Link>
-          <Link href="/teams" className="hover:text-white transition-colors">ทีม</Link>
-          <Link href="/tournaments" className="hover:text-white transition-colors">ลีก</Link>
-          <Link href="/schedule" className="text-[#E8B429]">Rankings</Link>
-        </div>
-      </nav>
-
       {/* 2. TOURNAMENT HEADER BAR */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E8B429]/35 bg-gradient-to-r from-[#161030] via-[#1A1C2E] to-[#0D1420] px-6 md:px-8 py-4">
         <div className="flex items-center gap-4 flex-wrap">

@@ -46,33 +46,6 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#080811] text-slate-100 flex flex-col font-sans selection:bg-[#F59E0B] selection:text-black">
 
-      {/* 🧭 RESERVED NAVBAR CONTAINER (72px) */}
-      <header className="w-full h-[72px] border-b border-white/[0.08] bg-[#0F111E]/60 backdrop-blur-md sticky top-0 z-50 px-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#F59E0B] to-[#8B5CF6] flex items-center justify-center text-black font-orbitron font-black text-sm shadow-md shadow-[#F59E0B]/20">
-            ZA
-          </div>
-          <div>
-            <span className="font-orbitron font-bold text-sm tracking-wider text-white">ZODIAC ARENA</span>
-            <span className="text-[10px] text-slate-400 block font-mono -mt-1 tracking-widest uppercase">Athlete Telemetry Hub</span>
-          </div>
-        </div>
-
-        <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full border border-dashed border-slate-700 bg-[#080811]/50 text-slate-400 text-xs font-mono">
-          <span>&lt;/&gt; RESERVED NAVBAR CONTAINER • 72PX HEIGHT</span>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-xs font-mono bg-[#080811]/80 px-3 py-1.5 rounded-lg border border-white/[0.08]">
-            <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse"></span>
-            <span className="text-slate-300">SERVER: AP-BANGKOK</span>
-          </div>
-          <div className="w-9 h-9 rounded-full bg-[#15182A] border border-[#F59E0B]/40 flex items-center justify-center text-xs text-[#F59E0B] font-bold">
-            {profile.zodiacSign === 'LEO' ? '♌' : '♈'}
-          </div>
-        </div>
-      </header>
-
       {/* 🎮 DASHBOARD MAIN VIEWPORT */}
       <main className="flex-1 max-w-[1600px] w-full mx-auto p-4 lg:p-6 space-y-5">
 

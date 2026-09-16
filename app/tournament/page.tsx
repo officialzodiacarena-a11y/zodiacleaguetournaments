@@ -263,23 +263,6 @@ export default async function TournamentRegistryPage() {
 
   return (
     <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 select-none">
-      {/* 1. TOP NAV */}
-      <nav className="sticky top-0 z-50 flex h-[60px] items-center justify-between border-b border-[#E8B429]/15 bg-[#0D0E1A]/95 px-6 md:px-10 backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E8B429] text-[#E8B429] font-bold text-xs">
-            ★
-          </div>
-          <span className="font-extrabold text-sm tracking-wider text-[#E8B429]">ZODIAC</span>
-          <span className="text-sm font-normal tracking-wide text-[#E8B429]/60">ARENA</span>
-        </div>
-        <div className="hidden md:flex gap-8 text-[13px] font-medium text-[#e9e9ed]/55">
-          <Link href="/profile" className="hover:text-[#E8B429] transition-colors">นักกีฬา</Link>
-          <Link href="/teams" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
-          <Link href="/tournament" className="text-[#E8B429] font-semibold border-b-2 border-[#E8B429] pb-0.5">ลีก</Link>
-          <Link href="/schedule" className="hover:text-[#E8B429] transition-colors">Rankings</Link>
-        </div>
-      </nav>
-
       {/* 2. PAGE HEADER */}
       <div className="max-w-[1200px] mx-auto px-6 md:px-10 pt-12 pb-8">
         <div className="flex items-center gap-3 mb-2.5">
