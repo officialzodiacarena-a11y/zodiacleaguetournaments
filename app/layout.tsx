@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import ZodiacOracle from '@/components/ZodiacOracle'
 import ThemeInjector from '@/components/ThemeInjector'
-import Navbar from '@/components/layout/Navbar'
+import ChromeGate from '@/components/layout/ChromeGate'
 
 export const metadata: Metadata = {
   title: 'ZODIAC ARENA — 12 Signs. One Destiny.',
@@ -18,9 +17,8 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <ThemeInjector />
-        <Navbar />
+        <ChromeGate />
         {children}
-        <ZodiacOracle />
       </body>
     </html>
   )

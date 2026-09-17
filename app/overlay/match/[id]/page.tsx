@@ -100,6 +100,21 @@ export default function MatchBroadcastOverlay({
   const [mvp, setMvp] = useState<MVPlayerStats | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [broadcastScene, setBroadcastScene] = useState<"VETO" | "LIVE" | "AWAITING_RESULT" | null>(null);
+  const [hudBanner, setHudBanner] = useState<{ type: string; message: string } | null>(null);
+
+  // บังคับพื้นหลังโปร่งใสให้ OBS Browser Source ดึงไปใช้ได้จริง
+  // (globals.css ตั้ง body { background: var(--background) } แบบทึบไว้ตั้งแต่ root layout — ต้อง override เฉพาะหน้านี้)
+  useEffect(() => {
+    const prevHtmlBg = document.documentElement.style.background;
+    const prevBodyBg = document.body.style.background;
+    document.documentElement.style.background = "transparent";
+    document.body.style.background = "transparent";
+    return () => {
+      document.documentElement.style.background = prevHtmlBg;
+      document.body.style.background = prevBodyBg;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -193,6 +208,9 @@ export default function MatchBroadcastOverlay({
         (payload) => {
           const updatedMatch = payload.new as MatchData;
           setMatch((prev) => (prev ? { ...prev, ...updatedMatch } : updatedMatch));
+          // สถานะจริงจาก DB มาแล้ว (เช่นกดปุ่ม Pause/Resume/Set Awaiting Result) ให้ยึดตามนี้
+          // จนกว่าจะมี scene_change broadcast รอบใหม่เข้ามาทับอีกที (Fallback State Sync ตามสเปก)
+          setBroadcastScene(null);
           fetchInitialData();
         }
       )
@@ -212,6 +230,21 @@ export default function MatchBroadcastOverlay({
       )
       .on("broadcast", { event: "stream_telemetry_relay" }, (payload) => {
         console.log("Realtime stream health telemetries received:", payload);
+      })
+      .on("broadcast", { event: "scene_change" }, (payload) => {
+        const scene = (payload.payload as { scene?: string })?.scene;
+        if (scene === "VETO" || scene === "LIVE" || scene === "AWAITING_RESULT") {
+          if (isMounted) setBroadcastScene(scene);
+        }
+      })
+      .on("broadcast", { event: "hud_notification" }, (payload) => {
+        const data = payload.payload as { type?: string; message?: string };
+        if (isMounted && data?.message) {
+          setHudBanner({ type: data.type || "NORMAL", message: data.message });
+        }
+      })
+      .on("broadcast", { event: "hud_notification_clear" }, () => {
+        if (isMounted) setHudBanner(null);
       })
       .subscribe();
 
@@ -244,6 +277,10 @@ export default function MatchBroadcastOverlay({
   }
 
   const { team_a, team_b, status, score_a, score_b, rounds_won_a, rounds_won_b } = match;
+  // scene_change broadcast (sub-second, zero DB write) คือ source of truth หลัก
+  // ถ้ายังไม่เคยได้รับ (เช่นเพิ่งโหลดหน้า/OBS เพิ่ง reconnect) ค่อย fallback ไปที่ matches.status จริงจาก DB
+  const displayStatus = broadcastScene ?? status;
+  const showScoreboard = displayStatus === "LIVE" || status === "PAUSED";
   const activeGame = games.find((g) => g.status === "LIVE") || games[games.length - 1];
   const mapName = activeGame?.map_name || "DECIDING_MAP";
   const isMatchPoint = rounds_won_a === 12 || rounds_won_b === 12;
@@ -251,8 +288,25 @@ export default function MatchBroadcastOverlay({
 
   return (
     <main className="relative w-[1920px] h-[1080px] bg-transparent text-white overflow-hidden font-sans">
+      {/* 0. HUD NOTIFICATION BANNER (จาก hud_notification broadcast) */}
+      {hudBanner && (
+        <section className="absolute top-[120px] left-1/2 -translate-x-1/2 z-[60]">
+          <div
+            className={`px-6 py-2.5 rounded-full border backdrop-blur-md shadow-lg ${
+              hudBanner.type === "PAUSE"
+                ? "bg-amber-500/15 border-amber-500/60 text-amber-300"
+                : hudBanner.type === "MATCH_POINT"
+                  ? "bg-rose-500/15 border-rose-500/60 text-rose-300"
+                  : "bg-[#00D4FF]/15 border-[#00D4FF]/60 text-[#00D4FF]"
+            }`}
+          >
+            <span className="font-mono text-xs font-black uppercase tracking-[2px]">{hudBanner.message}</span>
+          </div>
+        </section>
+      )}
+
       {/* 1. TOP COMPACT SCOREBOARD CENTER */}
-      {(status === "LIVE" || status === "PAUSED") && (
+      {showScoreboard && (
         <section className="absolute top-0 left-1/2 -translate-x-1/2 flex items-stretch h-[56px] w-[580px] bg-[#0A0A0F]/90 backdrop-blur-md border-b-2 border-[#C9A84C]/80 rounded-b-xl z-50 overflow-hidden shadow-[0_4px_25px_rgba(0,0,0,0.5)]">
           {/* TEAM A */}
           <div className="flex-1 flex items-center justify-end px-4 gap-3 bg-gradient-to-r from-transparent to-[#FF4655]/5">
@@ -291,7 +345,7 @@ export default function MatchBroadcastOverlay({
       )}
 
       {/* 2. DYNAMIC BROADCAST EVENT BADGES */}
-      {(status === "LIVE" || status === "PAUSED") && (
+      {showScoreboard && (
         <section className="absolute top-[64px] left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-40">
           {status === "PAUSED" && (
             <div className="animate-pulse px-4 py-1 bg-amber-500/10 border border-amber-500/50 rounded-full shadow-[0_0_10px_rgba(245,158,11,0.2)]">
@@ -312,7 +366,7 @@ export default function MatchBroadcastOverlay({
       )}
 
       {/* 3. MAP VETO OVERLAY */}
-      {status === "VETO" && (
+      {displayStatus === "VETO" && (
         <section className="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-md z-30 p-20">
           <div className="w-[1200px] bg-[#12121A]/80 border border-gray-800 rounded-2xl p-8 relative shadow-[0_0_50px_rgba(0,212,255,0.05)]">
             <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-[#00D4FF]/40 to-transparent" />
@@ -394,7 +448,7 @@ export default function MatchBroadcastOverlay({
       )}
 
       {/* 4. INTERMISSION & STATS TRANSITIONS */}
-      {status === "AWAITING_RESULT" && (
+      {displayStatus === "AWAITING_RESULT" && (
         <section className="absolute inset-0 flex items-center justify-end bg-black/90 backdrop-blur-md z-30 p-20">
           <div className="flex gap-10 max-w-[1400px] w-full">
             <div className="flex-1 bg-[#12121A]/80 border border-gray-800 rounded-2xl p-8 relative shadow-2xl">
