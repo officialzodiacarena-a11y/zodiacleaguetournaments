@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import './globals.css'
 import ThemeInjector from '@/components/ThemeInjector'
 import ChromeGate from '@/components/layout/ChromeGate'
@@ -19,6 +20,7 @@ export default function RootLayout({
         <ThemeInjector />
         <ChromeGate />
         {children}
+        <SpeedInsights />
       </body>
     </html>
   )
