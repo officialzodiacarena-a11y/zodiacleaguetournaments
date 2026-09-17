@@ -26,8 +26,10 @@ export type Database = {
           is_active: boolean
           priority: number
           slot_position: 'TOP_LEADERBOARD' | 'LEFT_TOWER' | 'RIGHT_TOWER'
+          sponsor_id: string | null
           starts_at: string
           target_url: string
+          tier: Database["public"]["Enums"]["sponsor_tier"] | null
           title: string
           updated_at: string
         }
@@ -42,8 +44,10 @@ export type Database = {
           is_active?: boolean
           priority?: number
           slot_position: 'TOP_LEADERBOARD' | 'LEFT_TOWER' | 'RIGHT_TOWER'
+          sponsor_id?: string | null
           starts_at?: string
           target_url: string
+          tier?: Database["public"]["Enums"]["sponsor_tier"] | null
           title: string
           updated_at?: string
         }
@@ -58,10 +62,141 @@ export type Database = {
           is_active?: boolean
           priority?: number
           slot_position?: 'TOP_LEADERBOARD' | 'LEFT_TOWER' | 'RIGHT_TOWER'
+          sponsor_id?: string | null
           starts_at?: string
           target_url?: string
+          tier?: Database["public"]["Enums"]["sponsor_tier"] | null
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      sponsors: {
+        Row: {
+          approved_by: string | null
+          brand_logo_url: string
+          company_name: string
+          contact_email: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          metadata: Json
+          partner_player_id: string | null
+          rejection_reason: string | null
+          status: Database["public"]["Enums"]["sponsor_status"]
+          tier: Database["public"]["Enums"]["sponsor_tier"]
+          updated_at: string
+        }
+        Insert: {
+          approved_by?: string | null
+          brand_logo_url: string
+          company_name: string
+          contact_email: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          partner_player_id?: string | null
+          rejection_reason?: string | null
+          status?: Database["public"]["Enums"]["sponsor_status"]
+          tier?: Database["public"]["Enums"]["sponsor_tier"]
+          updated_at?: string
+        }
+        Update: {
+          approved_by?: string | null
+          brand_logo_url?: string
+          company_name?: string
+          contact_email?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          partner_player_id?: string | null
+          rejection_reason?: string | null
+          status?: Database["public"]["Enums"]["sponsor_status"]
+          tier?: Database["public"]["Enums"]["sponsor_tier"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      partner_coupons: {
+        Row: {
+          ap_discount_amount: number
+          code: string
+          created_at: string
+          current_uses: number
+          description: string | null
+          expires_at: string
+          id: string
+          is_active: boolean
+          max_total_uses: number
+          min_purchase_ap: number
+          per_user_limit: number
+          sponsor_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          ap_discount_amount: number
+          code: string
+          created_at?: string
+          current_uses?: number
+          description?: string | null
+          expires_at: string
+          id?: string
+          is_active?: boolean
+          max_total_uses?: number
+          min_purchase_ap?: number
+          per_user_limit?: number
+          sponsor_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          ap_discount_amount?: number
+          code?: string
+          created_at?: string
+          current_uses?: number
+          description?: string | null
+          expires_at?: string
+          id?: string
+          is_active?: boolean
+          max_total_uses?: number
+          min_purchase_ap?: number
+          per_user_limit?: number
+          sponsor_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      partner_coupon_redemptions: {
+        Row: {
+          coupon_id: string
+          created_at: string
+          discount_applied_ap: number
+          id: string
+          idempotency_key: string
+          player_id: string
+        }
+        Insert: {
+          coupon_id: string
+          created_at?: string
+          discount_applied_ap: number
+          id?: string
+          idempotency_key: string
+          player_id: string
+        }
+        Update: {
+          coupon_id?: string
+          created_at?: string
+          discount_applied_ap?: number
+          id?: string
+          idempotency_key?: string
+          player_id?: string
         }
         Relationships: []
       }
@@ -4905,6 +5040,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      verify_and_redeem_partner_coupon: {
+        Args: {
+          p_coupon_code: string
+          p_idempotency_key: string
+          p_player_id: string
+          p_purchase_amount_ap: number
+        }
+        Returns: Json
+      }
       admin_revert_prediction_pool: {
         Args: { p_admin_id: string; p_pool_id: string }
         Returns: Json
@@ -5223,6 +5367,8 @@ export type Database = {
         | "EXPIRED"
         | "ESCROW_LOCKED"
       athlete_listing_type: "AUCTION" | "BUYOUT_ONLY" | "DUAL_MODE"
+      sponsor_tier: "SPONSOR" | "SPONSOR_PARTNER" | "PARTNER_COOP"
+      sponsor_status: "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED"
       audit_action_type:
         | "CREATE"
         | "UPDATE"
