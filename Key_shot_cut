@@ -1,4 +1,8 @@
-npm run diff:check -- 5             = "diff_check"   
-npm run tree:update                 = "tree:update"
+npm run diff:check -- 5                  = "diff_check"
+npm run tree:update                      = "tree:update"
 npm run export:codebase
-npx repomix --style xml --include "app/**/*,components/**/*,lib/**/*,types/**/*,config/**/*,supabase/**/*" --output repomix-output.xml
+npx repomix --style xml --include "app/**/*,components/**/*,lib/**/*,types/**/*,config/**/*,middleware.ts" --output repomix-core.xml
+npx repomix --style xml --include "supabase/migrations/**/*" --output repomix-schema.xml
+npx repomix --style xml --include "app/api/**/*" --output repomix-api.xml
+npx repomix --style xml --include "components/**/*" --output repomix-components.xml
+npx repomix --style xml --include "lib/**/*,types/**/*,middleware.ts" --output repomix-core.xml
