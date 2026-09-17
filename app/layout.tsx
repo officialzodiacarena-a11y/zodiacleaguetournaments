@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import './globals.css'
 import ZodiacOracle from '@/components/ZodiacOracle'
 import ThemeInjector from '@/components/ThemeInjector'
@@ -21,6 +22,7 @@ export default function RootLayout({
         <Navbar />
         {children}
         <ZodiacOracle />
+        <SpeedInsights />
       </body>
     </html>
   )
