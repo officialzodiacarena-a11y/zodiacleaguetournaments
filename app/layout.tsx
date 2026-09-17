@@ -3,6 +3,7 @@ import './globals.css'
 import ZodiacOracle from '@/components/ZodiacOracle'
 import ThemeInjector from '@/components/ThemeInjector'
 import Navbar from '@/components/layout/Navbar'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 
 export const metadata: Metadata = {
   title: 'ZODIAC ARENA — 12 Signs. One Destiny.',
@@ -21,6 +22,7 @@ export default function RootLayout({
         <Navbar />
         {children}
         <ZodiacOracle />
+        <SpeedInsights />
       </body>
     </html>
   )
