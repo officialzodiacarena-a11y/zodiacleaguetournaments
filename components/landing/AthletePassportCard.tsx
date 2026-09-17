@@ -89,7 +89,7 @@ export default function AthletePassportCard() {
           </div>
 
           <Link
-            href="/marketplace/athletes"
+            href="/leaderboard"
             className="w-full text-center py-2 rounded-lg bg-[#E8B429] hover:bg-[#ffc935] text-black font-black text-[11px] tracking-wider uppercase transition-all shadow-md font-mono mt-1"
           >
             เข้าสู่ตลาดซื้อขายนักกีฬา →

@@ -447,7 +447,7 @@ export default async function LandingPage() {
         <footer className="border-t border-white/5 pt-8 pb-4 text-center text-xs text-zinc-500 font-mono space-y-2">
           <p>© 2026 ZODIAC ARENA. ALL RIGHTS RESERVED. POWERED BY AI CASING & ESPORTS TELEMETRY.</p>
           <div className="flex items-center justify-center gap-4 text-[11px]">
-            <Link href="/terms" className="hover:text-zinc-400 underline">Terms of Service</Link>
+            <Link href="/privacy" className="hover:text-zinc-400 underline">Terms of Service</Link>
             <span>·</span>
             <Link href="/privacy" className="hover:text-zinc-400 underline">Privacy Policy</Link>
           </div>
