@@ -221,23 +221,6 @@ export default async function TournamentRegistrationPage({ params }: PageProps) 
 
   return (
     <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 select-none">
-      {/* 1. NAVBAR */}
-      <nav className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-[#E8B429]/20 bg-[#0D0E1A]/90 px-6 md:px-8 backdrop-blur-md">
-        <div className="flex items-center gap-2.5 font-black text-sm tracking-widest text-[#E8B429] uppercase">
-          <span className="text-lg">★</span>
-          <span>ZODIAC ARENA</span>
-        </div>
-        <div className="flex items-center gap-6 text-[13px] font-medium text-[#b2b6ca]">
-          <Link href="/profile" className="hover:text-[#E8B429] transition-colors">นักกีฬา</Link>
-          <Link href="/tournament" className="hover:text-[#E8B429] transition-colors">ทีม</Link>
-          <Link href="/tournament" className="text-[#E8B429] font-bold">ลีก</Link>
-          <Link href="/schedule" className="hover:text-[#E8B429] transition-colors">Rankings</Link>
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#9184d9] to-[#E8B429] font-bold text-xs text-[#0D0E1A]">
-            ZA
-          </div>
-        </div>
-      </nav>
-
       <main className="max-w-[1100px] mx-auto px-6 pt-9">
         {/* 3. TOURNAMENT INFO BAR */}
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#E8B429]/25 bg-gradient-to-r from-[#E8B429]/10 to-[#9184d9]/10 px-5 py-3 mb-7">

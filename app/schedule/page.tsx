@@ -243,30 +243,6 @@ export default async function MatchSchedulePage() {
 
   return (
     <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20">
-      {/* 1. TOP NAVBAR */}
-      <nav className="sticky top-0 z-50 flex h-[60px] items-center justify-between border-b border-[#E8B429]/20 bg-[#0D0E1A]/90 px-6 md:px-10 backdrop-blur-md">
-        <div className="flex items-center gap-2.5 font-bold tracking-widest text-[#E8B429]">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E8B429] text-xs">
-            ★
-          </div>
-          <span className="text-base">ZODIAC ARENA</span>
-        </div>
-        <div className="hidden md:flex gap-7 text-[13px] font-medium text-[#b2b6ca]">
-          <Link href="/profile" className="hover:text-[#E8B429] transition-colors">
-            นักกีฬา
-          </Link>
-          <Link href="/tournament" className="hover:text-[#E8B429] transition-colors">
-            ทีม
-          </Link>
-          <Link href="/tournament" className="hover:text-[#E8B429] transition-colors">
-            ลีก
-          </Link>
-          <Link href="/schedule" className="text-[#E8B429] font-bold">
-            Rankings
-          </Link>
-        </div>
-      </nav>
-
       {/* 2. PAGE CONTENT */}
       <main className="max-w-[1100px] mx-auto px-6 md:px-8 pt-10">
         <div className="mb-7">
