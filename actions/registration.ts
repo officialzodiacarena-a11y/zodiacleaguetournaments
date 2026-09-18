@@ -104,35 +104,46 @@ export async function submitRegistrationAction(
     return { error: { code: 'REGISTRATION_FAILED', message: insertError?.message ?? 'สมัครไม่สำเร็จ' } };
   }
 
-  const newBalance = actor.ap_balance - entryFeeAp;
-  const { data: debited } = await supabase
-    .from('players')
-    .update({ ap_balance: newBalance })
-    .eq('id', actor.id)
-    .gte('ap_balance', entryFeeAp)
-    .select('id')
-    .maybeSingle();
-
-  if (!debited) {
-    // AP ไม่พอ ณ จังหวะหักจริง (race condition) — ย้อนกลับการสมัคร
-    // ต้องใช้ service role เพราะ tournament_registrations ไม่มี RLS policy สำหรับ DELETE ของ user ทั่วไป
+  if (entryFeeAp > 0) {
     const admin = createAdminClient();
-    await admin.from('tournament_registrations').delete().eq('id', registration.id);
-    return { error: { code: 'INSUFFICIENT_AP', message: 'AP ไม่พอในจังหวะที่ทำรายการ กรุณาลองใหม่' } };
+    const { data: moveResult, error: moveError } = await admin.rpc('move_ap', {
+      p_player_id: actor.id,
+      p_amount: -entryFeeAp,
+      p_reason: 'TOURNAMENT_ENTRY_FEE',
+      p_idempotency_key: `reg-fee-${registration.id}`,
+      p_reference_type: 'tournament_registrations',
+      p_reference_id: registration.id,
+    });
+
+    const result = moveResult as { success?: boolean; error?: string; balance_after?: number } | null;
+
+    if (moveError || !result?.success) {
+      // AP ไม่พอ ณ จังหวะหักจริง หรือ transaction error — ย้อนกลับการสมัคร
+      await admin.from('tournament_registrations').delete().eq('id', registration.id);
+      const errorMsg =
+        result?.error === 'INSUFFICIENT_AP_BALANCE'
+          ? 'AP ไม่พอในจังหวะที่ทำรายการ กรุณาลองใหม่'
+          : `หักแต้ม AP ไม่สำเร็จ: ${moveError?.message ?? result?.error ?? 'UNKNOWN_ERROR'}`;
+      return { error: { code: result?.error ?? 'AP_DEDUCTION_FAILED', message: errorMsg } };
+    }
   }
 
   await supabase.from('audit_logs').insert([
+    ...(entryFeeAp > 0
+      ? [
+          {
+            actor_id: actor.id,
+            action: 'DEBIT' as const,
+            entity_type: 'players',
+            entity_id: actor.id,
+            before_data: { ap_balance: actor.ap_balance },
+            after_data: { ap_balance: actor.ap_balance - entryFeeAp },
+          },
+        ]
+      : []),
     {
       actor_id: actor.id,
-      action: 'DEBIT',
-      entity_type: 'players',
-      entity_id: actor.id,
-      before_data: { ap_balance: actor.ap_balance },
-      after_data: { ap_balance: newBalance },
-    },
-    {
-      actor_id: actor.id,
-      action: 'CREATE',
+      action: 'CREATE' as const,
       entity_type: 'tournament_registrations',
       entity_id: registration.id,
       after_data: { tournament_id: tournamentId, team_id: teamId, status: initialStatus },
