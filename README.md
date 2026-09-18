@@ -14,3 +14,8 @@ yarn dev
 pnpm dev
 # or
 bun dev
+```
+
+## Environments
+- **Production:** [https://zodiacleague-web-zodiac-arena.vercel.app](https://zodiacleague-web-zodiac-arena.vercel.app)
+- **Preview & Staging:** Automatically deployed on every branch and Pull Request via Vercel.
