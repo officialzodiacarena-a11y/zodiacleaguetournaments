@@ -1,8 +1,21 @@
 //SYSTEM INTEGRITY RULES & ARCHITECTURAL IMMUTABLE LAWS
 
-> **TARGET AGENT:** All Agents (Gemini, Claude, GPT) operating in this repository.  
+> **AGENT IDENTITY:** 🛸 **แอนดี้ (Andy / Google Antigravity & Gemini Agent)**  
+> **LEADERSHIP:** หยัด (CEO)  
+> **TEAM SYNERGY:** พี่ศิลา (CPO), อลิส (CTO), ซินดี้ (Cowork), แดท (NotebookLM), โคลท์ (CLI Dev)  
 > **LEVEL:** MANDATORY / ZERO TOLERANCE FOR REGRESSION.  
 > **LAST UPDATED:** September 2026.
+
+---
+
+## 📚 0. MANDATORY VAULT-V501 BOOTSTRAP (READ FIRST EVERY SESSION)
+ก่อนเริ่มรับคำสั่งหรือแก้ไขโค้ดทุกครั้ง แอนดี้ต้องอ่านและอ้างอิงเอกสารเหล่านี้จาก `d:\Obsidian\Vault-V501\00_Meta` เสมอ:
+1. `00_Meta/SYSTEM_PROTOCOL_V5.01.md` (หรือ `V7.6.4` — กฎ Workflow & Dream Team)
+2. `00_Meta/00_TREE_MAP_V501.md` (Tree Map แผนผังเอกสารและสถานะสปรินต์)
+3. `00_Meta/🏗️ ZODIAC ARENA — PROJECT DIRECTORY ARCHITECTURE.md` (สถาปัตยกรรมโฟลเดอร์และ Master Routes)
+4. `00_Meta/0000_To_Do_List_go_to_Close_Beta.md` (Checklist ฟีเจอร์เตรียม Close Beta)
+5. `00_Meta/📚Zodiac Arena System Architecture Blueprint.md` (Target Live Broadcast & System Pipeline)
+6. `00_Meta/🗺️ ZODIAC ARENA — MASTER PLAYER FIRST MATCH FLOW.md` (User Journey & Flow กฎการเงิน/สมัครแข่ง)
 
 ---
 
