@@ -1,6 +1,7 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
 import type { TeamProfileData, PlayerSlot, TeamRoleType } from '@/types/team';
+import { AthleteQuickPopover } from '@/components/profile/AthleteQuickPopover';
 import { lockRosterAction } from '@/actions/team';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
@@ -332,7 +333,21 @@ export default async function TeamProfilePage({ params }: PageProps) {
                         {role.text}
                       </span>
                     </div>
-                    <div className="text-base font-bold text-white tracking-wide truncate">{player.handle}</div>
+                    <AthleteQuickPopover
+                      playerId={player.userId}
+                      fallbackData={{
+                        riotId: player.handle,
+                        role: player.role,
+                        tierTitle: 'Unranked',
+                        winRate: 0,
+                        avgAcs: 0,
+                        avgKd: 0,
+                        avgAdr: 0,
+                        headshotPct: 0
+                      }}
+                    >
+                      <div className="text-base font-bold text-white tracking-wide truncate cursor-pointer hover:text-[#00D4FF] transition-colors underline decoration-dashed decoration-zinc-600 underline-offset-4">{player.handle}</div>
+                    </AthleteQuickPopover>
                     <div className="text-[11px] text-[#9397ab] mb-2.5 truncate">{player.fullNameTh}</div>
                     <div className="flex items-center justify-between border-t border-white/5 pt-2 text-center">
                       <div>
@@ -372,7 +387,21 @@ export default async function TeamProfilePage({ params }: PageProps) {
                     {sub.initials}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-bold text-white truncate">{sub.handle}</div>
+                    <AthleteQuickPopover
+                      playerId={sub.userId}
+                      fallbackData={{
+                        riotId: sub.handle,
+                        role: sub.role,
+                        tierTitle: 'Unranked',
+                        winRate: 0,
+                        avgAcs: 0,
+                        avgKd: 0,
+                        avgAdr: 0,
+                        headshotPct: 0
+                      }}
+                    >
+                      <div className="text-xs font-bold text-white truncate cursor-pointer hover:text-[#00D4FF] transition-colors underline decoration-dashed decoration-zinc-600 underline-offset-4">{sub.handle}</div>
+                    </AthleteQuickPopover>
                     <div className="text-[10px] text-[#9397ab] truncate">{sub.fullNameTh}</div>
                   </div>
                   <span className="rounded border border-[#E35A5A]/30 bg-[#E35A5A]/15 px-1.5 py-0.5 text-[9px] font-bold text-[#E35A5A]">

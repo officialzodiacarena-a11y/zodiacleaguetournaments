@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { AthleteQuickPopover } from '@/components/profile/AthleteQuickPopover';
 
 interface LobbyMember {
   id: string | null;
@@ -323,7 +324,21 @@ function TeamPanel({
       <ul className="space-y-1 mb-4">
         {team.members.map((m, idx) => (
           <li key={m.id ?? idx} className="text-xs text-zinc-300 flex items-center justify-between">
-            <span>{m.display_name}</span>
+            <AthleteQuickPopover
+              playerId={m.id || ''}
+              fallbackData={{
+                riotId: m.display_name,
+                role: m.role || 'Unknown',
+                tierTitle: 'Unranked',
+                winRate: 0,
+                avgAcs: 0,
+                avgKd: 0,
+                avgAdr: 0,
+                headshotPct: 0
+              }}
+            >
+              <span className="cursor-pointer hover:text-[#00D4FF] transition-colors underline decoration-dashed decoration-zinc-600 underline-offset-4">{m.display_name}</span>
+            </AthleteQuickPopover>
             <span className="text-[10px] text-zinc-500 uppercase">{m.role}</span>
           </li>
         ))}

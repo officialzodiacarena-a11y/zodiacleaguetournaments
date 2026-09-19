@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { AuctionListingCard } from '@/components/marketplace/AuctionListingCard';
 import { AthleteMarketQueryInput } from '@/types/marketplace';
 
@@ -70,7 +70,11 @@ export default function AthleteMarketplacePage() {
   const [nowTime, setNowTime] = useState(0);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setNowTime(Date.now());
+  }, []);
+
+  useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchListings();
   }, [fetchListings]);
