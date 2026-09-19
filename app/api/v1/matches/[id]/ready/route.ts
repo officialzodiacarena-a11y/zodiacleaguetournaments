@@ -167,7 +167,6 @@ export async function POST(
   }
 
   // 6. บันทึกข้อมูลแมตช์ผ่าน Admin Client
-  const adminSupabase = await createAdminClient();
   const { data: updatedMatch, error: updateErr } = await adminSupabase
     .from('matches')
     .update(asUpdate<'matches'>(updatePayload))
