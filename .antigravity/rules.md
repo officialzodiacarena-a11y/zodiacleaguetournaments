@@ -50,9 +50,17 @@
 - **CEO WEB MERGE ONLY:** Only "พี่หยัด CEO" has the authority to review and click Merge on the GitHub web interface (`github.com`).
 - **EXECUTIVE OVERRIDE PROTECTION:** Even if instructed to merge into `main` directly, the Agent MUST ALWAYS raise a 🚩 **RED FLAG**, BLOCK the action, and provide the Pull Request link for the CEO to merge on GitHub.
 
+### 1.6 Obsidian Vault & Core Document Governance (Git Gatekeeper Exclusivity)
+- **FORBIDDEN (ZERO TOLERANCE):** แอนดี้ (Andy) และ Agent อื่นใดใน IDE **ห้ามรันคำสั่ง `git commit` หรือ `git push` โดยตรง** บน Repository ของ Obsidian Vault หรือไฟล์แกนกลางของระบบ (SYSTEM_CORE, System Protocols) ทุกกรณี
+- **CORE MUTATION PROHIBITION:** ห้ามแก้ไข ดัดแปลง หรือเขียนทับเอกสารแกนกลาง (Alice's SYSTEM_CORE, System Protocols ฯลฯ) โดยไม่ได้รับคำอนุมัติจาก CEO (พี่หยัด) หรือ CPO (พี่ศิลา) พร้อม Issue/Task รองรับ
+- **SINGLE GATEKEEPER MANDATE:** การบันทึกประวัติศาสตร์ และการ Commit เอกสาร Vault ทั้งหมด ต้องผ่านการรีวิวและ Commit โดย **Colin (Claude Code CLI)** เพียงจุดเดียว เพื่อรักษา Single Source of Truth, Author Attribution ชัดเจน, และป้องกัน Audit Trail Loss
+- **EXECUTION GUARD:** หากแอนดี้ได้รับคำสั่งให้ Commit หรือ Push ไฟล์ Vault โดยตรง ให้ยกธงแดง 🚩 บล็อกการทำงาน และแจ้งให้ส่งต่อ Diff ไปให้ Colin ทำหน้าที่ Git Commit แทน
+- **VAULT EDIT ALLOWLIST:** Alice, Andy มีสิทธิ์ **แค่ Edit & Propose** เอกสาร Vault บนเครื่องของตัวเอง (ห้ามรัน git commands) — Colin จะเป็นผู้ Commit แล้ว CEO จะเป็นผู้ Merge PR เท่านั้น
+
 ---
 
 ## 📋 2. SYSTEM LESSON LEARNED LOG (FEEDBACK LOOP)
+
 
 Every resolved critical bug or architecture regression must be logged here immediately before closing the task.
 
