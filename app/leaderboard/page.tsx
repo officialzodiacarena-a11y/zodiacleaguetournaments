@@ -2,12 +2,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
 const ROLES = ['GLOBAL', 'DUELIST', 'CONTROLLER', 'INITIATOR', 'SENTINEL'];
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
+import { AthleteQuickPopover } from '@/components/profile/AthleteQuickPopover';
 
 // ด้านใน return:
 <main className="min-h-screen bg-[#0D0E1A] relative">
@@ -238,34 +238,49 @@ export default function LeaderboardPage() {
 
                     {/* Athlete Identity */}
                     <td className="py-4 px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="relative w-9 h-9 border border-[#00D4FF]/30 bg-[#1A1C2E] rounded-lg overflow-hidden flex items-center justify-center shrink-0">
-                          {player.avatar_url ? (
-                            <img src={player.avatar_url} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <span className="text-[10px] text-[#00D4FF] font-bold">🎮</span>
-                          )}
-                          <div className="absolute top-0 right-0 w-2 h-2 bg-[#4ade80] rounded-full border border-black shadow-[0_0_4px_#4ade80]" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <Link
-                              href="/profile"
-                              className="text-sm font-bold tracking-wide text-neutral-200 group-hover:text-[#00D4FF] transition-colors"
-                            >
-                              {player.display_name}
-                            </Link>
-                            {player.role && (
-                              <span className="px-1.5 py-0.5 text-[8px] border border-[#00D4FF]/40 text-[#00D4FF] bg-[#00D4FF]/10 uppercase tracking-widest rounded">
-                                {player.role}
-                              </span>
+                      <AthleteQuickPopover
+                        playerId={player.id}
+                        fallbackData={{
+                          riotId: player.display_name,
+                          avatarUrl: player.avatar_url,
+                          role: player.role || 'Unknown',
+                          tierTitle: player.tier || 'Unranked',
+                          winRate: player.win_rate,
+                          avgAcs: 0,
+                          avgKd: 0,
+                          avgAdr: 0,
+                          headshotPct: 0,
+                          rolling20Record: player.recent_form.join(''),
+                        }}
+                      >
+                        <div className="flex items-center gap-3 text-left">
+                          <div className="relative w-9 h-9 border border-[#00D4FF]/30 bg-[#1A1C2E] rounded-lg overflow-hidden flex items-center justify-center shrink-0">
+                            {player.avatar_url ? (
+                              <img src={player.avatar_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-[10px] text-[#00D4FF] font-bold">🎮</span>
                             )}
+                            <div className="absolute top-0 right-0 w-2 h-2 bg-[#4ade80] rounded-full border border-black shadow-[0_0_4px_#4ade80]" />
                           </div>
-                          <span className="text-[10px] text-neutral-500 font-mono">
-                            {player.athlete_id}
-                          </span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="text-sm font-bold tracking-wide text-neutral-200 group-hover:text-[#00D4FF] transition-colors"
+                              >
+                                {player.display_name}
+                              </span>
+                              {player.role && (
+                                <span className="px-1.5 py-0.5 text-[8px] border border-[#00D4FF]/40 text-[#00D4FF] bg-[#00D4FF]/10 uppercase tracking-widest rounded">
+                                  {player.role}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-neutral-500 font-mono">
+                              {player.athlete_id}
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      </AthleteQuickPopover>
                     </td>
 
                     {/* Rating / ELO */}

@@ -51,10 +51,10 @@ export function AuctionListingCard({ listingId, itemTitle, currentHighestBid, bu
     setSubmitting(true);
     setToast(null);
     try {
-      const res = await fetch(`/api/v1/marketplace/listings/${listingId}/bid`, {
+      const res = await fetch(`/api/v1/athlete-market/bid`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bid_amount: amount, idempotency_key: crypto.randomUUID() }),
+        body: JSON.stringify({ listing_id: listingId, bid_amount: amount, idempotency_key: crypto.randomUUID() }),
       });
       const json = await res.json();
       if (!res.ok) {

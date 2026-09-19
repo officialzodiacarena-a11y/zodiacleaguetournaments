@@ -2,28 +2,39 @@
 
 import React from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 
 export interface PlayerVerticalProfileProps {
-  playerId?: string;
-  riotId?: string;
-  avatarUrl?: string;
-  role?: 'Duelist' | 'Initiator' | 'Sentinel' | 'Controller';
-  tierTitle?: string;
+  playerId: string;
+  riotId: string;
+  avatarUrl?: string | null;
+  role: string;
+  tierTitle: string;
   zodiacPoints?: number;
   apBalance?: number;
-  winRate?: number;
+  winRate: number;
+  avgAcs: number;
+  avgKd: number;
+  avgAdr: number;
+  headshotPct: number;
+  rolling20Record?: string;
   isLoading?: boolean;
 }
 
 export const PlayerVerticalProfile: React.FC<PlayerVerticalProfileProps> = ({
-  playerId = 'usr_unknown',
-  riotId = 'Operator#TH1',
+  playerId,
+  riotId,
   avatarUrl,
-  role = 'Duelist',
-  tierTitle = 'Ascendant III',
-  zodiacPoints = 0,
-  apBalance = 0,
-  winRate = 0,
+  role,
+  tierTitle,
+  zodiacPoints,
+  apBalance,
+  winRate,
+  avgAcs,
+  avgKd,
+  avgAdr,
+  headshotPct,
+  rolling20Record,
   isLoading = false,
 }) => {
   if (isLoading) {
@@ -90,10 +101,45 @@ export const PlayerVerticalProfile: React.FC<PlayerVerticalProfileProps> = ({
       </div>
 
       {/* 4. Zodiac Stats (ZP, AP, WR%) */}
-      <div className="mt-6 space-y-2.5 pt-4 border-t border-white/10">
-        {/* Zodiac Points */}
+      <div className="mt-4 space-y-2.5 pt-4 border-t border-white/10">
+        
+        {/* Core Stats Grid (ACS, K/D, ADR, HS%) */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="bg-[#0D0E1A]/80 border border-white/5 rounded-xl p-2.5">
+            <div className="text-[9px] uppercase font-mono tracking-wider text-[#75798c] font-bold">ACS</div>
+            <div className="text-xs font-bold text-white font-mono">{avgAcs}</div>
+          </div>
+          <div className="bg-[#0D0E1A]/80 border border-white/5 rounded-xl p-2.5">
+            <div className="text-[9px] uppercase font-mono tracking-wider text-[#75798c] font-bold">K/D</div>
+            <div className="text-xs font-bold text-white font-mono">{avgKd}</div>
+          </div>
+          <div className="bg-[#0D0E1A]/80 border border-white/5 rounded-xl p-2.5">
+            <div className="text-[9px] uppercase font-mono tracking-wider text-[#75798c] font-bold">ADR</div>
+            <div className="text-xs font-bold text-white font-mono">{avgAdr}</div>
+          </div>
+          <div className="bg-[#0D0E1A]/80 border border-white/5 rounded-xl p-2.5">
+            <div className="text-[9px] uppercase font-mono tracking-wider text-[#75798c] font-bold">HS%</div>
+            <div className="text-xs font-bold text-white font-mono">{headshotPct}%</div>
+          </div>
+        </div>
+
+        {/* Recent Form & Win Rate */}
         <div className="bg-[#0D0E1A]/80 border border-white/5 rounded-xl p-3 flex justify-between items-center">
           <div>
+            <div className="text-[10px] uppercase font-mono tracking-wider text-[#75798c] font-bold">Recent Form</div>
+            <div className="text-xs font-bold text-white font-mono mt-0.5">
+              {rolling20Record || 'N/A'}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] uppercase font-mono tracking-wider text-[#75798c] font-bold">Win Rate</div>
+            <div className="text-sm font-bold text-[#34d399] font-mono">{winRate}%</div>
+          </div>
+        </div>
+
+        {/* Zodiac Points - Only show if defined and > 0 */}
+        {zodiacPoints !== undefined && zodiacPoints > 0 && (
+          <div className="bg-[#0D0E1A]/80 border border-white/5 rounded-xl p-3 flex justify-between items-center">
             <div className="text-[10px] uppercase font-mono tracking-wider text-[#75798c] font-bold">
               Zodiac Points
             </div>
@@ -101,25 +147,28 @@ export const PlayerVerticalProfile: React.FC<PlayerVerticalProfileProps> = ({
               {zodiacPoints.toLocaleString()} <span className="text-[11px] font-normal text-[#75798c]">ZP</span>
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-[10px] uppercase font-mono tracking-wider text-[#75798c] font-bold">
-              Win Rate
-            </div>
-            <div className="text-sm font-bold text-[#34d399] font-mono">
-              {winRate}%
-            </div>
-          </div>
-        </div>
+        )}
 
-        {/* AP Balance */}
-        <div className="bg-[#0D0E1A]/80 border border-white/5 rounded-xl p-2.5 flex justify-between items-center">
-          <div className="text-[9px] uppercase font-mono tracking-wider text-[#75798c] font-bold">
-            Action Points (AP)
+        {/* AP Balance - Only show if not guest */}
+        {apBalance !== undefined && (
+          <div className="bg-[#0D0E1A]/80 border border-white/5 rounded-xl p-2.5 flex justify-between items-center">
+            <div className="text-[9px] uppercase font-mono tracking-wider text-[#75798c] font-bold">
+              Action Points (AP)
+            </div>
+            <div className="text-xs font-black text-[#9184d9] font-mono">
+              {apBalance.toLocaleString()} AP
+            </div>
           </div>
-          <div className="text-xs font-black text-[#9184d9] font-mono">
-            {apBalance.toLocaleString()} AP
-          </div>
-        </div>
+        )}
+      </div>
+
+      <div className="mt-4 pt-2">
+        <Link 
+          href={`/profile/${playerId}`}
+          className="w-full flex items-center justify-center gap-2 bg-[#E8B429]/10 hover:bg-[#E8B429]/20 border border-[#E8B429]/40 text-[#E8B429] rounded-lg px-4 py-2.5 text-xs font-bold transition-all"
+        >
+          View Full Passport →
+        </Link>
       </div>
     </div>
   );

@@ -147,7 +147,7 @@ export default function Navbar() {
     { label: 'STORE', href: '/store' },
     {
       label: 'ATHLETE MARKET',
-      href: isMarketplaceDemoEnabled ? '/marketplace/athletes' : '/leaderboard',
+      href: '/marketplace/athletes',
       isBadge: isMarketplaceDemoEnabled ? 'DEMO' : null
     },
     { label: 'AI ORACLE', href: '/chatbot' },
@@ -258,7 +258,7 @@ export default function Navbar() {
           {/* MOBILE HAMBURGER BUTTON */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2 rounded-lg bg-white/5 border border-white/10 text-neutral-300 hover:text-white"
+            className="lg:hidden w-11 h-11 flex items-center justify-center rounded-lg bg-white/5 border border-white/10 text-neutral-300 hover:text-white"
             aria-label="Toggle Navigation Menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5 text-red-400" /> : <Menu className="w-5 h-5 text-[#00D4FF]" />}
