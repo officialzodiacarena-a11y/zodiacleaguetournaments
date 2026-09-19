@@ -198,6 +198,30 @@ export default function MatchLobbyPage() {
 
   if (!lobby) return null;
 
+  // หากห้องเริ่มแข่งขันแล้ว (LIVE หรือ PAUSED) ล็อคการเข้าใช้งานจนกว่าจะแข่งขันเสร็จสิ้น
+  if (lobby.status === 'LIVE' || lobby.status === 'PAUSED') {
+    return (
+      <main className="min-h-screen bg-[#0A0A0F] text-white flex flex-col items-center justify-center font-mono p-6">
+        <div className="border border-amber-500/40 bg-[#12121A]/90 backdrop-blur-md rounded-2xl p-8 max-w-md w-full text-center space-y-4 shadow-2xl">
+          <div className="w-14 h-14 mx-auto rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 text-2xl font-bold">
+            🔒
+          </div>
+          <h2 className="text-lg font-black text-[#F9EDD8] uppercase tracking-wider">
+            แมตช์กำลังอยู่ระหว่างการแข่งขัน
+          </h2>
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            ห้องนี้เริ่มแข่งขันแล้ว ไม่อนุญาตให้เข้าร่วมล็อบบี้ในขณะนี้ กรุณารอจนกว่าการแข่งขันจะเสร็จสิ้น
+          </p>
+          <div className="pt-2">
+            <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-amber-500/50 text-amber-400 bg-amber-500/10">
+              STATUS: {lobby.status}
+            </span>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   const countdown = formatCountdown(lobby.forfeit_deadline_at);
   const countdownActive = lobby.forfeit_deadline_at && new Date(lobby.forfeit_deadline_at).getTime() - now > 0;
 
