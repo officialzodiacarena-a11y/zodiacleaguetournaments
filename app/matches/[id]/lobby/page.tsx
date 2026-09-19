@@ -144,10 +144,14 @@ export default function MatchLobbyPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [lobby?.messages.length]);
 
-  async function handleReady() {
+  async function handleReady(side?: 'team_a' | 'team_b') {
     setReadySubmitting(true);
     try {
-      const res = await fetch(`/api/v1/matches/${matchId}/ready`, { method: 'POST' });
+      const res = await fetch(`/api/v1/matches/${matchId}/ready`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ side }),
+      });
       if (res.ok) {
         await fetchLobby();
       } else {
@@ -252,8 +256,8 @@ export default function MatchLobbyPage() {
 
       {/* PANEL A/B: TEAM ROSTERS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <TeamPanel team={lobby.team_a} accent="emerald" onReady={handleReady} readySubmitting={readySubmitting} />
-        <TeamPanel team={lobby.team_b} accent="rose" onReady={handleReady} readySubmitting={readySubmitting} />
+        <TeamPanel team={lobby.team_a} accent="emerald" onReady={() => handleReady('team_a')} readySubmitting={readySubmitting} />
+        <TeamPanel team={lobby.team_b} accent="rose" onReady={() => handleReady('team_b')} readySubmitting={readySubmitting} />
       </div>
 
       {/* PANEL C/D: CREDENTIALS + CHAT */}
