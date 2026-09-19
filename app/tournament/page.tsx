@@ -11,17 +11,8 @@ import { selectSeasonAction } from '@/actions/tournament';
 const SEASONS: SeasonSplit[] = ['SPRING', 'SUMMER', 'FALL', 'WINTER'];
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
+import { OfficialSponsorsBar } from '@/components/sponsor/OfficialSponsorsBar';
 
-// ด้านใน return:
-<main className="min-h-screen bg-[#0D0E1A] relative">
-  <SkyscraperTower position="LEFT_TOWER" />
-  <SkyscraperTower position="RIGHT_TOWER" />
-
-  <div className="max-w-7xl mx-auto p-6">
-    <SponsorSlot className="mb-6" />
-    {/* เนื้อหา Tournament List */}
-  </div>
-</main>
 interface RawTournamentRow {
   id: string;
   name: string;
@@ -262,7 +253,10 @@ export default async function TournamentRegistryPage() {
   const data = await getRegistryData();
 
   return (
-    <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 select-none">
+    <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 select-none relative">
+      <SkyscraperTower position="LEFT_TOWER" />
+      <SkyscraperTower position="RIGHT_TOWER" />
+
       {/* 2. PAGE HEADER */}
       <div className="max-w-[1200px] mx-auto px-6 md:px-10 pt-12 pb-8">
         <div className="flex items-center gap-3 mb-2.5">
@@ -460,6 +454,10 @@ export default async function TournamentRegistryPage() {
           </div>
         </div>
       )}
+
+      <div className="max-w-[1200px] mx-auto px-6 md:px-10">
+        <OfficialSponsorsBar />
+      </div>
     </div>
   );
 }

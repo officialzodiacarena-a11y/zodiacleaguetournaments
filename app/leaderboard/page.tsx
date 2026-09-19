@@ -7,18 +7,8 @@ import { createClient } from '@/lib/supabase/client';
 const ROLES = ['GLOBAL', 'DUELIST', 'CONTROLLER', 'INITIATOR', 'SENTINEL'];
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
+import { OfficialSponsorsBar } from '@/components/sponsor/OfficialSponsorsBar';
 import { AthleteQuickPopover } from '@/components/profile/AthleteQuickPopover';
-
-// ด้านใน return:
-<main className="min-h-screen bg-[#0D0E1A] relative">
-  <SkyscraperTower position="LEFT_TOWER" />
-  <SkyscraperTower position="RIGHT_TOWER" />
-
-  <div className="max-w-7xl mx-auto p-6">
-    <SponsorSlot className="mb-6" />
-    {/* เนื้อหา Leaderboard */}
-  </div>
-</main>
 interface LeaderboardPlayer {
   id: string;
   athlete_id: string;
@@ -141,6 +131,8 @@ export default function LeaderboardPage() {
 
   return (
     <main className="min-h-screen bg-[#0D0E1A] text-white pt-16 pb-16 px-4 md:px-8 font-mono relative select-none overflow-hidden">
+      <SkyscraperTower position="LEFT_TOWER" />
+      <SkyscraperTower position="RIGHT_TOWER" />
       {/* Ambient Lighting */}
       <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-[#00D4FF]/5 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-[#E8B429]/5 rounded-full blur-[160px] pointer-events-none" />
@@ -318,6 +310,10 @@ export default function LeaderboardPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto mt-10">
+        <OfficialSponsorsBar />
       </div>
     </main>
   );

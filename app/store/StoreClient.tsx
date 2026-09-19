@@ -6,12 +6,7 @@ import { CategoryFilter } from '@/components/store/CategoryFilter';
 import { SINOPECBanner } from '@/components/store/SINOPECBanner';
 import { ProductCard } from '@/components/store/ProductCard';
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
-// ด้านใน return:
-<div className="mx-auto max-w-6xl space-y-6 p-6">
-  <SponsorSlot />
-  <StoreHeader />
-  {/* เนื้อหา Store อื่นๆ */}
-</div>
+import { OfficialSponsorsBar } from '@/components/sponsor/OfficialSponsorsBar';
 
 interface Variant {
   id: string;
@@ -83,6 +78,8 @@ export function StoreClient() {
           ))}
         </div>
       )}
+
+      <OfficialSponsorsBar />
     </div>
   );
 }
