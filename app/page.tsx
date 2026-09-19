@@ -15,6 +15,7 @@ import {
   Flame,
 } from 'lucide-react';
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
+import { OfficialSponsorsBar } from '@/components/sponsor/OfficialSponsorsBar';
 
 export const dynamic = 'force-dynamic';
 
@@ -239,6 +240,9 @@ export default async function LandingPage() {
           </div>
 
         </section>
+
+        {/* OFFICIAL SPONSORS SECTION */}
+        <OfficialSponsorsBar />
 
         {/* SECTION 3: DYNAMIC ONBOARDING / PASSPORT STRIP */}
         <section className="rounded-2xl border border-white/10 bg-[#101223]/90 backdrop-blur-md p-6 md:p-8 shadow-2xl relative overflow-hidden">

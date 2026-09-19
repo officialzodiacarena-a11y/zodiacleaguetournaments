@@ -18,6 +18,7 @@ import {
 export const dynamic = 'force-dynamic';
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
+import { OfficialSponsorsBar } from '@/components/sponsor/OfficialSponsorsBar';
 
 // ด้านใน return:
 <div className="min-h-screen bg-[#0D0E1A] relative">
@@ -249,6 +250,11 @@ export default async function LandingPage() {
           </div>
 
         </section>
+
+        {/* ====================================================================
+            OFFICIAL SPONSORS & TITLE PARTNERS SECTION
+        ==================================================================== */}
+        <OfficialSponsorsBar />
 
         {/* ====================================================================
             SECTION 3: DYNAMIC ONBOARDING / PASSPORT STRIP
