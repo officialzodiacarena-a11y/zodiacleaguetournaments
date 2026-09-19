@@ -5,6 +5,7 @@ import { Shield, MessageSquare, UserCheck, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { getRoomDetails, sendRoomMessage, triggerMercySubBeacon } from "@/lib/actions/match-room";
 import { MercySubBeaconClaimWidget } from "@/components/dashboard/MercySubBeaconClaimWidget";
+import { AthleteQuickPopover } from "@/components/profile/AthleteQuickPopover";
 
 const supabase = createClient();
 
@@ -176,8 +177,24 @@ export default function CustomMatchRoomPage({ params }: { params: Promise<{ id: 
 
                     {roster.map((p) => (
                       <div key={p.id} className="p-3 bg-black/40 border border-white/5 rounded-xl flex justify-between items-center font-mono text-xs">
-                        <span className="text-gray-200 truncate">
-                          {p.players?.display_name || p.player_id.slice(0, 8)}
+                        <span className="text-gray-200 truncate flex items-center gap-1">
+                          <AthleteQuickPopover
+                            playerId={p.player_id}
+                            fallbackData={{
+                              riotId: p.players?.display_name || p.player_id.slice(0, 8),
+                              role: p.role_type || 'Unknown',
+                              tierTitle: 'Unranked',
+                              winRate: 0,
+                              avgAcs: 0,
+                              avgKd: 0,
+                              avgAdr: 0,
+                              headshotPct: 0
+                            }}
+                          >
+                            <span className="cursor-pointer hover:text-[#00D4FF] transition-colors underline decoration-dashed decoration-gray-600 underline-offset-4">
+                              {p.players?.display_name || p.player_id.slice(0, 8)}
+                            </span>
+                          </AthleteQuickPopover>
                           {p.is_mercy_ringer && <span className="text-rose-400 ml-1">[RINGER]</span>}
                         </span>
                         <span className={p.is_ready_confirmed ? "text-emerald-400 font-bold" : "text-yellow-400"}>

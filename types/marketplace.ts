@@ -27,10 +27,23 @@ export const CreateListingSchema = z.object({
 export type CreateListingInput = z.infer<typeof CreateListingSchema>;
 
 export const PlaceBidSchema = z.object({
-  bid_amount: z.number().positive(),
+  bid_amount: z.number().int().positive(),
   idempotency_key: z.string().min(10),
 });
 export type PlaceBidInput = z.infer<typeof PlaceBidSchema>;
+
+export const BuyoutPayloadSchema = z.object({
+  idempotency_key: z.string().min(10),
+});
+export type BuyoutPayloadInput = z.infer<typeof BuyoutPayloadSchema>;
+
+export const AthleteMarketQuerySchema = z.object({
+  position: z.enum(['ALL', 'DUELIST', 'INITIATOR', 'CONTROLLER', 'SENTINEL', 'FLEX']).optional().default('ALL'),
+  sort: z.enum(['RECENT', 'PRICE_ASC', 'PRICE_DESC', 'HIGHEST_ACS']).optional().default('RECENT'),
+  limit: z.coerce.number().min(1).max(50).optional().default(50),
+  page: z.coerce.number().min(1).optional().default(1),
+});
+export type AthleteMarketQueryInput = z.infer<typeof AthleteMarketQuerySchema>;
 
 // Public/buyer-facing listing shape — floor_price is intentionally never a
 // field on this type. Never widen this without re-checking the zero-leak spec.

@@ -1,18 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { z } from 'zod';
 
-const QuerySchema = z.object({
-  role: z.enum(['ALL', 'DUELIST', 'INITIATOR', 'CONTROLLER', 'SENTINEL']).default('ALL'),
-  sort: z.enum(['RECENT', 'PRICE_ASC', 'PRICE_DESC', 'HIGHEST_ACS']).default('RECENT'),
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(50).default(20),
-});
+import { AthleteMarketQuerySchema } from '@/types/marketplace';
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const query = QuerySchema.parse(Object.fromEntries(searchParams));
+    const query = AthleteMarketQuerySchema.parse(Object.fromEntries(searchParams));
     const supabase = await createClient();
 
     const offset = (query.page - 1) * query.limit;
@@ -37,6 +31,7 @@ export async function GET(req: Request) {
         ),
         target_player:target_player_id (
           id, athlete_id, display_name, avatar_url, country_code,
+          primary_role,
           player_stats (
             avg_acs, avg_kd, avg_adr, headshot_pct, win_rate
           )
@@ -45,12 +40,12 @@ export async function GET(req: Request) {
       .eq('status', 'ACTIVE')
       .gt('expires_at', new Date().toISOString());
 
-    // Role Filter
-    if (query.role !== 'ALL') {
-      dbQuery = dbQuery.eq('target_player.primary_role', query.role);
+    // Position Filter
+    if (query.position !== 'ALL') {
+      dbQuery = dbQuery.eq('target_player.primary_role', query.position);
     }
 
-    // Sorting Logic — แก้ไข nullsFirst ให้ถูกต้องตาม Supabase JS Client Specs
+    // Sorting Logic
     if (query.sort === 'RECENT') {
       dbQuery = dbQuery.order('created_at', { ascending: false });
     } else if (query.sort === 'PRICE_ASC') {
