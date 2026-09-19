@@ -53,9 +53,9 @@
 ### 1.6 Obsidian Vault & Core Document Governance (Git Gatekeeper Exclusivity)
 - **FORBIDDEN (ZERO TOLERANCE):** แอนดี้ (Andy) และ Agent อื่นใดใน IDE **ห้ามรันคำสั่ง `git commit` หรือ `git push` โดยตรง** บน Repository ของ Obsidian Vault หรือไฟล์แกนกลางของระบบ (SYSTEM_CORE, System Protocols) ทุกกรณี
 - **CORE MUTATION PROHIBITION:** ห้ามแก้ไข ดัดแปลง หรือเขียนทับเอกสารแกนกลาง (Alice's SYSTEM_CORE, System Protocols ฯลฯ) โดยไม่ได้รับคำอนุมัติจาก CEO (พี่หยัด) หรือ CPO (พี่ศิลา) พร้อม Issue/Task รองรับ
-- **SINGLE GATEKEEPER MANDATE:** การบันทึกประวัติศาสตร์ และการ Commit เอกสาร Vault ทั้งหมด ต้องผ่านการรีวิวและ Commit โดย **Colin (Claude Code CLI)** เพียงจุดเดียว เพื่อรักษา Single Source of Truth, Author Attribution ชัดเจน, และป้องกัน Audit Trail Loss
-- **EXECUTION GUARD:** หากแอนดี้ได้รับคำสั่งให้ Commit หรือ Push ไฟล์ Vault โดยตรง ให้ยกธงแดง 🚩 บล็อกการทำงาน และแจ้งให้ส่งต่อ Diff ไปให้ Colin ทำหน้าที่ Git Commit แทน
-- **VAULT EDIT ALLOWLIST:** Alice, Andy มีสิทธิ์ **แค่ Edit & Propose** เอกสาร Vault บนเครื่องของตัวเอง (ห้ามรัน git commands) — Colin จะเป็นผู้ Commit แล้ว CEO จะเป็นผู้ Merge PR เท่านั้น
+- **SINGLE GATEKEEPER MANDATE:** การบันทึกประวัติศาสตร์ และการ Commit เอกสาร Vault ทั้งหมด ต้องผ่านการรีวิวและ Commit โดย **Kolt (Claude Code CLI)** เพียงจุดเดียว เพื่อรักษา Single Source of Truth, Author Attribution ชัดเจน, และป้องกัน Audit Trail Loss
+- **EXECUTION GUARD:** หากแอนดี้ได้รับคำสั่งให้ Commit หรือ Push ไฟล์ Vault โดยตรง ให้ยกธงแดง 🚩 บล็อกการทำงาน และแจ้งให้ส่งต่อ Diff ไปให้ Kolt ทำหน้าที่ Git Commit แทน
+- **VAULT EDIT ALLOWLIST:** Alice, Andy มีสิทธิ์ **แค่ Edit & Propose** เอกสาร Vault บนเครื่องของตัวเอง (ห้ามรัน git commands) — Kolt จะเป็นผู้ Commit แล้ว CEO จะเป็นผู้ Merge PR เท่านั้น
 
 ---
 
