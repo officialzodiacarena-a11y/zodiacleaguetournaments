@@ -96,7 +96,13 @@ export async function POST(
 
   // 5. State Machine Transition Logic
   if (teamAReady && teamBReady) {
-    const hasVetoFormat = Boolean(match.stage?.veto_format);
+    const rawVeto = match.stage?.veto_format;
+    const hasVetoFormat = Boolean(
+      rawVeto &&
+      typeof rawVeto === 'object' &&
+      Object.keys(rawVeto).length > 0 &&
+      JSON.stringify(rawVeto) !== '{}'
+    );
     nextStatus = hasVetoFormat ? 'VETO' : 'LIVE';
     updatePayload.status = nextStatus;
     if (nextStatus === 'LIVE') {
