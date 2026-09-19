@@ -2,9 +2,11 @@
 
 import React, { useState } from "react";
 import { Shield, Zap, Filter, Crosshair, ArrowRight, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { createScheduledMatchRoom } from "@/lib/actions/match-room";
 
 export function QuickScrimFlipCard() {
+  const router = useRouter();
   const [isFlipped, setIsFlipped] = useState(false);
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<"DUELIST" | "INITIATOR" | "CONTROLLER" | "SENTINEL" | "FLEX">("DUELIST");
@@ -30,7 +32,12 @@ export function QuickScrimFlipCard() {
 
     if (res.success) {
       setFeedback("✅ SCRIM ROOM CREATED! REDIRECTING...");
-      setIsFlipped(false);
+      const roomId = (res.data as unknown as { room_id?: string })?.room_id;
+      if (roomId) {
+        router.push(`/tournaments/room/${roomId}`);
+      } else {
+        router.push('/tournaments');
+      }
     } else {
       setFeedback(`❌ ${res.error}`);
     }

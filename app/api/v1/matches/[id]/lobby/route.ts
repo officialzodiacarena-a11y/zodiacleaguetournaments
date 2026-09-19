@@ -86,7 +86,17 @@ export async function GET(req: Request, { params }: PageProps) {
       .eq('match_id', matchId)
       .order('created_at', { ascending: true });
 
-    const messages = (rawMessages ?? []).map((m: any) => ({
+    interface LobbyMessageRow {
+      id: string;
+      sender_id: string;
+      sender_role: string;
+      message: string;
+      is_system: boolean;
+      created_at: string;
+      players?: { display_name?: string } | null;
+    }
+
+    const messages = ((rawMessages as unknown as LobbyMessageRow[]) ?? []).map((m) => ({
       id: m.id,
       sender_id: m.sender_id,
       sender_name: m.is_system ? 'SYSTEM' : (m.players?.display_name ?? 'Player'),

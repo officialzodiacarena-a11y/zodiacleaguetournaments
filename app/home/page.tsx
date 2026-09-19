@@ -176,7 +176,7 @@ export default async function LandingPage() {
               liveMatches.map((match) => (
                 <Link
                   key={match.id}
-                  href={`/matches/${match.id}/lobby`}
+                  href={`/spectate/${match.id}`}
                   className="flex items-center gap-2 hover:text-[#E8B429] transition-colors whitespace-nowrap"
                 >
                   <span className="font-bold text-white">[{match.teamATag}]</span>
