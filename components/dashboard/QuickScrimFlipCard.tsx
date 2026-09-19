@@ -32,7 +32,7 @@ export function QuickScrimFlipCard() {
 
     if (res.success) {
       setFeedback("✅ SCRIM ROOM CREATED! REDIRECTING...");
-      const roomId = (res.data as { room_id?: string })?.room_id;
+      const roomId = (res.data as unknown as { room_id?: string })?.room_id;
       if (roomId) {
         router.push(`/tournaments/room/${roomId}`);
       } else {
