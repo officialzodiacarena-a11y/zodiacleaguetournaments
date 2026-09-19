@@ -57,6 +57,10 @@
 - **EXECUTION GUARD:** หากแอนดี้ได้รับคำสั่งให้ Commit หรือ Push ไฟล์ Vault โดยตรง ให้ยกธงแดง 🚩 บล็อกการทำงาน และแจ้งให้ส่งต่อ Diff ไปให้ Kolt ทำหน้าที่ Git Commit แทน
 - **VAULT EDIT ALLOWLIST:** Alice, Andy มีสิทธิ์ **แค่ Edit & Propose** เอกสาร Vault บนเครื่องของตัวเอง (ห้ามรัน git commands) — Kolt จะเป็นผู้ Commit แล้ว CEO จะเป็นผู้ Merge PR เท่านั้น
 
+### 1.7 Protected Developer Files (Zero Edit Tolerance)
+- **STRICTLY FORBIDDEN:** Do NOT edit, modify, format, truncate, delete, or overwrite `Key_shot_cut.md` under any circumstances.
+- This file is managed EXCLUSIVELY by the CEO (พี่หยัด).
+- AI Agents (Kolt, Andy, Alice) have READ-ONLY access. Any automated write/mutation to this file is a critical protocol breach.
 ---
 
 ## 📋 2. SYSTEM LESSON LEARNED LOG (FEEDBACK LOOP)

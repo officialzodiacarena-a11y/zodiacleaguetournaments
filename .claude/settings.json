@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git push *)",
+      "Bash(gh pr create --title 'feat: Add public spectator page for live stream & replay access' --body ' *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Read(//d/Obsidian/Vault-V501/00_Meta/**)"
+    ],
+    "additionalDirectories": [
+      "D:\\Obsidian\\Vault-V501\\00_Meta"
+    ]
+  }
+}

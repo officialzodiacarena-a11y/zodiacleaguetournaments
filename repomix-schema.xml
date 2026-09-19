@@ -32,7 +32,7 @@ The content is organized as follows:
 <notes>
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Only files matching these patterns are included: supabase/migrations/**/*
+- Only files matching these patterns are included: supabase/**/*
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
@@ -63,11 +63,518 @@ supabase/
     20260914_daily_quest_and_affiliate_v6.sql
     20260914_match_room_mercy_scrim_v7_01_fixes.sql
     20260914_match_room_mercy_scrim_v7_01.sql
+    20260916090000_backfill_sponsor_banners_and_metric_rpc.sql
+    20260916100000_sponsor_partner_tier_core.sql
+    20260916110000_sponsor_banners_add_tier_link.sql
+    20260916120000_partner_coupons_engine.sql
+    20260916130000_ap_ledger_reason_check_add_coupon.sql
     20260917_athlete_telemetry_hud_real_data.sql
+    20260917_enable_public_spectate.sql
+    20260918000000_add_tournament_entry_fee_reason.sql
+  .temp/
+    cli-latest
+    gotrue-version
+    linked-project.json
+    pooler-url
+    postgres-version
+    project-ref
+    rest-version
+    storage-migration
+    storage-version
 </directory_structure>
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="supabase/migrations/20260907120000_t23_match_lifecycle.sql">
+-- =============================================================================
+-- MIGRATION: T2.3 — Match State Machine, Check-In, Result Reporting & Lobby Chat
+-- Specs: T2.3-C01, T2.3-C02, T2.3-C03, T2.3-C04
+-- Corrections applied per 01_BRIEFS_SENT/T2.3-CORRECTION_Brief_for_Colt.md.md:
+--   Fix 1 — audit_logs field names reconciled against the REAL production schema
+--           (verified via live introspection: id, actor_id, actor_role, action,
+--           entity_type, entity_id, before_data, after_data, diff, reason,
+--           ip_address, user_agent, request_id, session_id, created_at).
+--           `action` is an ENUM (public.audit_action_type) with no
+--           MATCH-specific values, so all match-lifecycle audit rows below use
+--           action = 'UPDATE', entity_type = 'matches', entity_id = match id,
+--           and put the specific event name in `reason` / before_data / after_data.
+--   Fix 2 — Dual no-show resolves to WALKOVER / winner_team_id = NULL /
+--           outcome = 'WALKOVER' + referee notification (NOT the DISPUTED /
+--           ADMIN_REFERRAL path floated in the C02 stress-test doc — that is
+--           explicitly deferred to Sprint 2.4).
+--   Fix 3 — Revised: no system bot player. public.players.user_id is NOT
+--           NULL and 1:1 with auth.users in production, so seeding a fake
+--           player row is not viable without first creating a matching
+--           auth.users row (out of scope for a migration file). Instead,
+--           match_lobby_messages.sender_id is made nullable and every
+--           system-message insert below uses sender_id = NULL.
+--   Fix 4 — lobby_code is read from matches.format_config->>'lobby_code'
+--           (JSONB), not a flat column. matches.format_config does not exist
+--           yet in production, so it is added by this migration.
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- 0. Shared helper functions referenced by the RLS policies below.
+--    public.is_admin() and public.current_player_id() already exist in
+--    production; public.is_team_leader() and public.is_referee_of() do not
+--    and are introduced here.
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.is_team_leader(p_team_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM public.team_members
+        WHERE team_id = p_team_id
+          AND player_id = public.current_player_id()
+          AND role IN ('CAPTAIN', 'MANAGER', 'OWNER')
+          AND status = 'ACTIVE'
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_referee_of(p_match_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM public.matches
+        WHERE id = p_match_id
+          AND referee_id = public.current_player_id()
+    );
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 1. T2.3-C01 — Match State Machine Guard (BEFORE UPDATE trigger)
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.validate_match_transition_guard()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_allowed       BOOLEAN := FALSE;
+    v_has_veto      BOOLEAN := FALSE;
+BEGIN
+    IF OLD.status = NEW.status THEN
+        RETURN NEW;
+    END IF;
+
+    -- Terminal states are locked. (FORFEITED / DISPUTED are valid enum values
+    -- but are out of scope for this sprint per the correction brief — Fix 2 —
+    -- and are intentionally NOT treated as terminal here.)
+    IF OLD.status IN ('COMPLETED', 'WALKOVER', 'BYE', 'CANCELLED') THEN
+        RAISE EXCEPTION 'INVALID_STATUS_TRANSITION: Terminal status % cannot be updated to %', OLD.status, NEW.status;
+    END IF;
+
+    CASE OLD.status
+        WHEN 'SCHEDULED' THEN
+            IF NEW.status IN ('READY_CHECK', 'WALKOVER', 'BYE', 'CANCELLED') THEN
+                v_allowed := TRUE;
+            END IF;
+
+        WHEN 'READY_CHECK' THEN
+            IF NEW.status = 'WALKOVER' THEN
+                v_allowed := TRUE;
+            ELSIF NEW.status IN ('VETO', 'LIVE') THEN
+                SELECT (veto_format IS NOT NULL AND veto_format != '{}'::jsonb) INTO v_has_veto
+                FROM public.tournament_stages s
+                WHERE s.id = OLD.stage_id;
+
+                IF NEW.status = 'VETO' AND v_has_veto THEN
+                    v_allowed := TRUE;
+                ELSIF NEW.status = 'LIVE' AND NOT v_has_veto THEN
+                    v_allowed := TRUE;
+                END IF;
+            END IF;
+
+        WHEN 'VETO' THEN
+            IF NEW.status IN ('LIVE', 'CANCELLED') THEN
+                v_allowed := TRUE;
+            END IF;
+
+        WHEN 'LIVE' THEN
+            IF NEW.status IN ('PAUSED', 'AWAITING_RESULT') THEN
+                v_allowed := TRUE;
+            END IF;
+
+        WHEN 'PAUSED' THEN
+            IF NEW.status = 'LIVE' THEN
+                v_allowed := TRUE;
+            END IF;
+
+        WHEN 'AWAITING_RESULT' THEN
+            IF NEW.status = 'COMPLETED' THEN
+                v_allowed := TRUE;
+            END IF;
+
+        ELSE
+            v_allowed := FALSE;
+    END CASE;
+
+    IF NOT v_allowed THEN
+        RAISE EXCEPTION 'INVALID_STATUS_TRANSITION: Cannot transition match % from % to %', OLD.id, OLD.status, NEW.status;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_validate_match_transition ON public.matches;
+CREATE TRIGGER trg_validate_match_transition
+    BEFORE UPDATE OF status ON public.matches
+    FOR EACH ROW EXECUTE FUNCTION public.validate_match_transition_guard();
+
+-- -----------------------------------------------------------------------------
+-- 2. T2.3-C01 — Auto-Walkover Engine (Stored Procedure, Fix 2 applied)
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.resolve_expired_ready_checks()
+RETURNS TABLE (
+    resolved_match_id   UUID,
+    winner_team_id      UUID,
+    final_status        VARCHAR
+) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+    r_match RECORD;
+    v_winner UUID;
+BEGIN
+    FOR r_match IN
+        SELECT id, team_a_id, team_b_id, team_a_ready_at, team_b_ready_at, referee_id
+        FROM public.matches
+        WHERE status IN ('SCHEDULED', 'READY_CHECK')
+          AND forfeit_deadline_at IS NOT NULL
+          AND forfeit_deadline_at < NOW()
+        FOR UPDATE
+    LOOP
+        resolved_match_id := r_match.id;
+
+        IF r_match.team_a_ready_at IS NOT NULL AND r_match.team_b_ready_at IS NULL THEN
+            v_winner := r_match.team_a_id;
+        ELSIF r_match.team_b_ready_at IS NOT NULL AND r_match.team_a_ready_at IS NULL THEN
+            v_winner := r_match.team_b_id;
+        ELSE
+            -- Fix 2: dual no-show (neither ready) is STILL a WALKOVER with a
+            -- NULL winner, not a DISPUTED/ADMIN_REFERRAL branch — that path is
+            -- deferred to Sprint 2.4 per the correction brief.
+            v_winner := NULL;
+        END IF;
+
+        winner_team_id := v_winner;
+        final_status := 'WALKOVER';
+
+        UPDATE public.matches
+        SET status = 'WALKOVER',
+            winner_team_id = v_winner,
+            outcome = 'WALKOVER',
+            ended_at = NOW(),
+            updated_at = NOW()
+        WHERE id = r_match.id;
+
+        -- Fix 1: audit_logs uses the REAL production schema.
+        INSERT INTO public.audit_logs (action, entity_type, entity_id, before_data, after_data, reason)
+        VALUES (
+            'UPDATE',
+            'matches',
+            r_match.id,
+            jsonb_build_object('team_a_ready_at', r_match.team_a_ready_at, 'team_b_ready_at', r_match.team_b_ready_at),
+            jsonb_build_object('status', 'WALKOVER', 'winner_team_id', v_winner, 'outcome', 'WALKOVER'),
+            'AUTO_WALKOVER_RESOLVE'
+        );
+
+        -- Fix 2: notify the referee, whichever branch fired (single no-show or
+        -- dual no-show), so the assignment stays visible in-app on top of the
+        -- realtime broadcast fired by the cron route.
+        IF r_match.referee_id IS NOT NULL THEN
+            INSERT INTO public.notifications (player_id, type, title, body, action_url)
+            VALUES (
+                r_match.referee_id,
+                'MATCH_WALKOVER_REVIEW',
+                'แมตช์ถูกปรับแพ้บายอัตโนมัติ',
+                CASE
+                    WHEN v_winner IS NOT NULL THEN 'ทีมคู่แข่งไม่เช็คอินภายในเวลา ระบบปรับแพ้บายให้อัตโนมัติแล้ว โปรดตรวจสอบ'
+                    ELSE 'ทั้งสองทีมไม่เช็คอินภายในเวลา ระบบปรับแพ้บายทั้งคู่ (ไม่มีผู้ชนะ) โปรดตรวจสอบหน้างาน'
+                END,
+                '/matches/' || r_match.id::text || '/lobby'
+            );
+        END IF;
+
+        RETURN NEXT;
+    END LOOP;
+END;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 3. T2.3-C02 — Match Check-In columns & RLS
+--    (team_a_ready_at / team_b_ready_at / forfeit_deadline_at already exist in
+--    production; these statements are no-ops there and only matter for other
+--    environments, kept IF NOT EXISTS / IF NOT EXISTS for idempotency.)
+-- -----------------------------------------------------------------------------
+ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS team_a_ready_at TIMESTAMPTZ;
+ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS team_b_ready_at TIMESTAMPTZ;
+ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS forfeit_deadline_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_matches_checkin_monitoring
+ON public.matches (status, forfeit_deadline_at)
+WHERE status IN ('SCHEDULED', 'READY_CHECK');
+
+ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "matches_checkin_update_policy" ON public.matches;
+CREATE POLICY "matches_checkin_update_policy" ON public.matches
+    FOR UPDATE USING (
+        public.is_admin()
+        OR public.is_referee_of(id)
+        OR auth.uid() IN (
+            SELECT p.user_id FROM public.team_members tm
+            JOIN public.players p ON p.id = tm.player_id
+            WHERE tm.team_id = matches.team_a_id
+              AND tm.role IN ('CAPTAIN', 'MANAGER', 'OWNER')
+              AND tm.status = 'ACTIVE'
+        )
+        OR auth.uid() IN (
+            SELECT p.user_id FROM public.team_members tm
+            JOIN public.players p ON p.id = tm.player_id
+            WHERE tm.team_id = matches.team_b_id
+              AND tm.role IN ('CAPTAIN', 'MANAGER', 'OWNER')
+              AND tm.status = 'ACTIVE'
+        )
+    );
+
+-- -----------------------------------------------------------------------------
+-- 4. T2.3-C03 — Result Reporting Core (public.match_reports)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.match_reports (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id            UUID NOT NULL REFERENCES public.matches(id) ON DELETE CASCADE,
+    reported_by_team    UUID NOT NULL REFERENCES public.teams(id) ON DELETE CASCADE,
+    reported_by_user    UUID NOT NULL REFERENCES public.players(id) ON DELETE SET NULL,
+
+    winner_team_id      UUID NOT NULL REFERENCES public.teams(id) ON DELETE RESTRICT,
+    score_a             SMALLINT NOT NULL CHECK (score_a >= 0),
+    score_b             SMALLINT NOT NULL CHECK (score_b >= 0),
+
+    evidence_urls       TEXT[] DEFAULT ARRAY[]::TEXT[] NOT NULL,
+    note                TEXT,
+
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT uq_match_report_per_team UNIQUE (match_id, reported_by_team)
+);
+
+CREATE INDEX IF NOT EXISTS idx_match_reports_lookup ON public.match_reports(match_id, reported_by_team);
+
+ALTER TABLE public.match_reports ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "match_reports_public_select" ON public.match_reports;
+CREATE POLICY "match_reports_public_select" ON public.match_reports
+    FOR SELECT USING (TRUE);
+
+DROP POLICY IF EXISTS "match_reports_team_insert" ON public.match_reports;
+CREATE POLICY "match_reports_team_insert" ON public.match_reports
+    FOR INSERT WITH CHECK (
+        auth.role() = 'authenticated'
+        AND public.is_team_leader(reported_by_team)
+        AND EXISTS (
+            SELECT 1 FROM public.matches m
+            WHERE m.id = match_id
+              AND (m.team_a_id = reported_by_team OR m.team_b_id = reported_by_team)
+              AND m.status = 'AWAITING_RESULT'
+        )
+    );
+
+DROP POLICY IF EXISTS "match_reports_team_update" ON public.match_reports;
+CREATE POLICY "match_reports_team_update" ON public.match_reports
+    FOR UPDATE USING (
+        auth.role() = 'authenticated'
+        AND public.is_team_leader(reported_by_team)
+        AND EXISTS (
+            SELECT 1 FROM public.matches m
+            WHERE m.id = match_id
+              AND m.status = 'AWAITING_RESULT'
+        )
+    );
+
+DROP POLICY IF EXISTS "match_reports_admin_all" ON public.match_reports;
+CREATE POLICY "match_reports_admin_all" ON public.match_reports
+    FOR ALL USING (public.is_admin());
+
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_match_reports_updated ON public.match_reports;
+CREATE TRIGGER trg_match_reports_updated
+    BEFORE UPDATE ON public.match_reports
+    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- -----------------------------------------------------------------------------
+-- 5. T2.3-C04 — Match Lobby & Realtime Chat
+-- -----------------------------------------------------------------------------
+
+-- Fix 4: lobby_code lives in matches.format_config JSONB, which does not
+-- exist yet in production — add it here.
+ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS format_config JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+CREATE TABLE IF NOT EXISTS public.match_lobby_messages (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id        UUID NOT NULL REFERENCES public.matches(id) ON DELETE CASCADE,
+    sender_id       UUID NOT NULL REFERENCES public.players(id) ON DELETE CASCADE,
+    sender_role     VARCHAR(20) NOT NULL CONSTRAINT chk_sender_role CHECK (sender_role IN ('TEAM_A', 'TEAM_B', 'REFEREE', 'SYSTEM')),
+    message         TEXT NOT NULL CONSTRAINT chk_msg_length CHECK (char_length(message) <= 500),
+    is_system       BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Fix 3 (revised): no system bot player exists, so system-authored rows
+-- (is_system = TRUE) carry sender_id = NULL instead of a fake FK target.
+ALTER TABLE public.match_lobby_messages ALTER COLUMN sender_id DROP NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_lobby_messages_match ON public.match_lobby_messages (match_id, created_at DESC);
+
+ALTER TABLE public.match_lobby_messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "lobby_messages_select_policy" ON public.match_lobby_messages;
+CREATE POLICY "lobby_messages_select_policy" ON public.match_lobby_messages
+    FOR SELECT USING (
+        auth.role() = 'authenticated'
+        AND (
+            public.is_admin()
+            OR public.is_referee_of(match_id)
+            OR EXISTS (
+                SELECT 1 FROM public.matches m
+                WHERE m.id = match_id
+                  AND (
+                      m.team_a_id IN (
+                          SELECT team_id FROM public.team_members
+                          WHERE player_id = public.current_player_id() AND status = 'ACTIVE'
+                      )
+                      OR m.team_b_id IN (
+                          SELECT team_id FROM public.team_members
+                          WHERE player_id = public.current_player_id() AND status = 'ACTIVE'
+                      )
+                  )
+            )
+        )
+    );
+
+DROP POLICY IF EXISTS "lobby_messages_insert_policy" ON public.match_lobby_messages;
+CREATE POLICY "lobby_messages_insert_policy" ON public.match_lobby_messages
+    FOR INSERT WITH CHECK (
+        auth.role() = 'authenticated'
+        AND is_system = FALSE
+        AND (
+            public.is_admin()
+            OR public.is_referee_of(match_id)
+            OR EXISTS (
+                SELECT 1 FROM public.matches m
+                WHERE m.id = match_id
+                  AND (
+                      m.team_a_id IN (
+                          SELECT team_id FROM public.team_members
+                          WHERE player_id = public.current_player_id() AND status = 'ACTIVE'
+                      )
+                      OR m.team_b_id IN (
+                          SELECT team_id FROM public.team_members
+                          WHERE player_id = public.current_player_id() AND status = 'ACTIVE'
+                      )
+                  )
+            )
+        )
+    );
+
+DROP POLICY IF EXISTS "lobby_messages_no_update" ON public.match_lobby_messages;
+CREATE POLICY "lobby_messages_no_update" ON public.match_lobby_messages FOR UPDATE USING (false);
+
+DROP POLICY IF EXISTS "lobby_messages_no_delete" ON public.match_lobby_messages;
+CREATE POLICY "lobby_messages_no_delete" ON public.match_lobby_messages FOR DELETE USING (false);
+
+-- Fix 3 (revised): no system bot player is seeded — see the note above the
+-- CREATE TABLE for public.match_lobby_messages. sender_id is NULL for every
+-- is_system = TRUE row inserted by the trigger below.
+
+CREATE OR REPLACE FUNCTION public.log_lobby_system_message()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_msg           TEXT;
+    v_team_name     TEXT;
+BEGIN
+    IF TG_TABLE_NAME = 'matches' AND TG_OP = 'UPDATE' THEN
+
+        IF OLD.team_a_ready_at IS NULL AND NEW.team_a_ready_at IS NOT NULL THEN
+            SELECT name INTO v_team_name FROM public.teams WHERE id = NEW.team_a_id;
+            INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
+            VALUES (NEW.id, NULL, 'SYSTEM', '[SYSTEM] สโมสร ' || COALESCE(v_team_name, 'TEAM_A') || ' กดยืนยันความพร้อมแข่งขันแล้ว ✅', TRUE);
+        END IF;
+
+        IF OLD.team_b_ready_at IS NULL AND NEW.team_b_ready_at IS NOT NULL THEN
+            SELECT name INTO v_team_name FROM public.teams WHERE id = NEW.team_b_id;
+            INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
+            VALUES (NEW.id, NULL, 'SYSTEM', '[SYSTEM] สโมสร ' || COALESCE(v_team_name, 'TEAM_B') || ' กดยืนยันความพร้อมแข่งขันแล้ว ✅', TRUE);
+        END IF;
+
+        IF OLD.status != 'VETO' AND NEW.status = 'VETO' THEN
+            INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
+            VALUES (NEW.id, NULL, 'SYSTEM', '[SYSTEM] เริ่มต้นขั้นตอนดราฟต์เลือกแผนที่แข่ง (Map Veto Phase Active)', TRUE);
+        END IF;
+
+        IF OLD.status != 'LIVE' AND NEW.status = 'LIVE' THEN
+            INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
+            VALUES (NEW.id, NULL, 'SYSTEM', '[SYSTEM] สัญญาณภาพพร้อมรบแล้ว! การแข่งขันนัดประวัติศาสตร์เริ่มต้นอย่างเป็นทางการ ⚔️', TRUE);
+        END IF;
+
+        -- Fix 4: lobby_code lives in format_config JSONB, not a flat column.
+        IF (OLD.format_config->>'lobby_code' IS NULL AND NEW.format_config->>'lobby_code' IS NOT NULL)
+           OR (OLD.format_config->>'lobby_code' IS DISTINCT FROM NEW.format_config->>'lobby_code') THEN
+            INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
+            VALUES (
+                NEW.id,
+                NULL,
+                'SYSTEM',
+                '[SYSTEM] ผู้ตัดสินได้กรอกรหัสพาสเวิร์ดล็อบบี้: ' || NEW.format_config->>'lobby_code',
+                TRUE
+            );
+        END IF;
+
+        IF OLD.status != 'WALKOVER' AND NEW.status = 'WALKOVER' THEN
+            IF NEW.winner_team_id IS NOT NULL THEN
+                SELECT name INTO v_team_name FROM public.teams WHERE id = NEW.winner_team_id;
+                v_msg := '[SYSTEM] ขีดจำกัดเช็คอินหมดลง ยื่นโทษปรับแพ้บายให้แก่คู่แข่ง ปรับทีม ' || COALESCE(v_team_name, 'WINNER_TEAM') || ' ชนะบายสำเร็จ 🏆';
+            ELSE
+                v_msg := '[SYSTEM] ทั้งสองทีมไม่กดยืนยันความพร้อมแข่งขันตามเกณฑ์ 15 นาที ปรับแพ้บายทั้งคู่ (Dual Walkover) รอผู้ตัดสินตรวจสอบ';
+            END IF;
+
+            INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
+            VALUES (NEW.id, NULL, 'SYSTEM', v_msg, TRUE);
+        END IF;
+
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_match_lobby_system_messages ON public.matches;
+CREATE TRIGGER trg_match_lobby_system_messages
+    AFTER UPDATE ON public.matches
+    FOR EACH ROW EXECUTE FUNCTION public.log_lobby_system_message();
+</file>
 
 <file path="supabase/migrations/20260908000000_t24_referee_dispute_operations.sql">
 -- =============================================================================
@@ -465,6 +972,351 @@ CREATE INDEX IF NOT EXISTS idx_player_stats_leaderboard
 
 CREATE INDEX IF NOT EXISTS idx_player_stats_player
     ON public.player_stats (player_id);
+</file>
+
+<file path="supabase/migrations/20260908120000_t33_watch_to_earn.sql">
+-- =============================================================================
+-- MIGRATION: T3.3 — Streaming & AP Distribution (Watch-to-Earn)
+-- ส่งให้พี่หยัดรันใน Supabase SQL Editor เท่านั้น
+-- หมายเหตุ: verify กับ DB จริงแล้วว่า move_ap()/claim_watch_reward() ยังไม่มีอยู่จริง
+-- (ต่างจากที่สเปคเดิมสมมติไว้) จึงสร้างไว้ท้ายไฟล์นี้ — เป็นฟังก์ชันกลางของระบบ AP
+-- ที่ T3.4 (Redemption Store) เรียกใช้ผ่าน move_ap() ด้วยเช่นกัน (reason='STORE_REDEEM')
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- ap_earning_rules — กติกาการให้ AP ต่อสตรีม (interval, cap, ฯลฯ)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.ap_earning_rules (
+    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name                 TEXT NOT NULL,
+    ap_per_interval      NUMERIC(6,2) NOT NULL DEFAULT 1,
+    interval_seconds     INTEGER NOT NULL DEFAULT 60,
+    daily_cap_ap         INTEGER NOT NULL DEFAULT 100,
+    max_session_minutes  INTEGER NOT NULL DEFAULT 180,
+    is_active            BOOLEAN NOT NULL DEFAULT true,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- -----------------------------------------------------------------------------
+-- streams — อาจมีอยู่แล้วบางส่วน (จากสเปคก่อนหน้า) เติมคอลัมน์ที่ T3.3 ต้องใช้
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.streams (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title             TEXT NOT NULL,
+    match_id          UUID REFERENCES public.matches(id) ON DELETE SET NULL,
+    is_earn_eligible  BOOLEAN NOT NULL DEFAULT false,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- type/status ใช้ ENUM stream_type_type / stream_status_type ที่มีอยู่แล้วใน DB (ไม่ใช่ TEXT + CHECK)
+ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS type stream_type_type;
+ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS status stream_status_type NOT NULL DEFAULT 'SCHEDULED';
+ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS tournament_id UUID REFERENCES public.tournaments(id) ON DELETE SET NULL;
+ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS earning_rule_id UUID REFERENCES public.ap_earning_rules(id) ON DELETE SET NULL;
+ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS ap_budget_total NUMERIC(10,2);
+ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS ap_budget_spent NUMERIC(10,2) NOT NULL DEFAULT 0;
+ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS stream_url TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_streams_status ON public.streams (status);
+CREATE INDEX IF NOT EXISTS idx_streams_tournament ON public.streams (tournament_id);
+
+-- -----------------------------------------------------------------------------
+-- watch_sessions — วงจรชีวิตของการดูสตรีมเพื่อรับ AP
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.watch_sessions (
+    id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    stream_id             UUID NOT NULL REFERENCES public.streams(id) ON DELETE CASCADE,
+    player_id             UUID NOT NULL REFERENCES public.players(id) ON DELETE CASCADE,
+    earning_rule_id       UUID REFERENCES public.ap_earning_rules(id) ON DELETE SET NULL,
+    status                TEXT NOT NULL DEFAULT 'ACTIVE'
+                              CHECK (status IN ('ACTIVE', 'CLAIMED', 'EXPIRED', 'ABANDONED')),
+    started_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_heartbeat_at     TIMESTAMPTZ,
+    position_sec          NUMERIC(10,2) NOT NULL DEFAULT 0,
+    watched_seconds       NUMERIC(10,2) NOT NULL DEFAULT 0,
+    risk_score            NUMERIC(5,2) NOT NULL DEFAULT 0,
+    is_anomalous          BOOLEAN NOT NULL DEFAULT false,
+    anomaly_note          TEXT,
+    claimed_at            TIMESTAMPTZ,
+    ap_awarded            NUMERIC(10,2),
+    start_idempotency_key TEXT,
+    device_id             TEXT,
+    ip_address            TEXT,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ผู้เล่นหนึ่งคนมี session ACTIVE ได้ทีละ 1 รายการเท่านั้น (กันดูหลายสตรีมพร้อมกันเพื่อฟาร์ม AP)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_watch_sessions_active_player
+    ON public.watch_sessions (player_id)
+    WHERE status = 'ACTIVE';
+
+CREATE INDEX IF NOT EXISTS idx_watch_sessions_stream ON public.watch_sessions (stream_id);
+CREATE INDEX IF NOT EXISTS idx_watch_sessions_player ON public.watch_sessions (player_id);
+CREATE INDEX IF NOT EXISTS idx_watch_sessions_device ON public.watch_sessions (device_id);
+CREATE INDEX IF NOT EXISTS idx_watch_sessions_ip ON public.watch_sessions (ip_address);
+
+-- -----------------------------------------------------------------------------
+-- watch_heartbeats — log ทุก heartbeat เพื่อ audit/anti-abuse
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.watch_heartbeats (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id        UUID NOT NULL REFERENCES public.watch_sessions(id) ON DELETE CASCADE,
+    position_sec      NUMERIC(10,2) NOT NULL,
+    playback_rate     NUMERIC(4,2) NOT NULL DEFAULT 1,
+    delta_sec         NUMERIC(10,2) NOT NULL,
+    watched_seconds   NUMERIC(10,2) NOT NULL,
+    is_anomalous      BOOLEAN NOT NULL DEFAULT false,
+    anomaly_reason    TEXT,
+    risk_score_delta  NUMERIC(5,2) NOT NULL DEFAULT 0,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_watch_heartbeats_session ON public.watch_heartbeats (session_id, created_at);
+
+-- -----------------------------------------------------------------------------
+-- ap_daily_limits — โควต้า AP ต่อวันต่อผู้เล่น (Asia/Bangkok)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.ap_daily_limits (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    player_id   UUID NOT NULL REFERENCES public.players(id) ON DELETE CASCADE,
+    limit_date  DATE NOT NULL,
+    ap_earned   NUMERIC(10,2) NOT NULL DEFAULT 0,
+    daily_cap   NUMERIC(10,2) NOT NULL DEFAULT 100,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ap_daily_limits_player_date
+    ON public.ap_daily_limits (player_id, limit_date);
+
+-- -----------------------------------------------------------------------------
+-- ap_ledger — ประวัติการเคลื่อนไหว AP ทั้งหมด (เขียนโดย move_ap / claim_watch_reward)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.ap_ledger (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    player_id        UUID NOT NULL REFERENCES public.players(id) ON DELETE CASCADE,
+    amount           NUMERIC(10,2) NOT NULL,
+    reason           TEXT NOT NULL CHECK (reason IN ('WATCH_REWARD', 'CLAWBACK', 'ADMIN_ADJUSTMENT', 'STORE_REDEEM')),
+    reference_type   TEXT,
+    reference_id     UUID,
+    idempotency_key  TEXT UNIQUE,
+    balance_after    NUMERIC(10,2) NOT NULL,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ap_ledger_player ON public.ap_ledger (player_id, created_at DESC);
+
+-- -----------------------------------------------------------------------------
+-- abuse_flags — ผลตรวจจับความผิดปกติจาก cron abuse-analysis
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.abuse_flags (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    player_id        UUID NOT NULL REFERENCES public.players(id) ON DELETE CASCADE,
+    flag_type        TEXT NOT NULL CHECK (flag_type IN ('DEVICE_MULTI_ACCOUNT', 'IP_CLUSTER', 'BOT_PATTERN')),
+    severity         TEXT NOT NULL DEFAULT 'MEDIUM' CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH')),
+    details          JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status           TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'REVIEWED', 'CLAWED_BACK', 'DISMISSED')),
+    clawback_amount  NUMERIC(10,2),
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    reviewed_at      TIMESTAMPTZ,
+    reviewed_by      UUID REFERENCES public.players(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_abuse_flags_player ON public.abuse_flags (player_id);
+CREATE INDEX IF NOT EXISTS idx_abuse_flags_status ON public.abuse_flags (status);
+
+-- -----------------------------------------------------------------------------
+-- move_ap — จุดเดียวที่แก้ยอด AP ของผู้เล่น: อ่านยอดปัจจุบันจาก ap_ledger.balance_after
+-- แถวล่าสุด, เช็ค idempotency_key ซ้ำ, เช็คห้ามติดลบ, insert แถวใหม่ลง ledger,
+-- และถ้าเป็น WATCH_REWARD ที่เป็นบวกจะพ่วงอัปเดต ap_daily_limits ให้ในตัว
+-- ล็อกต่อผู้เล่นด้วย pg_advisory_xact_lock กันสอง request แข่งกันแก้ยอดพร้อมกัน
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.move_ap(
+    p_player_id       UUID,
+    p_amount          NUMERIC,
+    p_reason          TEXT,
+    p_idempotency_key TEXT DEFAULT NULL,
+    p_reference_type  TEXT DEFAULT NULL,
+    p_reference_id    UUID DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_current_balance NUMERIC;
+    v_new_balance     NUMERIC;
+    v_existing        RECORD;
+    v_ledger_id       UUID;
+    v_today           DATE;
+BEGIN
+    IF p_amount = 0 THEN
+        RETURN jsonb_build_object('success', false, 'error', 'ZERO_AMOUNT');
+    END IF;
+
+    PERFORM pg_advisory_xact_lock(hashtext(p_player_id::text)::bigint);
+
+    IF p_idempotency_key IS NOT NULL THEN
+        SELECT id, balance_after INTO v_existing
+        FROM public.ap_ledger
+        WHERE idempotency_key = p_idempotency_key;
+
+        IF FOUND THEN
+            RETURN jsonb_build_object(
+                'success', false,
+                'error', 'DUPLICATE_KEY',
+                'ledger_id', v_existing.id,
+                'balance_after', v_existing.balance_after
+            );
+        END IF;
+    END IF;
+
+    SELECT balance_after INTO v_current_balance
+    FROM public.ap_ledger
+    WHERE player_id = p_player_id
+    ORDER BY created_at DESC
+    LIMIT 1;
+
+    v_current_balance := COALESCE(v_current_balance, 0);
+    v_new_balance := v_current_balance + p_amount;
+
+    IF v_new_balance < 0 THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'INSUFFICIENT_AP_BALANCE',
+            'current_balance', v_current_balance,
+            'requested', p_amount
+        );
+    END IF;
+
+    INSERT INTO public.ap_ledger (player_id, amount, reason, reference_type, reference_id, idempotency_key, balance_after)
+    VALUES (p_player_id, p_amount, p_reason, p_reference_type, p_reference_id, p_idempotency_key, v_new_balance)
+    RETURNING id INTO v_ledger_id;
+
+    IF p_reason = 'WATCH_REWARD' AND p_amount > 0 THEN
+        v_today := (NOW() AT TIME ZONE 'Asia/Bangkok')::date;
+
+        INSERT INTO public.ap_daily_limits (player_id, limit_date, ap_earned)
+        VALUES (p_player_id, v_today, p_amount)
+        ON CONFLICT (player_id, limit_date) DO UPDATE
+            SET ap_earned = public.ap_daily_limits.ap_earned + EXCLUDED.ap_earned,
+                updated_at = NOW();
+    END IF;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'ledger_id', v_ledger_id,
+        'balance_after', v_new_balance
+    );
+END;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- claim_watch_reward — ปิด watch_sessions (ACTIVE -> CLAIMED) แบบกันเบิ้ล, คำนวณ AP
+-- จาก watched_seconds/interval_seconds * ap_per_interval, บังคับ daily cap,
+-- ปฏิเสธ session ที่ is_anomalous, และ mint AP ผ่าน move_ap() (reason=WATCH_REWARD)
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.claim_watch_reward(p_session_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_session         RECORD;
+    v_rule            RECORD;
+    v_intervals       NUMERIC;
+    v_raw_ap          NUMERIC;
+    v_today           DATE;
+    v_daily_earned    NUMERIC;
+    v_daily_cap       NUMERIC;
+    v_remaining_today NUMERIC;
+    v_ap_awarded      NUMERIC;
+    v_capped          BOOLEAN;
+    v_move_result     JSONB;
+BEGIN
+    SELECT * INTO v_session
+    FROM public.watch_sessions
+    WHERE id = p_session_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'error', 'SESSION_NOT_FOUND');
+    END IF;
+
+    IF v_session.status = 'CLAIMED' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'ALREADY_CLAIMED');
+    END IF;
+
+    IF v_session.status <> 'ACTIVE' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'INVALID_SESSION_STATUS');
+    END IF;
+
+    IF v_session.is_anomalous THEN
+        RETURN jsonb_build_object('success', false, 'error', 'SESSION_TOO_RISKY');
+    END IF;
+
+    SELECT * INTO v_rule FROM public.ap_earning_rules WHERE id = v_session.earning_rule_id;
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'error', 'EARNING_RULE_NOT_FOUND');
+    END IF;
+
+    v_intervals := FLOOR(v_session.watched_seconds / v_rule.interval_seconds);
+    v_raw_ap := v_intervals * v_rule.ap_per_interval;
+
+    v_today := (NOW() AT TIME ZONE 'Asia/Bangkok')::date;
+
+    SELECT ap_earned, daily_cap INTO v_daily_earned, v_daily_cap
+    FROM public.ap_daily_limits
+    WHERE player_id = v_session.player_id AND limit_date = v_today
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        v_daily_earned := 0;
+        v_daily_cap := v_rule.daily_cap_ap;
+    END IF;
+
+    v_remaining_today := GREATEST(v_daily_cap - v_daily_earned, 0);
+    v_ap_awarded := LEAST(v_raw_ap, v_remaining_today);
+    v_capped := v_ap_awarded < v_raw_ap;
+
+    IF v_ap_awarded > 0 THEN
+        v_move_result := public.move_ap(
+            v_session.player_id,
+            v_ap_awarded,
+            'WATCH_REWARD',
+            'claim-session-' || p_session_id::text,
+            'watch_session',
+            p_session_id
+        );
+
+        IF NOT (v_move_result->>'success')::boolean THEN
+            RETURN jsonb_build_object('success', false, 'error', COALESCE(v_move_result->>'error', 'MOVE_AP_FAILED'));
+        END IF;
+    END IF;
+
+    UPDATE public.watch_sessions
+    SET status = 'CLAIMED', claimed_at = NOW(), ap_awarded = v_ap_awarded, updated_at = NOW()
+    WHERE id = p_session_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'ap_awarded', v_ap_awarded,
+        'capped', v_capped,
+        'balance_after', COALESCE(
+            (v_move_result->>'balance_after')::numeric,
+            (SELECT balance_after FROM public.ap_ledger WHERE player_id = v_session.player_id ORDER BY created_at DESC LIMIT 1),
+            0
+        ),
+        'daily_earned', v_daily_earned + v_ap_awarded,
+        'daily_cap', v_daily_cap
+    );
+END;
+$$;
 </file>
 
 <file path="supabase/migrations/20260908130000_t34_redemption_store.sql">
@@ -1644,6 +2496,38 @@ VALUES
         '2026-12-31T23:59:59+00'
     )
 ON CONFLICT (code) DO NOTHING;
+</file>
+
+<file path="supabase/.temp/gotrue-version">
+v2.196.0
+</file>
+
+<file path="supabase/.temp/linked-project.json">
+{"ref":"yjygevsdfebdyzywbpdr","name":"officialzodiacarena-a11y's Project","organization_id":"fprxdxebqnzisxeposmq","organization_slug":"fprxdxebqnzisxeposmq"}
+</file>
+
+<file path="supabase/.temp/pooler-url">
+postgresql://postgres.yjygevsdfebdyzywbpdr@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres
+</file>
+
+<file path="supabase/.temp/postgres-version">
+17.6.1.166
+</file>
+
+<file path="supabase/.temp/project-ref">
+yjygevsdfebdyzywbpdr
+</file>
+
+<file path="supabase/.temp/rest-version">
+v14.5
+</file>
+
+<file path="supabase/.temp/storage-migration">
+objects-null-version-index
+</file>
+
+<file path="supabase/.temp/storage-version">
+v1.73.1
 </file>
 
 <file path="supabase/migrations/20260908170000_t40_manual_athlete_verification.sql">
@@ -4394,494 +5278,502 @@ ALTER TABLE public.ap_ledger ADD CONSTRAINT ap_ledger_reason_check
 COMMIT;
 </file>
 
-<file path="supabase/migrations/20260907120000_t23_match_lifecycle.sql">
+<file path="supabase/migrations/20260916090000_backfill_sponsor_banners_and_metric_rpc.sql">
 -- =============================================================================
--- MIGRATION: T2.3 — Match State Machine, Check-In, Result Reporting & Lobby Chat
--- Specs: T2.3-C01, T2.3-C02, T2.3-C03, T2.3-C04
--- Corrections applied per 01_BRIEFS_SENT/T2.3-CORRECTION_Brief_for_Colt.md.md:
---   Fix 1 — audit_logs field names reconciled against the REAL production schema
---           (verified via live introspection: id, actor_id, actor_role, action,
---           entity_type, entity_id, before_data, after_data, diff, reason,
---           ip_address, user_agent, request_id, session_id, created_at).
---           `action` is an ENUM (public.audit_action_type) with no
---           MATCH-specific values, so all match-lifecycle audit rows below use
---           action = 'UPDATE', entity_type = 'matches', entity_id = match id,
---           and put the specific event name in `reason` / before_data / after_data.
---   Fix 2 — Dual no-show resolves to WALKOVER / winner_team_id = NULL /
---           outcome = 'WALKOVER' + referee notification (NOT the DISPUTED /
---           ADMIN_REFERRAL path floated in the C02 stress-test doc — that is
---           explicitly deferred to Sprint 2.4).
---   Fix 3 — Revised: no system bot player. public.players.user_id is NOT
---           NULL and 1:1 with auth.users in production, so seeding a fake
---           player row is not viable without first creating a matching
---           auth.users row (out of scope for a migration file). Instead,
---           match_lobby_messages.sender_id is made nullable and every
---           system-message insert below uses sender_id = NULL.
---   Fix 4 — lobby_code is read from matches.format_config->>'lobby_code'
---           (JSONB), not a flat column. matches.format_config does not exist
---           yet in production, so it is added by this migration.
+-- BACKFILL: sponsor_banners + increment_banner_metric()
+-- ส่งให้พี่หยัดรันใน Supabase SQL Editor เท่านั้น (Claude ไม่มีสิทธิ์รัน SQL)
+--
+-- Context: sponsor_banners table และ increment_banner_metric() RPC มีอยู่จริงบน
+-- Supabase production แล้ว (commit 6cc31e4, 7a25a9b) แต่ไม่เคยมี migration file
+-- ติดตามใน repo เลย — QA (อลิส) พบว่าเป็น schema drift แบบเดียวกับที่เจอใน
+-- 20260908140000_t33_patch_ap_balance_sync.sql มาก่อน ไฟล์นี้ backfill ไว้กัน
+-- drift ต่อไปเรื่อยๆ เท่านั้น
+--
+-- ⚠️ สำคัญ: ใช้ CREATE TABLE IF NOT EXISTS เพื่อไม่แตะ production table ที่มีอยู่
+-- แล้ว (มีข้อมูลจริงอยู่) — ตั้งใจ "ไม่เปิด RLS" ในไฟล์นี้ เพราะไม่ทราบว่า
+-- production table เปิด RLS อยู่แล้วหรือไม่ (public route app/api/v1/banners/route.ts
+-- อ่านผ่าน regular client สำเร็จอยู่ในปัจจุบัน) — ถ้าเปิด RLS โดยไม่มี policy ที่
+-- ถูกต้องอาจทำให้แบนเนอร์หน้าบ้านหายทันที พี่หยัดต้องตรวจสอบสถานะ RLS จริงก่อน
+-- (Supabase Dashboard > Table Editor > sponsor_banners > RLS) แล้วค่อยตัดสินใจ
+-- เปิดในไฟล์แยกต่างหากทีหลัง
+--
+-- slot_position: ไม่ทราบว่า production เก็บเป็น Postgres ENUM type จริงหรือ
+-- TEXT + CHECK constraint — ไฟล์นี้สมมติเป็น TEXT + CHECK (ปลอดภัยกว่าเพราะ
+-- CREATE TYPE จะ error ถ้ามี type ชื่อชนกันอยู่แล้วในรูปแบบอื่น) โปรดตรวจสอบ
+-- จริงก่อนรัน ถ้า production เป็น ENUM ให้ข้ามส่วน CREATE TABLE นี้ไปเลย
+-- (ตารางมีอยู่แล้วคำสั่งนี้จะ no-op เพราะ IF NOT EXISTS)
 -- =============================================================================
 
--- -----------------------------------------------------------------------------
--- 0. Shared helper functions referenced by the RLS policies below.
---    public.is_admin() and public.current_player_id() already exist in
---    production; public.is_team_leader() and public.is_referee_of() do not
---    and are introduced here.
--- -----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.is_team_leader(p_team_id UUID)
-RETURNS BOOLEAN
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-    SELECT EXISTS (
-        SELECT 1 FROM public.team_members
-        WHERE team_id = p_team_id
-          AND player_id = public.current_player_id()
-          AND role IN ('CAPTAIN', 'MANAGER', 'OWNER')
-          AND status = 'ACTIVE'
-    );
-$$;
+CREATE TABLE IF NOT EXISTS public.sponsor_banners (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title            TEXT NOT NULL,
+    brand_name       TEXT,
+    slot_position    TEXT NOT NULL CHECK (slot_position IN ('TOP_LEADERBOARD', 'LEFT_TOWER', 'RIGHT_TOWER')),
+    image_url        TEXT NOT NULL,
+    target_url       TEXT NOT NULL,
+    priority         INTEGER NOT NULL DEFAULT 0,
+    is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+    starts_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ends_at          TIMESTAMPTZ,
+    impression_count INTEGER NOT NULL DEFAULT 0,
+    click_count      INTEGER NOT NULL DEFAULT 0,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
-CREATE OR REPLACE FUNCTION public.is_referee_of(p_match_id UUID)
-RETURNS BOOLEAN
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-    SELECT EXISTS (
-        SELECT 1 FROM public.matches
-        WHERE id = p_match_id
-          AND referee_id = public.current_player_id()
-    );
-$$;
-
--- -----------------------------------------------------------------------------
--- 1. T2.3-C01 — Match State Machine Guard (BEFORE UPDATE trigger)
--- -----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.validate_match_transition_guard()
-RETURNS TRIGGER
+-- Best-effort reconstruction จากพฤติกรรมที่เรียกใช้จริงใน
+-- app/api/v1/banners/[id]/track/route.ts (p_metric_type: 'IMPRESSION' | 'CLICK').
+-- ⚠️ ใช้ CREATE OR REPLACE เหมือน pattern เดิมของ move_ap() patch — พี่หยัดควร
+-- diff กับ pg_get_functiondef('public.increment_banner_metric'::regproc) ของจริง
+-- บน production ก่อนรัน เผื่อ implementation จริงมี logic เพิ่มเติมที่ไฟล์นี้ไม่รู้จัก
+CREATE OR REPLACE FUNCTION public.increment_banner_metric(
+    p_banner_id   UUID,
+    p_metric_type TEXT
+)
+RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE
-    v_allowed       BOOLEAN := FALSE;
-    v_has_veto      BOOLEAN := FALSE;
 BEGIN
-    IF OLD.status = NEW.status THEN
-        RETURN NEW;
+    IF p_metric_type = 'IMPRESSION' THEN
+        UPDATE public.sponsor_banners
+        SET impression_count = impression_count + 1, updated_at = NOW()
+        WHERE id = p_banner_id;
+    ELSIF p_metric_type = 'CLICK' THEN
+        UPDATE public.sponsor_banners
+        SET click_count = click_count + 1, updated_at = NOW()
+        WHERE id = p_banner_id;
     END IF;
-
-    -- Terminal states are locked. (FORFEITED / DISPUTED are valid enum values
-    -- but are out of scope for this sprint per the correction brief — Fix 2 —
-    -- and are intentionally NOT treated as terminal here.)
-    IF OLD.status IN ('COMPLETED', 'WALKOVER', 'BYE', 'CANCELLED') THEN
-        RAISE EXCEPTION 'INVALID_STATUS_TRANSITION: Terminal status % cannot be updated to %', OLD.status, NEW.status;
-    END IF;
-
-    CASE OLD.status
-        WHEN 'SCHEDULED' THEN
-            IF NEW.status IN ('READY_CHECK', 'WALKOVER', 'BYE', 'CANCELLED') THEN
-                v_allowed := TRUE;
-            END IF;
-
-        WHEN 'READY_CHECK' THEN
-            IF NEW.status = 'WALKOVER' THEN
-                v_allowed := TRUE;
-            ELSIF NEW.status IN ('VETO', 'LIVE') THEN
-                SELECT (veto_format IS NOT NULL AND veto_format != '{}'::jsonb) INTO v_has_veto
-                FROM public.tournament_stages s
-                WHERE s.id = OLD.stage_id;
-
-                IF NEW.status = 'VETO' AND v_has_veto THEN
-                    v_allowed := TRUE;
-                ELSIF NEW.status = 'LIVE' AND NOT v_has_veto THEN
-                    v_allowed := TRUE;
-                END IF;
-            END IF;
-
-        WHEN 'VETO' THEN
-            IF NEW.status IN ('LIVE', 'CANCELLED') THEN
-                v_allowed := TRUE;
-            END IF;
-
-        WHEN 'LIVE' THEN
-            IF NEW.status IN ('PAUSED', 'AWAITING_RESULT') THEN
-                v_allowed := TRUE;
-            END IF;
-
-        WHEN 'PAUSED' THEN
-            IF NEW.status = 'LIVE' THEN
-                v_allowed := TRUE;
-            END IF;
-
-        WHEN 'AWAITING_RESULT' THEN
-            IF NEW.status = 'COMPLETED' THEN
-                v_allowed := TRUE;
-            END IF;
-
-        ELSE
-            v_allowed := FALSE;
-    END CASE;
-
-    IF NOT v_allowed THEN
-        RAISE EXCEPTION 'INVALID_STATUS_TRANSITION: Cannot transition match % from % to %', OLD.id, OLD.status, NEW.status;
-    END IF;
-
-    RETURN NEW;
 END;
 $$;
+</file>
 
-DROP TRIGGER IF EXISTS trg_validate_match_transition ON public.matches;
-CREATE TRIGGER trg_validate_match_transition
-    BEFORE UPDATE OF status ON public.matches
-    FOR EACH ROW EXECUTE FUNCTION public.validate_match_transition_guard();
+<file path="supabase/migrations/20260916100000_sponsor_partner_tier_core.sql">
+-- =============================================================================
+-- MIGRATION: Sponsor & Partner Tier Management — Core (sponsors table)
+-- ส่งให้พี่หยัดรันใน Supabase SQL Editor เท่านั้น (Claude ไม่มีสิทธิ์รัน SQL)
+-- รันหลัง 20260916090000_backfill_sponsor_banners_and_metric_rpc.sql เสมอ
+--
+-- อ้างอิง: Master Brief Sponsor And Partner Tier Management System.md +
+-- QA Gate approval จากอลิส (2026-09-16)
+--
+-- หมายเหตุการปรับจาก Tech Spec ต้นฉบับ (SPEC-SPT-001) ให้ตรงกับ convention จริง
+-- ของโปรเจกต์ (พบระหว่าง QA pre-implementation):
+--   - Owner/actor columns อ้างอิง public.players(id) ไม่ใช่ auth.users(id) ตรงๆ
+--     (ตาม pattern audit_logs.actor_id, ap_ledger.player_id, move_ap() ทั้งหมด)
+--   - Role check ใน RLS ใช้ public.user_roles (player_id, role, revoked_at)
+--     ไม่ใช่ players.role ตรงๆ (ตาม pattern lib/admin/requireAdminRole.ts)
+-- =============================================================================
 
--- -----------------------------------------------------------------------------
--- 2. T2.3-C01 — Auto-Walkover Engine (Stored Procedure, Fix 2 applied)
--- -----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.resolve_expired_ready_checks()
-RETURNS TABLE (
-    resolved_match_id   UUID,
-    winner_team_id      UUID,
-    final_status        VARCHAR
-) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-    r_match RECORD;
-    v_winner UUID;
-BEGIN
-    FOR r_match IN
-        SELECT id, team_a_id, team_b_id, team_a_ready_at, team_b_ready_at, referee_id
-        FROM public.matches
-        WHERE status IN ('SCHEDULED', 'READY_CHECK')
-          AND forfeit_deadline_at IS NOT NULL
-          AND forfeit_deadline_at < NOW()
-        FOR UPDATE
-    LOOP
-        resolved_match_id := r_match.id;
+-- ==========================================
+-- 1. ENUMS
+-- ==========================================
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'sponsor_tier') THEN
+        CREATE TYPE public.sponsor_tier AS ENUM ('SPONSOR', 'SPONSOR_PARTNER', 'PARTNER_COOP');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'sponsor_status') THEN
+        CREATE TYPE public.sponsor_status AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED');
+    END IF;
+END $$;
 
-        IF r_match.team_a_ready_at IS NOT NULL AND r_match.team_b_ready_at IS NULL THEN
-            v_winner := r_match.team_a_id;
-        ELSIF r_match.team_b_ready_at IS NOT NULL AND r_match.team_a_ready_at IS NULL THEN
-            v_winner := r_match.team_b_id;
-        ELSE
-            -- Fix 2: dual no-show (neither ready) is STILL a WALKOVER with a
-            -- NULL winner, not a DISPUTED/ADMIN_REFERRAL branch — that path is
-            -- deferred to Sprint 2.4 per the correction brief.
-            v_winner := NULL;
-        END IF;
-
-        winner_team_id := v_winner;
-        final_status := 'WALKOVER';
-
-        UPDATE public.matches
-        SET status = 'WALKOVER',
-            winner_team_id = v_winner,
-            outcome = 'WALKOVER',
-            ended_at = NOW(),
-            updated_at = NOW()
-        WHERE id = r_match.id;
-
-        -- Fix 1: audit_logs uses the REAL production schema.
-        INSERT INTO public.audit_logs (action, entity_type, entity_id, before_data, after_data, reason)
-        VALUES (
-            'UPDATE',
-            'matches',
-            r_match.id,
-            jsonb_build_object('team_a_ready_at', r_match.team_a_ready_at, 'team_b_ready_at', r_match.team_b_ready_at),
-            jsonb_build_object('status', 'WALKOVER', 'winner_team_id', v_winner, 'outcome', 'WALKOVER'),
-            'AUTO_WALKOVER_RESOLVE'
-        );
-
-        -- Fix 2: notify the referee, whichever branch fired (single no-show or
-        -- dual no-show), so the assignment stays visible in-app on top of the
-        -- realtime broadcast fired by the cron route.
-        IF r_match.referee_id IS NOT NULL THEN
-            INSERT INTO public.notifications (player_id, type, title, body, action_url)
-            VALUES (
-                r_match.referee_id,
-                'MATCH_WALKOVER_REVIEW',
-                'แมตช์ถูกปรับแพ้บายอัตโนมัติ',
-                CASE
-                    WHEN v_winner IS NOT NULL THEN 'ทีมคู่แข่งไม่เช็คอินภายในเวลา ระบบปรับแพ้บายให้อัตโนมัติแล้ว โปรดตรวจสอบ'
-                    ELSE 'ทั้งสองทีมไม่เช็คอินภายในเวลา ระบบปรับแพ้บายทั้งคู่ (ไม่มีผู้ชนะ) โปรดตรวจสอบหน้างาน'
-                END,
-                '/matches/' || r_match.id::text || '/lobby'
-            );
-        END IF;
-
-        RETURN NEXT;
-    END LOOP;
-END;
-$$;
-
--- -----------------------------------------------------------------------------
--- 3. T2.3-C02 — Match Check-In columns & RLS
---    (team_a_ready_at / team_b_ready_at / forfeit_deadline_at already exist in
---    production; these statements are no-ops there and only matter for other
---    environments, kept IF NOT EXISTS / IF NOT EXISTS for idempotency.)
--- -----------------------------------------------------------------------------
-ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS team_a_ready_at TIMESTAMPTZ;
-ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS team_b_ready_at TIMESTAMPTZ;
-ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS forfeit_deadline_at TIMESTAMPTZ;
-
-CREATE INDEX IF NOT EXISTS idx_matches_checkin_monitoring
-ON public.matches (status, forfeit_deadline_at)
-WHERE status IN ('SCHEDULED', 'READY_CHECK');
-
-ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "matches_checkin_update_policy" ON public.matches;
-CREATE POLICY "matches_checkin_update_policy" ON public.matches
-    FOR UPDATE USING (
-        public.is_admin()
-        OR public.is_referee_of(id)
-        OR auth.uid() IN (
-            SELECT p.user_id FROM public.team_members tm
-            JOIN public.players p ON p.id = tm.player_id
-            WHERE tm.team_id = matches.team_a_id
-              AND tm.role IN ('CAPTAIN', 'MANAGER', 'OWNER')
-              AND tm.status = 'ACTIVE'
-        )
-        OR auth.uid() IN (
-            SELECT p.user_id FROM public.team_members tm
-            JOIN public.players p ON p.id = tm.player_id
-            WHERE tm.team_id = matches.team_b_id
-              AND tm.role IN ('CAPTAIN', 'MANAGER', 'OWNER')
-              AND tm.status = 'ACTIVE'
-        )
-    );
-
--- -----------------------------------------------------------------------------
--- 4. T2.3-C03 — Result Reporting Core (public.match_reports)
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.match_reports (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    match_id            UUID NOT NULL REFERENCES public.matches(id) ON DELETE CASCADE,
-    reported_by_team    UUID NOT NULL REFERENCES public.teams(id) ON DELETE CASCADE,
-    reported_by_user    UUID NOT NULL REFERENCES public.players(id) ON DELETE SET NULL,
-
-    winner_team_id      UUID NOT NULL REFERENCES public.teams(id) ON DELETE RESTRICT,
-    score_a             SMALLINT NOT NULL CHECK (score_a >= 0),
-    score_b             SMALLINT NOT NULL CHECK (score_b >= 0),
-
-    evidence_urls       TEXT[] DEFAULT ARRAY[]::TEXT[] NOT NULL,
-    note                TEXT,
-
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT uq_match_report_per_team UNIQUE (match_id, reported_by_team)
+-- ==========================================
+-- 2. SPONSORS TABLE
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.sponsors (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_name       TEXT NOT NULL,
+    brand_logo_url     TEXT NOT NULL,
+    contact_email      TEXT NOT NULL,
+    partner_player_id  UUID REFERENCES public.players(id) ON DELETE SET NULL,
+    tier               public.sponsor_tier NOT NULL DEFAULT 'SPONSOR',
+    status             public.sponsor_status NOT NULL DEFAULT 'PENDING',
+    is_active          BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by         UUID REFERENCES public.players(id) ON DELETE SET NULL,
+    approved_by        UUID REFERENCES public.players(id) ON DELETE SET NULL,
+    rejection_reason   TEXT,
+    metadata           JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_match_reports_lookup ON public.match_reports(match_id, reported_by_team);
+CREATE INDEX IF NOT EXISTS idx_sponsors_tier_status ON public.sponsors(tier, status, is_active);
+CREATE INDEX IF NOT EXISTS idx_sponsors_partner_player ON public.sponsors(partner_player_id);
 
-ALTER TABLE public.match_reports ENABLE ROW LEVEL SECURITY;
+-- ==========================================
+-- 3. ROW-LEVEL SECURITY
+-- ==========================================
+ALTER TABLE public.sponsors ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "match_reports_public_select" ON public.match_reports;
-CREATE POLICY "match_reports_public_select" ON public.match_reports
-    FOR SELECT USING (TRUE);
+DROP POLICY IF EXISTS "Public Read Approved Active Sponsors" ON public.sponsors;
+CREATE POLICY "Public Read Approved Active Sponsors" ON public.sponsors
+    FOR SELECT USING (status = 'APPROVED' AND is_active = TRUE);
 
-DROP POLICY IF EXISTS "match_reports_team_insert" ON public.match_reports;
-CREATE POLICY "match_reports_team_insert" ON public.match_reports
-    FOR INSERT WITH CHECK (
-        auth.role() = 'authenticated'
-        AND public.is_team_leader(reported_by_team)
-        AND EXISTS (
-            SELECT 1 FROM public.matches m
-            WHERE m.id = match_id
-              AND (m.team_a_id = reported_by_team OR m.team_b_id = reported_by_team)
-              AND m.status = 'AWAITING_RESULT'
-        )
-    );
-
-DROP POLICY IF EXISTS "match_reports_team_update" ON public.match_reports;
-CREATE POLICY "match_reports_team_update" ON public.match_reports
-    FOR UPDATE USING (
-        auth.role() = 'authenticated'
-        AND public.is_team_leader(reported_by_team)
-        AND EXISTS (
-            SELECT 1 FROM public.matches m
-            WHERE m.id = match_id
-              AND m.status = 'AWAITING_RESULT'
-        )
-    );
-
-DROP POLICY IF EXISTS "match_reports_admin_all" ON public.match_reports;
-CREATE POLICY "match_reports_admin_all" ON public.match_reports
-    FOR ALL USING (public.is_admin());
-
-CREATE OR REPLACE FUNCTION public.set_updated_at()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS trg_match_reports_updated ON public.match_reports;
-CREATE TRIGGER trg_match_reports_updated
-    BEFORE UPDATE ON public.match_reports
-    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
--- -----------------------------------------------------------------------------
--- 5. T2.3-C04 — Match Lobby & Realtime Chat
--- -----------------------------------------------------------------------------
-
--- Fix 4: lobby_code lives in matches.format_config JSONB, which does not
--- exist yet in production — add it here.
-ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS format_config JSONB NOT NULL DEFAULT '{}'::jsonb;
-
-CREATE TABLE IF NOT EXISTS public.match_lobby_messages (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    match_id        UUID NOT NULL REFERENCES public.matches(id) ON DELETE CASCADE,
-    sender_id       UUID NOT NULL REFERENCES public.players(id) ON DELETE CASCADE,
-    sender_role     VARCHAR(20) NOT NULL CONSTRAINT chk_sender_role CHECK (sender_role IN ('TEAM_A', 'TEAM_B', 'REFEREE', 'SYSTEM')),
-    message         TEXT NOT NULL CONSTRAINT chk_msg_length CHECK (char_length(message) <= 500),
-    is_system       BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Fix 3 (revised): no system bot player exists, so system-authored rows
--- (is_system = TRUE) carry sender_id = NULL instead of a fake FK target.
-ALTER TABLE public.match_lobby_messages ALTER COLUMN sender_id DROP NOT NULL;
-
-CREATE INDEX IF NOT EXISTS idx_lobby_messages_match ON public.match_lobby_messages (match_id, created_at DESC);
-
-ALTER TABLE public.match_lobby_messages ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "lobby_messages_select_policy" ON public.match_lobby_messages;
-CREATE POLICY "lobby_messages_select_policy" ON public.match_lobby_messages
+DROP POLICY IF EXISTS "Partner Read Own Sponsor Record" ON public.sponsors;
+CREATE POLICY "Partner Read Own Sponsor Record" ON public.sponsors
     FOR SELECT USING (
-        auth.role() = 'authenticated'
-        AND (
-            public.is_admin()
-            OR public.is_referee_of(match_id)
-            OR EXISTS (
-                SELECT 1 FROM public.matches m
-                WHERE m.id = match_id
-                  AND (
-                      m.team_a_id IN (
-                          SELECT team_id FROM public.team_members
-                          WHERE player_id = public.current_player_id() AND status = 'ACTIVE'
-                      )
-                      OR m.team_b_id IN (
-                          SELECT team_id FROM public.team_members
-                          WHERE player_id = public.current_player_id() AND status = 'ACTIVE'
-                      )
-                  )
-            )
+        partner_player_id IN (SELECT id FROM public.players WHERE user_id = auth.uid())
+    );
+
+-- ⚠️ นโยบายนี้เป็น defense-in-depth เท่านั้น — เส้นทาง admin จริงทั้งหมดใช้
+-- createAdminClient() (service role key) ที่ bypass RLS อยู่แล้ว และมี
+-- requireAdminRole() gate ที่ application layer เป็นด่านหลัก
+DROP POLICY IF EXISTS "Admin Full Access Sponsors" ON public.sponsors;
+CREATE POLICY "Admin Full Access Sponsors" ON public.sponsors
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.players p
+            JOIN public.user_roles ur ON ur.player_id = p.id
+            WHERE p.user_id = auth.uid()
+              AND ur.revoked_at IS NULL
+              AND ur.role IN ('SUPER_ADMIN', 'ADMIN', 'MARKETPLACE_ADMIN')
+        )
+    );
+</file>
+
+<file path="supabase/migrations/20260916110000_sponsor_banners_add_tier_link.sql">
+-- =============================================================================
+-- MIGRATION: Link sponsor_banners -> sponsors + tier column
+-- ส่งให้พี่หยัดรันใน Supabase SQL Editor เท่านั้น (Claude ไม่มีสิทธิ์รัน SQL)
+-- รันหลัง 20260916100000_sponsor_partner_tier_core.sql เสมอ
+--
+-- Additive-only: เพิ่มคอลัมน์ nullable สองตัว ไม่แตะข้อมูลเดิมของ
+-- sponsor_banners ที่มีอยู่แล้วบน production เลย ปลอดภัยต่อ rows เก่าที่ยัง
+-- ไม่มี sponsor ผูกอยู่ (sponsor_id/tier จะเป็น NULL ไปก่อนจนกว่าแอดมินจะผูก
+-- แบนเนอร์เดิมเข้ากับ sponsor record ผ่านหน้า UI ใหม่)
+-- =============================================================================
+
+ALTER TABLE public.sponsor_banners
+    ADD COLUMN IF NOT EXISTS sponsor_id UUID REFERENCES public.sponsors(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS tier public.sponsor_tier;
+
+CREATE INDEX IF NOT EXISTS idx_sponsor_banners_sponsor_id ON public.sponsor_banners(sponsor_id);
+
+-- หมายเหตุ: Master Brief ต้องการให้ Tier 2/3 มีพื้นที่แสดงผลพรีเมียมเพิ่ม
+-- (TOURNAMENT_HERO, MATCH_LOBBY, STORE_FEATURED) นอกเหนือจาก 3 ตำแหน่งเดิม
+-- (TOP_LEADERBOARD, LEFT_TOWER, RIGHT_TOWER) — ไม่รวมอยู่ใน migration นี้เพราะ
+-- ยังไม่ทราบชนิดคอลัมน์จริงของ slot_position บน production (ENUM type หรือ
+-- TEXT+CHECK) การขยายค่าต้องใช้คำสั่งคนละแบบกัน (ALTER TYPE ... ADD VALUE
+-- vs DROP/ADD CONSTRAINT) พี่หยัดช่วยยืนยันชนิดคอลัมน์จริงก่อน แล้วจะตามด้วย
+-- migration แยกสำหรับขยาย slot ในรอบถัดไป
+</file>
+
+<file path="supabase/migrations/20260916120000_partner_coupons_engine.sql">
+-- =============================================================================
+-- MIGRATION: Partner Coupon & Discount Engine (PARTNER_COOP tier only)
+-- ส่งให้พี่หยัดรันใน Supabase SQL Editor เท่านั้น (Claude ไม่มีสิทธิ์รัน SQL)
+-- รันหลัง 20260916100000_sponsor_partner_tier_core.sql เสมอ
+--
+-- หมายเหตุ: verify_and_redeem_partner_coupon() นี้ "ตรวจสอบ + จองสิทธิ์คูปอง"
+-- เท่านั้น (คำนวณส่วนลด, กันใช้ซ้ำ, ล็อกโควตา) ไม่ได้เรียก move_ap() เอง —
+-- การหักแต้ม AP จริงของคำสั่งซื้อยังเกิดผ่าน checkout flow เดิม (checkout_order)
+-- ที่ต้องนำ final_price_ap จาก RPC นี้ไปใช้ต่อ (นอกขอบเขต migration ชุดนี้
+-- ตาม QA Gate ที่อนุมัติไว้ 4 migrations) — เก็บ COUPON_REDEEM ไว้ใน
+-- ap_ledger_reason_check (migration ถัดไป) เผื่อรอบ integration ถัดไปที่จะ
+-- โยง checkout_order เข้ากับคูปองจริง
+-- =============================================================================
+
+-- ==========================================
+-- 1. PARTNER COUPONS TABLE (sponsor tier = PARTNER_COOP เท่านั้นที่ออกได้)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.partner_coupons (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sponsor_id       UUID NOT NULL REFERENCES public.sponsors(id) ON DELETE CASCADE,
+    code             VARCHAR(50) NOT NULL UNIQUE,
+    title            TEXT NOT NULL,
+    description      TEXT,
+    ap_discount_amount INTEGER NOT NULL CHECK (ap_discount_amount >= 0),
+    min_purchase_ap  INTEGER NOT NULL DEFAULT 0 CHECK (min_purchase_ap >= 0),
+    max_total_uses   INTEGER NOT NULL DEFAULT 1000 CHECK (max_total_uses > 0),
+    current_uses     INTEGER NOT NULL DEFAULT 0 CHECK (current_uses <= max_total_uses),
+    per_user_limit   INTEGER NOT NULL DEFAULT 1 CHECK (per_user_limit > 0),
+    is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+    expires_at       TIMESTAMPTZ NOT NULL,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_partner_coupons_code ON public.partner_coupons(code, is_active, expires_at);
+CREATE INDEX IF NOT EXISTS idx_partner_coupons_sponsor ON public.partner_coupons(sponsor_id);
+
+-- ==========================================
+-- 2. PARTNER COUPON REDEMPTIONS LEDGER
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.partner_coupon_redemptions (
+    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    coupon_id            UUID NOT NULL REFERENCES public.partner_coupons(id) ON DELETE CASCADE,
+    player_id            UUID NOT NULL REFERENCES public.players(id) ON DELETE CASCADE,
+    discount_applied_ap  INTEGER NOT NULL CHECK (discount_applied_ap >= 0),
+    idempotency_key      VARCHAR(128) NOT NULL UNIQUE,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_player_coupon ON public.partner_coupon_redemptions(player_id, coupon_id);
+
+-- ==========================================
+-- 3. RLS
+-- ==========================================
+ALTER TABLE public.partner_coupons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.partner_coupon_redemptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public Read Active Coupons" ON public.partner_coupons;
+CREATE POLICY "Public Read Active Coupons" ON public.partner_coupons
+    FOR SELECT USING (is_active = TRUE AND expires_at > NOW() AND current_uses < max_total_uses);
+
+DROP POLICY IF EXISTS "Partner Coop Manage Own Coupons" ON public.partner_coupons;
+CREATE POLICY "Partner Coop Manage Own Coupons" ON public.partner_coupons
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.sponsors s
+            WHERE s.id = partner_coupons.sponsor_id
+              AND s.partner_player_id IN (SELECT id FROM public.players WHERE user_id = auth.uid())
+              AND s.tier = 'PARTNER_COOP'
+              AND s.status = 'APPROVED'
         )
     );
 
-DROP POLICY IF EXISTS "lobby_messages_insert_policy" ON public.match_lobby_messages;
-CREATE POLICY "lobby_messages_insert_policy" ON public.match_lobby_messages
-    FOR INSERT WITH CHECK (
-        auth.role() = 'authenticated'
-        AND is_system = FALSE
-        AND (
-            public.is_admin()
-            OR public.is_referee_of(match_id)
-            OR EXISTS (
-                SELECT 1 FROM public.matches m
-                WHERE m.id = match_id
-                  AND (
-                      m.team_a_id IN (
-                          SELECT team_id FROM public.team_members
-                          WHERE player_id = public.current_player_id() AND status = 'ACTIVE'
-                      )
-                      OR m.team_b_id IN (
-                          SELECT team_id FROM public.team_members
-                          WHERE player_id = public.current_player_id() AND status = 'ACTIVE'
-                      )
-                  )
-            )
+DROP POLICY IF EXISTS "Admin Full Access Coupons" ON public.partner_coupons;
+CREATE POLICY "Admin Full Access Coupons" ON public.partner_coupons
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.players p
+            JOIN public.user_roles ur ON ur.player_id = p.id
+            WHERE p.user_id = auth.uid()
+              AND ur.revoked_at IS NULL
+              AND ur.role IN ('SUPER_ADMIN', 'ADMIN', 'MARKETPLACE_ADMIN')
         )
     );
 
-DROP POLICY IF EXISTS "lobby_messages_no_update" ON public.match_lobby_messages;
-CREATE POLICY "lobby_messages_no_update" ON public.match_lobby_messages FOR UPDATE USING (false);
+DROP POLICY IF EXISTS "Player Read Own Redemptions" ON public.partner_coupon_redemptions;
+CREATE POLICY "Player Read Own Redemptions" ON public.partner_coupon_redemptions
+    FOR SELECT USING (
+        player_id IN (SELECT id FROM public.players WHERE user_id = auth.uid())
+    );
 
-DROP POLICY IF EXISTS "lobby_messages_no_delete" ON public.match_lobby_messages;
-CREATE POLICY "lobby_messages_no_delete" ON public.match_lobby_messages FOR DELETE USING (false);
+DROP POLICY IF EXISTS "Admin Full Access Redemptions" ON public.partner_coupon_redemptions;
+CREATE POLICY "Admin Full Access Redemptions" ON public.partner_coupon_redemptions
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.players p
+            JOIN public.user_roles ur ON ur.player_id = p.id
+            WHERE p.user_id = auth.uid()
+              AND ur.revoked_at IS NULL
+              AND ur.role IN ('SUPER_ADMIN', 'ADMIN', 'MARKETPLACE_ADMIN')
+        )
+    );
 
--- Fix 3 (revised): no system bot player is seeded — see the note above the
--- CREATE TABLE for public.match_lobby_messages. sender_id is NULL for every
--- is_system = TRUE row inserted by the trigger below.
-
-CREATE OR REPLACE FUNCTION public.log_lobby_system_message()
-RETURNS TRIGGER
+-- ==========================================
+-- 4. ATOMIC COUPON VALIDATION & REDEMPTION LOCK
+-- p_player_id ต้องเป็น public.players.id (ไม่ใช่ auth.users.id) ตาม convention
+-- เดียวกับ move_ap() — anti-BOLA จึงตรวจผ่านการ join players.user_id = auth.uid()
+-- แทนการเทียบ p_player_id = auth.uid() ตรงๆ แบบใน tech spec ต้นฉบับ
+-- ==========================================
+CREATE OR REPLACE FUNCTION public.verify_and_redeem_partner_coupon(
+    p_player_id           UUID,
+    p_coupon_code         VARCHAR,
+    p_purchase_amount_ap  INTEGER,
+    p_idempotency_key     VARCHAR
+)
+RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-    v_msg           TEXT;
-    v_team_name     TEXT;
+    v_coupon              RECORD;
+    v_sponsor             RECORD;
+    v_player_uses         INT;
+    v_discount_ap         INT;
+    v_existing_redemption RECORD;
 BEGIN
-    IF TG_TABLE_NAME = 'matches' AND TG_OP = 'UPDATE' THEN
+    SET LOCAL lock_timeout = '3s';
 
-        IF OLD.team_a_ready_at IS NULL AND NEW.team_a_ready_at IS NOT NULL THEN
-            SELECT name INTO v_team_name FROM public.teams WHERE id = NEW.team_a_id;
-            INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
-            VALUES (NEW.id, NULL, 'SYSTEM', '[SYSTEM] สโมสร ' || COALESCE(v_team_name, 'TEAM_A') || ' กดยืนยันความพร้อมแข่งขันแล้ว ✅', TRUE);
-        END IF;
-
-        IF OLD.team_b_ready_at IS NULL AND NEW.team_b_ready_at IS NOT NULL THEN
-            SELECT name INTO v_team_name FROM public.teams WHERE id = NEW.team_b_id;
-            INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
-            VALUES (NEW.id, NULL, 'SYSTEM', '[SYSTEM] สโมสร ' || COALESCE(v_team_name, 'TEAM_B') || ' กดยืนยันความพร้อมแข่งขันแล้ว ✅', TRUE);
-        END IF;
-
-        IF OLD.status != 'VETO' AND NEW.status = 'VETO' THEN
-            INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
-            VALUES (NEW.id, NULL, 'SYSTEM', '[SYSTEM] เริ่มต้นขั้นตอนดราฟต์เลือกแผนที่แข่ง (Map Veto Phase Active)', TRUE);
-        END IF;
-
-        IF OLD.status != 'LIVE' AND NEW.status = 'LIVE' THEN
-            INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
-            VALUES (NEW.id, NULL, 'SYSTEM', '[SYSTEM] สัญญาณภาพพร้อมรบแล้ว! การแข่งขันนัดประวัติศาสตร์เริ่มต้นอย่างเป็นทางการ ⚔️', TRUE);
-        END IF;
-
-        -- Fix 4: lobby_code lives in format_config JSONB, not a flat column.
-        IF (OLD.format_config->>'lobby_code' IS NULL AND NEW.format_config->>'lobby_code' IS NOT NULL)
-           OR (OLD.format_config->>'lobby_code' IS DISTINCT FROM NEW.format_config->>'lobby_code') THEN
-            INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
-            VALUES (
-                NEW.id,
-                NULL,
-                'SYSTEM',
-                '[SYSTEM] ผู้ตัดสินได้กรอกรหัสพาสเวิร์ดล็อบบี้: ' || NEW.format_config->>'lobby_code',
-                TRUE
-            );
-        END IF;
-
-        IF OLD.status != 'WALKOVER' AND NEW.status = 'WALKOVER' THEN
-            IF NEW.winner_team_id IS NOT NULL THEN
-                SELECT name INTO v_team_name FROM public.teams WHERE id = NEW.winner_team_id;
-                v_msg := '[SYSTEM] ขีดจำกัดเช็คอินหมดลง ยื่นโทษปรับแพ้บายให้แก่คู่แข่ง ปรับทีม ' || COALESCE(v_team_name, 'WINNER_TEAM') || ' ชนะบายสำเร็จ 🏆';
-            ELSE
-                v_msg := '[SYSTEM] ทั้งสองทีมไม่กดยืนยันความพร้อมแข่งขันตามเกณฑ์ 15 นาที ปรับแพ้บายทั้งคู่ (Dual Walkover) รอผู้ตัดสินตรวจสอบ';
-            END IF;
-
-            INSERT INTO public.match_lobby_messages (match_id, sender_id, sender_role, message, is_system)
-            VALUES (NEW.id, NULL, 'SYSTEM', v_msg, TRUE);
-        END IF;
-
+    -- Anti-BOLA Check: p_player_id ต้องเป็นของผู้ใช้ที่ล็อกอินอยู่จริง
+    IF p_player_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM public.players WHERE id = p_player_id AND user_id = auth.uid()
+    ) THEN
+        RETURN jsonb_build_object('success', FALSE, 'error', 'UNAUTHORIZED_BOLA_VIOLATION');
     END IF;
-    RETURN NEW;
+
+    -- Idempotency Check
+    SELECT * INTO v_existing_redemption
+    FROM public.partner_coupon_redemptions
+    WHERE idempotency_key = p_idempotency_key;
+
+    IF FOUND THEN
+        RETURN jsonb_build_object(
+            'success', TRUE,
+            'discount_applied_ap', v_existing_redemption.discount_applied_ap,
+            'message', 'IDEMPOTENT_REPLAY_SUCCESS'
+        );
+    END IF;
+
+    -- Fetch and Lock Coupon Row
+    SELECT * INTO v_coupon
+    FROM public.partner_coupons
+    WHERE code = UPPER(p_coupon_code)
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', FALSE, 'error', 'COUPON_NOT_FOUND');
+    END IF;
+
+    IF NOT v_coupon.is_active OR v_coupon.expires_at <= NOW() THEN
+        RETURN jsonb_build_object('success', FALSE, 'error', 'COUPON_EXPIRED_OR_INACTIVE');
+    END IF;
+
+    IF v_coupon.current_uses >= v_coupon.max_total_uses THEN
+        RETURN jsonb_build_object('success', FALSE, 'error', 'COUPON_MAX_USES_REACHED');
+    END IF;
+
+    IF p_purchase_amount_ap < v_coupon.min_purchase_ap THEN
+        RETURN jsonb_build_object('success', FALSE, 'error', 'MINIMUM_AP_PURCHASE_NOT_MET');
+    END IF;
+
+    -- Fetch Sponsor Tier & Status
+    SELECT * INTO v_sponsor
+    FROM public.sponsors
+    WHERE id = v_coupon.sponsor_id;
+
+    IF NOT FOUND OR v_sponsor.status <> 'APPROVED' OR NOT v_sponsor.is_active THEN
+        RETURN jsonb_build_object('success', FALSE, 'error', 'SPONSOR_SUSPENDED_OR_INACTIVE');
+    END IF;
+
+    IF v_sponsor.tier <> 'PARTNER_COOP' THEN
+        RETURN jsonb_build_object('success', FALSE, 'error', 'INVALID_SPONSOR_TIER_FOR_COUPON');
+    END IF;
+
+    -- Check Per-User Limit
+    SELECT COUNT(*) INTO v_player_uses
+    FROM public.partner_coupon_redemptions
+    WHERE coupon_id = v_coupon.id AND player_id = p_player_id;
+
+    IF v_player_uses >= v_coupon.per_user_limit THEN
+        RETURN jsonb_build_object('success', FALSE, 'error', 'USER_REACHED_PER_USER_LIMIT');
+    END IF;
+
+    -- Calculate Discount, Floor at 0 AP
+    v_discount_ap := LEAST(v_coupon.ap_discount_amount, p_purchase_amount_ap);
+    IF v_discount_ap < 0 THEN
+        v_discount_ap := 0;
+    END IF;
+
+    UPDATE public.partner_coupons
+    SET current_uses = current_uses + 1,
+        updated_at = NOW()
+    WHERE id = v_coupon.id;
+
+    INSERT INTO public.partner_coupon_redemptions (
+        coupon_id, player_id, discount_applied_ap, idempotency_key
+    ) VALUES (
+        v_coupon.id, p_player_id, v_discount_ap, p_idempotency_key
+    );
+
+    RETURN jsonb_build_object(
+        'success', TRUE,
+        'coupon_id', v_coupon.id,
+        'code', v_coupon.code,
+        'discount_applied_ap', v_discount_ap,
+        'final_price_ap', p_purchase_amount_ap - v_discount_ap
+    );
+EXCEPTION WHEN OTHERS THEN
+    RETURN jsonb_build_object('success', FALSE, 'error', SQLERRM);
 END;
 $$;
+</file>
 
-DROP TRIGGER IF EXISTS trg_match_lobby_system_messages ON public.matches;
-CREATE TRIGGER trg_match_lobby_system_messages
-    AFTER UPDATE ON public.matches
-    FOR EACH ROW EXECUTE FUNCTION public.log_lobby_system_message();
+<file path="supabase/migrations/20260916130000_ap_ledger_reason_check_add_coupon.sql">
+-- =============================================================================
+-- MIGRATION: Extend ap_ledger_reason_check with COUPON_REDEEM
+-- ส่งให้พี่หยัดรันใน Supabase SQL Editor เท่านั้น (Claude ไม่มีสิทธิ์รัน SQL)
+-- รันหลัง 20260914_match_room_mercy_scrim_v7_01_fixes.sql เสมอ (ต้องเป็น
+-- migration ล่าสุดที่แก้ constraint นี้ ณ เวลาที่รัน — ถ้ามี migration อื่นที่
+-- เพิ่ม reason ใหม่ระหว่างทาง ให้ union ค่าจากไฟล์นั้นเข้ามาด้วยก่อนรัน ตาม
+-- pattern ที่เคยแก้ไว้ใน commit 3109521)
+--
+-- Union ค่าเดิมทั้ง 25 ค่าจาก 20260914_match_room_mercy_scrim_v7_01_fixes.sql
+-- ไว้ครบ แล้วเพิ่ม COUPON_REDEEM ท้ายรายการ (สำรองไว้สำหรับรอบ integration
+-- ถัดไปที่จะโยง verify_and_redeem_partner_coupon() เข้ากับ checkout flow จริง
+-- — migration ชุดนี้ยังไม่มีจุดใดเรียก move_ap() ด้วย reason นี้)
+-- =============================================================================
+
+ALTER TABLE public.ap_ledger DROP CONSTRAINT IF EXISTS ap_ledger_reason_check;
+ALTER TABLE public.ap_ledger ADD CONSTRAINT ap_ledger_reason_check
+    CHECK (reason IN (
+        'WATCH_REWARD', 'CLAWBACK', 'ADMIN_ADJUSTMENT', 'STORE_REDEEM', 'TOP_UP',
+        'REFUND_AP_CREDIT', 'PENALTY_FINE', 'SUBSCRIPTION_RENEWAL', 'MARKETPLACE_BID',
+        'MARKETPLACE_REFUND', 'MARKETPLACE_SOLD', 'ESCROW_LOCK', 'ESCROW_SETTLED',
+        'ESCROW_AUTO_RELEASE', 'PREDICTION_BUY', 'PREDICTION_PAYOUT',
+        'PREDICTION_REFUND_VOID', 'PREDICTION_HOUSE_FEE_BURN', 'WATCH_EARN',
+        'PREDICTION_JACKPOT_PAYOUT', 'SCRIM_ESCROW_LOCK', 'SCRIM_MERCY_RINGER_STAKE',
+        'QUEST_REWARD', 'REFERRAL', 'SCRIM_VICTORY_PAYOUT', 'SCRIM_REFUND',
+        'COUPON_REDEEM'
+    ));
+</file>
+
+<file path="supabase/migrations/20260917_enable_public_spectate.sql">
+-- Enable public spectator access to matches, teams, and related data
+-- Allows unauthenticated users to view match details and replays for live streaming/replay viewing
+
+-- Policy: Allow anon/public read access to matches
+DROP POLICY IF EXISTS "matches_public_read_policy" ON public.matches;
+CREATE POLICY "matches_public_read_policy" ON public.matches
+  FOR SELECT
+  USING (true);
+
+-- Policy: Allow anon/public read access to teams
+DROP POLICY IF EXISTS "teams_public_read_policy" ON public.teams;
+CREATE POLICY "teams_public_read_policy" ON public.teams
+  FOR SELECT
+  USING (true);
+
+-- Policy: Allow anon/public read access to match_games
+DROP POLICY IF EXISTS "match_games_public_read_policy" ON public.match_games;
+CREATE POLICY "match_games_public_read_policy" ON public.match_games
+  FOR SELECT
+  USING (true);
+
+-- Policy: Allow anon/public read access to map_vetoes
+DROP POLICY IF EXISTS "map_vetoes_public_read_policy" ON public.map_vetoes;
+CREATE POLICY "map_vetoes_public_read_policy" ON public.map_vetoes
+  FOR SELECT
+  USING (true);
+
+-- Policy: Allow anon/public read access to match_replays (already implemented via API, but explicit RLS is safer)
+DROP POLICY IF EXISTS "match_replays_public_read_policy" ON public.match_replays;
+CREATE POLICY "match_replays_public_read_policy" ON public.match_replays
+  FOR SELECT
+  USING (true);
+</file>
+
+<file path="supabase/migrations/20260918000000_add_tournament_entry_fee_reason.sql">
+-- =============================================================================
+-- MIGRATION: Extend ap_ledger_reason_check with TOURNAMENT_ENTRY_FEE
+-- ส่งให้พี่หยัด (CEO) รันใน Supabase SQL Editor เท่านั้น (Agent ไม่มีสิทธิ์รัน SQL บน Production)
+-- รันหลัง 20260916130000_ap_ledger_reason_check_add_coupon.sql เสมอ
+--
+-- Union ค่าเดิมทั้งหมด 27 ค่าจาก migration ก่อนหน้า แล้วเพิ่ม TOURNAMENT_ENTRY_FEE
+-- เพื่อรองรับการหักค่าสมัครทัวร์นาเมนต์ผ่าน move_ap() RPC ใน actions/registration.ts
+-- ตาม Immutable Architectural Rule 1.2 (.antigravity/rules.md)
+-- =============================================================================
+
+ALTER TABLE public.ap_ledger DROP CONSTRAINT IF EXISTS ap_ledger_reason_check;
+ALTER TABLE public.ap_ledger ADD CONSTRAINT ap_ledger_reason_check
+    CHECK (reason IN (
+        'WATCH_REWARD', 'CLAWBACK', 'ADMIN_ADJUSTMENT', 'STORE_REDEEM', 'TOP_UP',
+        'REFUND_AP_CREDIT', 'PENALTY_FINE', 'SUBSCRIPTION_RENEWAL', 'MARKETPLACE_BID',
+        'MARKETPLACE_REFUND', 'MARKETPLACE_SOLD', 'ESCROW_LOCK', 'ESCROW_SETTLED',
+        'ESCROW_AUTO_RELEASE', 'PREDICTION_BUY', 'PREDICTION_PAYOUT',
+        'PREDICTION_REFUND_VOID', 'PREDICTION_HOUSE_FEE_BURN', 'WATCH_EARN',
+        'PREDICTION_JACKPOT_PAYOUT', 'SCRIM_ESCROW_LOCK', 'SCRIM_MERCY_RINGER_STAKE',
+        'QUEST_REWARD', 'REFERRAL', 'SCRIM_VICTORY_PAYOUT', 'SCRIM_REFUND',
+        'COUPON_REDEEM', 'TOURNAMENT_ENTRY_FEE'
+    ));
+</file>
+
+<file path="supabase/.temp/cli-latest">
+v2.117.0
 </file>
 
 <file path="supabase/migrations/20260917_athlete_telemetry_hud_real_data.sql">
@@ -5696,351 +6588,6 @@ END;
 $$;
 
 COMMIT;
-</file>
-
-<file path="supabase/migrations/20260908120000_t33_watch_to_earn.sql">
--- =============================================================================
--- MIGRATION: T3.3 — Streaming & AP Distribution (Watch-to-Earn)
--- ส่งให้พี่หยัดรันใน Supabase SQL Editor เท่านั้น
--- หมายเหตุ: verify กับ DB จริงแล้วว่า move_ap()/claim_watch_reward() ยังไม่มีอยู่จริง
--- (ต่างจากที่สเปคเดิมสมมติไว้) จึงสร้างไว้ท้ายไฟล์นี้ — เป็นฟังก์ชันกลางของระบบ AP
--- ที่ T3.4 (Redemption Store) เรียกใช้ผ่าน move_ap() ด้วยเช่นกัน (reason='STORE_REDEEM')
--- =============================================================================
-
--- -----------------------------------------------------------------------------
--- ap_earning_rules — กติกาการให้ AP ต่อสตรีม (interval, cap, ฯลฯ)
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.ap_earning_rules (
-    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name                 TEXT NOT NULL,
-    ap_per_interval      NUMERIC(6,2) NOT NULL DEFAULT 1,
-    interval_seconds     INTEGER NOT NULL DEFAULT 60,
-    daily_cap_ap         INTEGER NOT NULL DEFAULT 100,
-    max_session_minutes  INTEGER NOT NULL DEFAULT 180,
-    is_active            BOOLEAN NOT NULL DEFAULT true,
-    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- -----------------------------------------------------------------------------
--- streams — อาจมีอยู่แล้วบางส่วน (จากสเปคก่อนหน้า) เติมคอลัมน์ที่ T3.3 ต้องใช้
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.streams (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title             TEXT NOT NULL,
-    match_id          UUID REFERENCES public.matches(id) ON DELETE SET NULL,
-    is_earn_eligible  BOOLEAN NOT NULL DEFAULT false,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- type/status ใช้ ENUM stream_type_type / stream_status_type ที่มีอยู่แล้วใน DB (ไม่ใช่ TEXT + CHECK)
-ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS type stream_type_type;
-ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS status stream_status_type NOT NULL DEFAULT 'SCHEDULED';
-ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS tournament_id UUID REFERENCES public.tournaments(id) ON DELETE SET NULL;
-ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS earning_rule_id UUID REFERENCES public.ap_earning_rules(id) ON DELETE SET NULL;
-ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS ap_budget_total NUMERIC(10,2);
-ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS ap_budget_spent NUMERIC(10,2) NOT NULL DEFAULT 0;
-ALTER TABLE public.streams ADD COLUMN IF NOT EXISTS stream_url TEXT;
-
-CREATE INDEX IF NOT EXISTS idx_streams_status ON public.streams (status);
-CREATE INDEX IF NOT EXISTS idx_streams_tournament ON public.streams (tournament_id);
-
--- -----------------------------------------------------------------------------
--- watch_sessions — วงจรชีวิตของการดูสตรีมเพื่อรับ AP
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.watch_sessions (
-    id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    stream_id             UUID NOT NULL REFERENCES public.streams(id) ON DELETE CASCADE,
-    player_id             UUID NOT NULL REFERENCES public.players(id) ON DELETE CASCADE,
-    earning_rule_id       UUID REFERENCES public.ap_earning_rules(id) ON DELETE SET NULL,
-    status                TEXT NOT NULL DEFAULT 'ACTIVE'
-                              CHECK (status IN ('ACTIVE', 'CLAIMED', 'EXPIRED', 'ABANDONED')),
-    started_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_heartbeat_at     TIMESTAMPTZ,
-    position_sec          NUMERIC(10,2) NOT NULL DEFAULT 0,
-    watched_seconds       NUMERIC(10,2) NOT NULL DEFAULT 0,
-    risk_score            NUMERIC(5,2) NOT NULL DEFAULT 0,
-    is_anomalous          BOOLEAN NOT NULL DEFAULT false,
-    anomaly_note          TEXT,
-    claimed_at            TIMESTAMPTZ,
-    ap_awarded            NUMERIC(10,2),
-    start_idempotency_key TEXT,
-    device_id             TEXT,
-    ip_address            TEXT,
-    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ผู้เล่นหนึ่งคนมี session ACTIVE ได้ทีละ 1 รายการเท่านั้น (กันดูหลายสตรีมพร้อมกันเพื่อฟาร์ม AP)
-CREATE UNIQUE INDEX IF NOT EXISTS uq_watch_sessions_active_player
-    ON public.watch_sessions (player_id)
-    WHERE status = 'ACTIVE';
-
-CREATE INDEX IF NOT EXISTS idx_watch_sessions_stream ON public.watch_sessions (stream_id);
-CREATE INDEX IF NOT EXISTS idx_watch_sessions_player ON public.watch_sessions (player_id);
-CREATE INDEX IF NOT EXISTS idx_watch_sessions_device ON public.watch_sessions (device_id);
-CREATE INDEX IF NOT EXISTS idx_watch_sessions_ip ON public.watch_sessions (ip_address);
-
--- -----------------------------------------------------------------------------
--- watch_heartbeats — log ทุก heartbeat เพื่อ audit/anti-abuse
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.watch_heartbeats (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    session_id        UUID NOT NULL REFERENCES public.watch_sessions(id) ON DELETE CASCADE,
-    position_sec      NUMERIC(10,2) NOT NULL,
-    playback_rate     NUMERIC(4,2) NOT NULL DEFAULT 1,
-    delta_sec         NUMERIC(10,2) NOT NULL,
-    watched_seconds   NUMERIC(10,2) NOT NULL,
-    is_anomalous      BOOLEAN NOT NULL DEFAULT false,
-    anomaly_reason    TEXT,
-    risk_score_delta  NUMERIC(5,2) NOT NULL DEFAULT 0,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_watch_heartbeats_session ON public.watch_heartbeats (session_id, created_at);
-
--- -----------------------------------------------------------------------------
--- ap_daily_limits — โควต้า AP ต่อวันต่อผู้เล่น (Asia/Bangkok)
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.ap_daily_limits (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    player_id   UUID NOT NULL REFERENCES public.players(id) ON DELETE CASCADE,
-    limit_date  DATE NOT NULL,
-    ap_earned   NUMERIC(10,2) NOT NULL DEFAULT 0,
-    daily_cap   NUMERIC(10,2) NOT NULL DEFAULT 100,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_ap_daily_limits_player_date
-    ON public.ap_daily_limits (player_id, limit_date);
-
--- -----------------------------------------------------------------------------
--- ap_ledger — ประวัติการเคลื่อนไหว AP ทั้งหมด (เขียนโดย move_ap / claim_watch_reward)
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.ap_ledger (
-    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    player_id        UUID NOT NULL REFERENCES public.players(id) ON DELETE CASCADE,
-    amount           NUMERIC(10,2) NOT NULL,
-    reason           TEXT NOT NULL CHECK (reason IN ('WATCH_REWARD', 'CLAWBACK', 'ADMIN_ADJUSTMENT', 'STORE_REDEEM')),
-    reference_type   TEXT,
-    reference_id     UUID,
-    idempotency_key  TEXT UNIQUE,
-    balance_after    NUMERIC(10,2) NOT NULL,
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_ap_ledger_player ON public.ap_ledger (player_id, created_at DESC);
-
--- -----------------------------------------------------------------------------
--- abuse_flags — ผลตรวจจับความผิดปกติจาก cron abuse-analysis
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.abuse_flags (
-    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    player_id        UUID NOT NULL REFERENCES public.players(id) ON DELETE CASCADE,
-    flag_type        TEXT NOT NULL CHECK (flag_type IN ('DEVICE_MULTI_ACCOUNT', 'IP_CLUSTER', 'BOT_PATTERN')),
-    severity         TEXT NOT NULL DEFAULT 'MEDIUM' CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH')),
-    details          JSONB NOT NULL DEFAULT '{}'::jsonb,
-    status           TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'REVIEWED', 'CLAWED_BACK', 'DISMISSED')),
-    clawback_amount  NUMERIC(10,2),
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    reviewed_at      TIMESTAMPTZ,
-    reviewed_by      UUID REFERENCES public.players(id) ON DELETE SET NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_abuse_flags_player ON public.abuse_flags (player_id);
-CREATE INDEX IF NOT EXISTS idx_abuse_flags_status ON public.abuse_flags (status);
-
--- -----------------------------------------------------------------------------
--- move_ap — จุดเดียวที่แก้ยอด AP ของผู้เล่น: อ่านยอดปัจจุบันจาก ap_ledger.balance_after
--- แถวล่าสุด, เช็ค idempotency_key ซ้ำ, เช็คห้ามติดลบ, insert แถวใหม่ลง ledger,
--- และถ้าเป็น WATCH_REWARD ที่เป็นบวกจะพ่วงอัปเดต ap_daily_limits ให้ในตัว
--- ล็อกต่อผู้เล่นด้วย pg_advisory_xact_lock กันสอง request แข่งกันแก้ยอดพร้อมกัน
--- -----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.move_ap(
-    p_player_id       UUID,
-    p_amount          NUMERIC,
-    p_reason          TEXT,
-    p_idempotency_key TEXT DEFAULT NULL,
-    p_reference_type  TEXT DEFAULT NULL,
-    p_reference_id    UUID DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    v_current_balance NUMERIC;
-    v_new_balance     NUMERIC;
-    v_existing        RECORD;
-    v_ledger_id       UUID;
-    v_today           DATE;
-BEGIN
-    IF p_amount = 0 THEN
-        RETURN jsonb_build_object('success', false, 'error', 'ZERO_AMOUNT');
-    END IF;
-
-    PERFORM pg_advisory_xact_lock(hashtext(p_player_id::text)::bigint);
-
-    IF p_idempotency_key IS NOT NULL THEN
-        SELECT id, balance_after INTO v_existing
-        FROM public.ap_ledger
-        WHERE idempotency_key = p_idempotency_key;
-
-        IF FOUND THEN
-            RETURN jsonb_build_object(
-                'success', false,
-                'error', 'DUPLICATE_KEY',
-                'ledger_id', v_existing.id,
-                'balance_after', v_existing.balance_after
-            );
-        END IF;
-    END IF;
-
-    SELECT balance_after INTO v_current_balance
-    FROM public.ap_ledger
-    WHERE player_id = p_player_id
-    ORDER BY created_at DESC
-    LIMIT 1;
-
-    v_current_balance := COALESCE(v_current_balance, 0);
-    v_new_balance := v_current_balance + p_amount;
-
-    IF v_new_balance < 0 THEN
-        RETURN jsonb_build_object(
-            'success', false,
-            'error', 'INSUFFICIENT_AP_BALANCE',
-            'current_balance', v_current_balance,
-            'requested', p_amount
-        );
-    END IF;
-
-    INSERT INTO public.ap_ledger (player_id, amount, reason, reference_type, reference_id, idempotency_key, balance_after)
-    VALUES (p_player_id, p_amount, p_reason, p_reference_type, p_reference_id, p_idempotency_key, v_new_balance)
-    RETURNING id INTO v_ledger_id;
-
-    IF p_reason = 'WATCH_REWARD' AND p_amount > 0 THEN
-        v_today := (NOW() AT TIME ZONE 'Asia/Bangkok')::date;
-
-        INSERT INTO public.ap_daily_limits (player_id, limit_date, ap_earned)
-        VALUES (p_player_id, v_today, p_amount)
-        ON CONFLICT (player_id, limit_date) DO UPDATE
-            SET ap_earned = public.ap_daily_limits.ap_earned + EXCLUDED.ap_earned,
-                updated_at = NOW();
-    END IF;
-
-    RETURN jsonb_build_object(
-        'success', true,
-        'ledger_id', v_ledger_id,
-        'balance_after', v_new_balance
-    );
-END;
-$$;
-
--- -----------------------------------------------------------------------------
--- claim_watch_reward — ปิด watch_sessions (ACTIVE -> CLAIMED) แบบกันเบิ้ล, คำนวณ AP
--- จาก watched_seconds/interval_seconds * ap_per_interval, บังคับ daily cap,
--- ปฏิเสธ session ที่ is_anomalous, และ mint AP ผ่าน move_ap() (reason=WATCH_REWARD)
--- -----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.claim_watch_reward(p_session_id UUID)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    v_session         RECORD;
-    v_rule            RECORD;
-    v_intervals       NUMERIC;
-    v_raw_ap          NUMERIC;
-    v_today           DATE;
-    v_daily_earned    NUMERIC;
-    v_daily_cap       NUMERIC;
-    v_remaining_today NUMERIC;
-    v_ap_awarded      NUMERIC;
-    v_capped          BOOLEAN;
-    v_move_result     JSONB;
-BEGIN
-    SELECT * INTO v_session
-    FROM public.watch_sessions
-    WHERE id = p_session_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'error', 'SESSION_NOT_FOUND');
-    END IF;
-
-    IF v_session.status = 'CLAIMED' THEN
-        RETURN jsonb_build_object('success', false, 'error', 'ALREADY_CLAIMED');
-    END IF;
-
-    IF v_session.status <> 'ACTIVE' THEN
-        RETURN jsonb_build_object('success', false, 'error', 'INVALID_SESSION_STATUS');
-    END IF;
-
-    IF v_session.is_anomalous THEN
-        RETURN jsonb_build_object('success', false, 'error', 'SESSION_TOO_RISKY');
-    END IF;
-
-    SELECT * INTO v_rule FROM public.ap_earning_rules WHERE id = v_session.earning_rule_id;
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'error', 'EARNING_RULE_NOT_FOUND');
-    END IF;
-
-    v_intervals := FLOOR(v_session.watched_seconds / v_rule.interval_seconds);
-    v_raw_ap := v_intervals * v_rule.ap_per_interval;
-
-    v_today := (NOW() AT TIME ZONE 'Asia/Bangkok')::date;
-
-    SELECT ap_earned, daily_cap INTO v_daily_earned, v_daily_cap
-    FROM public.ap_daily_limits
-    WHERE player_id = v_session.player_id AND limit_date = v_today
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        v_daily_earned := 0;
-        v_daily_cap := v_rule.daily_cap_ap;
-    END IF;
-
-    v_remaining_today := GREATEST(v_daily_cap - v_daily_earned, 0);
-    v_ap_awarded := LEAST(v_raw_ap, v_remaining_today);
-    v_capped := v_ap_awarded < v_raw_ap;
-
-    IF v_ap_awarded > 0 THEN
-        v_move_result := public.move_ap(
-            v_session.player_id,
-            v_ap_awarded,
-            'WATCH_REWARD',
-            'claim-session-' || p_session_id::text,
-            'watch_session',
-            p_session_id
-        );
-
-        IF NOT (v_move_result->>'success')::boolean THEN
-            RETURN jsonb_build_object('success', false, 'error', COALESCE(v_move_result->>'error', 'MOVE_AP_FAILED'));
-        END IF;
-    END IF;
-
-    UPDATE public.watch_sessions
-    SET status = 'CLAIMED', claimed_at = NOW(), ap_awarded = v_ap_awarded, updated_at = NOW()
-    WHERE id = p_session_id;
-
-    RETURN jsonb_build_object(
-        'success', true,
-        'ap_awarded', v_ap_awarded,
-        'capped', v_capped,
-        'balance_after', COALESCE(
-            (v_move_result->>'balance_after')::numeric,
-            (SELECT balance_after FROM public.ap_ledger WHERE player_id = v_session.player_id ORDER BY created_at DESC LIMIT 1),
-            0
-        ),
-        'daily_earned', v_daily_earned + v_ap_awarded,
-        'daily_cap', v_daily_cap
-    );
-END;
-$$;
 </file>
 
 <file path="supabase/migrations/20260914_daily_quest_and_affiliate_v6.sql">

@@ -49,6 +49,7 @@ components/
       CategoryManager.tsx
       CreateItemForm.tsx
       ShipmentManager.tsx
+      SponsorManager.tsx
     EmergencyVoidPanel.tsx
     SettlementErrorTable.tsx
     SettlePoolPanel.tsx
@@ -75,6 +76,7 @@ components/
   landing/
     AthletePassportCard.tsx
   layout/
+    ChromeGate.tsx
     Navbar.tsx
   legal/
     LegalPageShell.tsx
@@ -112,7 +114,6 @@ components/
     WatchAPTracker.tsx
   auto-refresh.tsx
   matches-matrix-view.tsx
-  Navbar.tsx
   RiotLoginButton.tsx
   ThemeInjector.tsx
   tournament-bracket-view.tsx
@@ -190,64 +191,6 @@ export function JoinCircuitButtons() {
     </div>
   );
 }
-</file>
-
-<file path="components/layout/Navbar.tsx">
-'use client';
-
-import React from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-
-export const Navbar: React.FC = () => {
-  const pathname = usePathname();
-
-  const navLinks = [
-    { href: '/profile', label: 'นักกีฬา' },
-    { href: '/lobby', label: 'ห้องแข่ง (Lobby)' },
-    { href: '/match', label: 'แมตช์' },
-    { href: '/leaderboard', label: 'Rankings' },
-  ];
-
-  return (
-    <nav className="flex items-center justify-between px-8 h-14 bg-[#0D0E1A]/95 border-b border-[#E8B429]/15 sticky top-0 z-40 backdrop-blur-md">
-      {/* Brand Logo */}
-      <Link href="/profile" className="flex items-center gap-2.5 group">
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" className="group-hover:scale-105 transition-transform">
-          <polygon points="14,2 26,8 26,20 14,26 2,20 2,8" fill="none" stroke="#E8B429" strokeWidth="1.5" />
-          <polygon points="14,7 21,11 21,17 14,21 7,17 7,11" fill="rgba(232,180,41,0.12)" stroke="#E8B429" strokeWidth="1" />
-          <circle cx="14" cy="14" r="3" fill="#E8B429" />
-        </svg>
-        <span className="font-bold tracking-widest text-[#E8B429] text-lg uppercase drop-shadow-[0_0_12px_rgba(232,180,41,0.3)]">
-          ZODIAC ARENA
-        </span>
-      </Link>
-
-      {/* Nav Links */}
-      <div className="flex items-center gap-6 text-xs font-semibold tracking-wider">
-        {navLinks.map((link) => {
-          const isActive = pathname === link.href;
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`transition-colors py-1 relative ${
-                isActive
-                  ? 'text-[#E8B429] font-bold'
-                  : 'text-neutral-400 hover:text-[#E8B429]'
-              }`}
-            >
-              {link.label}
-              {isActive && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#E8B429] shadow-[0_0_8px_#E8B429]" />
-              )}
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
-  );
-};
 </file>
 
 <file path="components/profile/AthletePassport.tsx">
@@ -874,6 +817,254 @@ export function CareerTimeline({ records }: CareerTimelineProps) {
 }
 </file>
 
+<file path="components/profile/PlayerVerticalProfile.tsx">
+'use client';
+
+import React from 'react';
+import Image from 'next/image';
+
+export interface PlayerVerticalProfileProps {
+  playerId?: string;
+  riotId?: string;
+  avatarUrl?: string;
+  role?: 'Duelist' | 'Initiator' | 'Sentinel' | 'Controller';
+  tierTitle?: string;
+  zodiacPoints?: number;
+  apBalance?: number;
+  winRate?: number;
+  isLoading?: boolean;
+}
+
+export const PlayerVerticalProfile: React.FC<PlayerVerticalProfileProps> = ({
+  playerId = 'usr_unknown',
+  riotId = 'Operator#TH1',
+  avatarUrl,
+  role = 'Duelist',
+  tierTitle = 'Ascendant III',
+  zodiacPoints = 0,
+  apBalance = 0,
+  winRate = 0,
+  isLoading = false,
+}) => {
+  if (isLoading) {
+    return (
+      <div className="w-full h-full min-h-[400px] bg-[#1A1C2E]/60 border border-[#E8B429]/20 rounded-2xl p-6 flex flex-col items-center justify-between animate-pulse relative backdrop-blur-md">
+        <div className="w-full flex justify-between items-center">
+          <div className="h-4 w-16 bg-white/10 rounded" />
+          <div className="h-4 w-12 bg-white/10 rounded-full" />
+        </div>
+        <div className="h-24 w-24 rounded-2xl bg-white/10 mt-4" />
+        <div className="w-full space-y-2 mt-4 text-center">
+          <div className="h-5 w-32 bg-white/10 mx-auto rounded" />
+          <div className="h-3 w-20 bg-white/10 mx-auto rounded" />
+        </div>
+        <div className="w-full space-y-2 mt-6">
+          <div className="h-10 w-full bg-white/10 rounded-xl" />
+          <div className="h-10 w-full bg-white/10 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-full bg-[#1A1C2E] border border-white/10 hover:border-[#E8B429]/50 rounded-2xl p-5 md:p-6 flex flex-col justify-between shadow-2xl backdrop-blur-md transition-all duration-300 group overflow-hidden">
+      {/* 1. Header: Player Tag & Role */}
+      <div>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-mono tracking-widest text-[#75798c] uppercase">
+            ID: {playerId.slice(0, 8)}
+          </span>
+          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md tracking-wider border font-mono uppercase bg-[#E8B429]/10 text-[#E8B429] border-[#E8B429]/30">
+            {role}
+          </span>
+        </div>
+
+        {/* 2. Avatar */}
+        <div className="relative flex justify-center mt-6 mb-4">
+          <div className="relative w-24 h-24 rounded-2xl overflow-hidden bg-[#0D0E1A] border-2 border-[#E8B429]/30 group-hover:border-[#E8B429] transition-colors flex items-center justify-center">
+            {avatarUrl ? (
+              <Image
+                src={avatarUrl}
+                alt={riotId}
+                fill
+                className="object-cover"
+              />
+            ) : (
+              <span className="font-mono text-2xl font-black text-[#E8B429]">
+                {riotId.slice(0, 2).toUpperCase()}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* 3. Riot ID & Rank */}
+        <div className="text-center space-y-1">
+          <h2 className="text-lg font-black text-white tracking-wide truncate group-hover:text-[#E8B429] transition-colors font-mono">
+            {riotId}
+          </h2>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#0D0E1A] border border-white/10 text-[11px] font-semibold text-[#b2b6ca]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#34d399]" />
+            <span>{tierTitle}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Zodiac Stats (ZP, AP, WR%) */}
+      <div className="mt-6 space-y-2.5 pt-4 border-t border-white/10">
+        {/* Zodiac Points */}
+        <div className="bg-[#0D0E1A]/80 border border-white/5 rounded-xl p-3 flex justify-between items-center">
+          <div>
+            <div className="text-[10px] uppercase font-mono tracking-wider text-[#75798c] font-bold">
+              Zodiac Points
+            </div>
+            <div className="text-base font-black text-[#E8B429] font-mono">
+              {zodiacPoints.toLocaleString()} <span className="text-[11px] font-normal text-[#75798c]">ZP</span>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] uppercase font-mono tracking-wider text-[#75798c] font-bold">
+              Win Rate
+            </div>
+            <div className="text-sm font-bold text-[#34d399] font-mono">
+              {winRate}%
+            </div>
+          </div>
+        </div>
+
+        {/* AP Balance */}
+        <div className="bg-[#0D0E1A]/80 border border-white/5 rounded-xl p-2.5 flex justify-between items-center">
+          <div className="text-[9px] uppercase font-mono tracking-wider text-[#75798c] font-bold">
+            Action Points (AP)
+          </div>
+          <div className="text-xs font-black text-[#9184d9] font-mono">
+            {apBalance.toLocaleString()} AP
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="components/tournament/MatchNode.tsx">
+'use client';
+
+import React from 'react';
+import type { BracketMatchNode } from '@/types/bracket';
+
+interface MatchNodeProps {
+  node: BracketMatchNode;
+  isAdminMode?: boolean;
+  onMatchClick?: (nodeId: string) => void;
+}
+
+export const MatchNode: React.FC<MatchNodeProps> = ({
+  node,
+  isAdminMode = false,
+  onMatchClick,
+}) => {
+  const isLive = node.status === 'LIVE';
+  const isCompleted = node.status === 'COMPLETED';
+  const isReady = node.status === 'READY';
+  const isClickable = isAdminMode || isLive || isCompleted || isReady;
+
+  const getCardStyles = () => {
+    if (isLive) {
+      return 'border-[#dc3232]/60 bg-gradient-to-r from-[#b41e1e]/20 via-[#1A1C2E] to-[#1A1C2E] shadow-[0_0_15px_rgba(220,50,50,0.25)]';
+    }
+    if (isCompleted) {
+      return 'border-white/10 bg-[#1A1C2E] hover:border-[#E8B429]/40';
+    }
+    if (isReady) {
+      return 'border-[#E8B429]/50 bg-[#1A1C2E] shadow-[0_0_12px_rgba(232,180,41,0.15)]';
+    }
+    return 'border-white/5 bg-[#121422]/70 opacity-60';
+  };
+
+  const isTeamAWinner = isCompleted && Boolean(node.winnerTeamId) && node.winnerTeamId === node.teamA?.id;
+  const isTeamBWinner = isCompleted && Boolean(node.winnerTeamId) && node.winnerTeamId === node.teamB?.id;
+
+  return (
+    <div
+      onClick={() => isClickable && onMatchClick?.(node.id)}
+      className={`relative w-64 rounded-xl border p-3 transition-all duration-200 ${getCardStyles()} ${
+        isClickable ? 'cursor-pointer hover:scale-[1.02]' : 'cursor-default'
+      }`}
+    >
+      {/* Header Info */}
+      <div className="flex items-center justify-between text-[9px] font-bold tracking-wider mb-2">
+        <span className="text-[#75798c] uppercase">
+          {node.label || `M${node.positionInRound}`}
+        </span>
+        <div className="flex items-center gap-1.5">
+          {isLive && (
+            <span className="flex items-center gap-1 text-[#ff4444] animate-pulse">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#ff4444]" />
+              LIVE
+            </span>
+          )}
+          {node.bestOf && (
+            <span className="text-[#9397ab] bg-white/5 px-1.5 py-0.5 rounded">
+              BO{node.bestOf}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        {/* Team A Row */}
+        <div
+          className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
+            isTeamAWinner
+              ? 'bg-[#E8B429]/15 text-[#E8B429] font-bold'
+              : 'text-[#e9e9ed] bg-black/20'
+          }`}
+        >
+          <div className="flex items-center gap-2 overflow-hidden">
+            <span className="truncate">
+              {node.teamA?.name ?? (node.teamA ? 'Loading...' : 'TBD')}
+            </span>
+          </div>
+          {node.scoreA !== undefined && node.scoreA !== null && (
+            <span
+              className={`font-mono text-xs font-black ${
+                isTeamAWinner ? 'text-[#E8B429]' : 'text-[#75798c]'
+              }`}
+            >
+              {node.scoreA}
+            </span>
+          )}
+        </div>
+
+        {/* Team B Row */}
+        <div
+          className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
+            isTeamBWinner
+              ? 'bg-[#E8B429]/15 text-[#E8B429] font-bold'
+              : 'text-[#e9e9ed] bg-black/20'
+          }`}
+        >
+          <div className="flex items-center gap-2 overflow-hidden">
+            <span className="truncate">
+              {node.teamB?.name ?? (node.teamB ? 'Loading...' : 'TBD')}
+            </span>
+          </div>
+          {node.scoreB !== undefined && node.scoreB !== null && (
+            <span
+              className={`font-mono text-xs font-black ${
+                isTeamBWinner ? 'text-[#E8B429]' : 'text-[#75798c]'
+              }`}
+            >
+              {node.scoreB}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+</file>
+
 <file path="components/auto-refresh.tsx">
 // components/auto-refresh.tsx
 'use client';
@@ -932,6 +1123,50 @@ export default function RiotLoginButton() {
       Sign in with Riot Games
     </button>
   );
+}
+</file>
+
+<file path="components/ThemeInjector.tsx">
+'use client';
+
+import { useEffect } from 'react';
+
+interface ActiveThemeResponse {
+  data: {
+    custom_css_vars: Record<string, string>;
+  };
+}
+
+// T3.6-B01 — client-side only: ดึง GET /api/v1/themes/active แล้ว inject
+// custom_css_vars ลง document.documentElement เป็น CSS custom properties
+export default function ThemeInjector() {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function applyActiveTheme() {
+      try {
+        const res = await fetch('/api/v1/themes/active');
+        if (!res.ok) return;
+
+        const json: ActiveThemeResponse = await res.json();
+        if (cancelled) return;
+
+        for (const [key, value] of Object.entries(json.data.custom_css_vars)) {
+          document.documentElement.style.setProperty(key, value);
+        }
+      } catch {
+        // เงียบไว้ — ธีมล้มเหลวไม่ควรบล็อกการใช้งานหน้าเว็บ ใช้ CSS default ต่อไปได้
+      }
+    }
+
+    applyActiveTheme();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return null;
 }
 </file>
 
@@ -2061,6 +2296,419 @@ export function ShipmentManager() {
             ))}
           </tbody>
         </table>
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="components/admin/marketplace/SponsorManager.tsx">
+// components/admin/marketplace/SponsorManager.tsx
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import {
+  Plus,
+  CheckCircle2,
+  XCircle,
+  Ban,
+  Building2,
+  Sparkles,
+  X,
+  RefreshCw,
+  BarChart3,
+} from 'lucide-react';
+import type { AdminSponsorDetail, CreateSponsorInput, SponsorStatus } from '@/types/sponsor';
+
+const EMPTY_FORM: CreateSponsorInput = {
+  company_name: '',
+  brand_logo_url: '',
+  contact_email: '',
+  tier: 'SPONSOR',
+  metadata: {},
+};
+
+const TIER_OPTIONS = [
+  { id: 'SPONSOR', label: 'SPONSOR', desc: 'แบนเนอร์/โลโก้ตำแหน่งมาตรฐาน + สถิติพื้นฐาน' },
+  { id: 'SPONSOR_PARTNER', label: 'SPONSOR_PARTNER', desc: 'พื้นที่พรีเมียม + โควตาหน้า Tournament/Match' },
+  { id: 'PARTNER_COOP', label: 'PARTNER_COOP', desc: 'ครบทุกตำแหน่ง + เปิดหน้าร้าน + ออกคูปองส่วนลด AP' },
+] as const;
+
+const STATUS_STYLE: Record<SponsorStatus, string> = {
+  PENDING: 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/30',
+  APPROVED: 'bg-[#4CAF50]/10 text-[#4CAF50] border-[#4CAF50]/30',
+  REJECTED: 'bg-red-500/10 text-red-400 border-red-500/30',
+  SUSPENDED: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30',
+};
+
+export function SponsorManager() {
+  const [sponsors, setSponsors] = useState<AdminSponsorDetail[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formData, setFormData] = useState<CreateSponsorInput>(EMPTY_FORM);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const [rejectingSponsor, setRejectingSponsor] = useState<AdminSponsorDetail | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+
+  const fetchSponsors = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/v1/admin/sponsors');
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || 'โหลดข้อมูลสปอนเซอร์ไม่สำเร็จ');
+      setSponsors(json.data || []);
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการโหลด');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load on mount
+    fetchSponsors();
+  }, [fetchSponsors]);
+
+  const pendingCount = sponsors.filter((s) => s.status === 'PENDING').length;
+  const approvedCount = sponsors.filter((s) => s.status === 'APPROVED').length;
+  const coopCount = sponsors.filter((s) => s.tier === 'PARTNER_COOP' && s.status === 'APPROVED').length;
+
+  function handleOpenCreate() {
+    setFormData(EMPTY_FORM);
+    setFormError(null);
+    setIsModalOpen(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setFormError(null);
+
+    try {
+      const res = await fetch('/api/v1/admin/sponsors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || 'สร้างรายการสปอนเซอร์ไม่สำเร็จ');
+
+      setIsModalOpen(false);
+      await fetchSponsors();
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการบันทึก');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function updateApproval(sponsor: AdminSponsorDetail, status: SponsorStatus, rejection_reason?: string) {
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/v1/admin/sponsors/${sponsor.id}/approval`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, rejection_reason }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || 'ปรับสถานะไม่สำเร็จ');
+
+      setSponsors((prev) => prev.map((s) => (s.id === sponsor.id ? json.data : s)));
+      setRejectingSponsor(null);
+      setRejectReason('');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* KPI STRIP */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="rounded-xl border border-white/5 bg-[#1A1C2E] p-4">
+          <div className="flex items-center justify-between text-[#94A3B8] mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider">สปอนเซอร์ทั้งหมด</span>
+            <Building2 className="w-4 h-4 text-[#00D4FF]" />
+          </div>
+          <span className="text-2xl font-black text-white">{sponsors.length}</span>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-[#1A1C2E] p-4">
+          <div className="flex items-center justify-between text-[#94A3B8] mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider">รออนุมัติ</span>
+            <Sparkles className="w-4 h-4 text-[#F59E0B]" />
+          </div>
+          <span className="text-2xl font-black text-[#F59E0B]">{pendingCount}</span>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-[#1A1C2E] p-4">
+          <div className="flex items-center justify-between text-[#94A3B8] mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider">อนุมัติแล้ว</span>
+            <CheckCircle2 className="w-4 h-4 text-[#4CAF50]" />
+          </div>
+          <span className="text-2xl font-black text-[#4CAF50]">{approvedCount}</span>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-[#1A1C2E] p-4">
+          <div className="flex items-center justify-between text-[#94A3B8] mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider">PARTNER_COOP Active</span>
+            <Sparkles className="w-4 h-4 text-[#E8B429]" />
+          </div>
+          <span className="text-2xl font-black text-[#E8B429]">{coopCount}</span>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-[#94A3B8]">รายการสปอนเซอร์ & พาร์ทเนอร์</h2>
+        <button
+          type="button"
+          onClick={handleOpenCreate}
+          className="flex items-center gap-1.5 rounded-lg bg-[#E8B429] px-4 py-2 text-xs font-bold text-[#0D0E1A] hover:bg-[#d4a222] transition-colors shadow-lg cursor-pointer"
+        >
+          <Plus className="w-4 h-4" />
+          <span>เพิ่มสปอนเซอร์ใหม่</span>
+        </button>
+      </div>
+
+      {error && (
+        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400">{error}</div>
+      )}
+
+      <div className="overflow-hidden rounded-xl border border-white/5 bg-[#1A1C2E]">
+        {loading ? (
+          <div className="py-16 text-center text-zinc-500 text-xs flex items-center justify-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin text-[#E8B429]" />
+            <span>กำลังโหลดรายการสปอนเซอร์...</span>
+          </div>
+        ) : sponsors.length === 0 ? (
+          <div className="py-16 text-center text-zinc-500 text-xs">
+            <Building2 className="w-8 h-8 mx-auto mb-2 opacity-30 text-[#94A3B8]" />
+            <p>ยังไม่มีสปอนเซอร์ในระบบ</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-white/5 bg-[#121424] text-[10px] font-mono uppercase text-[#94A3B8]">
+                <tr>
+                  <th className="py-3.5 px-4 font-bold">บริษัท</th>
+                  <th className="py-3.5 px-4 font-bold">Tier</th>
+                  <th className="py-3.5 px-4 font-bold">สถานะ</th>
+                  <th className="py-3.5 px-4 font-bold">อีเมลติดต่อ</th>
+                  <th className="py-3.5 px-4 font-bold text-right">ดำเนินการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {sponsors.map((s) => (
+                  <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-white">{s.company_name}</div>
+                      {s.rejection_reason && (
+                        <div className="text-[10px] text-red-400 mt-0.5">เหตุผลปฏิเสธ: {s.rejection_reason}</div>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-[10px]">
+                      <span className="px-2 py-0.5 rounded border border-[#00D4FF]/40 bg-[#00D4FF]/10 text-[#00D4FF] font-bold">
+                        {s.tier}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-mono font-bold border ${STATUS_STYLE[s.status]}`}>
+                        {s.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-zinc-400">{s.contact_email}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Link
+                          href={`/admin/marketplace/sponsors/${s.id}/metrics`}
+                          className="p-1.5 rounded hover:bg-white/10 text-zinc-400 hover:text-[#00D4FF] transition-colors cursor-pointer"
+                          title="ดู Analytics"
+                        >
+                          <BarChart3 className="w-4 h-4" />
+                        </Link>
+                        {s.status !== 'APPROVED' && (
+                          <button
+                            type="button"
+                            disabled={submitting}
+                            onClick={() => updateApproval(s, 'APPROVED')}
+                            className="p-1.5 rounded hover:bg-[#4CAF50]/20 text-zinc-400 hover:text-[#4CAF50] transition-colors cursor-pointer disabled:opacity-40"
+                            title="อนุมัติ"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {s.status !== 'REJECTED' && (
+                          <button
+                            type="button"
+                            disabled={submitting}
+                            onClick={() => setRejectingSponsor(s)}
+                            className="p-1.5 rounded hover:bg-red-500/20 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer disabled:opacity-40"
+                            title="ปฏิเสธ"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        )}
+                        {s.status === 'APPROVED' && (
+                          <button
+                            type="button"
+                            disabled={submitting}
+                            onClick={() => updateApproval(s, 'SUSPENDED')}
+                            className="p-1.5 rounded hover:bg-zinc-500/20 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer disabled:opacity-40"
+                            title="ระงับสิทธิ์"
+                          >
+                            <Ban className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* CREATE MODAL */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#1A1C2E] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-[#E8B429]" />
+                <span>เพิ่มสปอนเซอร์ใหม่</span>
+              </h3>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="text-zinc-500 hover:text-white cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {formError && (
+              <div className="p-2.5 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-400">{formError}</div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-[#94A3B8] uppercase mb-1">ชื่อบริษัท *</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.company_name}
+                  onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+                  placeholder="เช่น Luminary Global"
+                  className="w-full bg-[#121424] border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#E8B429]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-[#94A3B8] uppercase mb-1">URL โลโก้แบรนด์ *</label>
+                <input
+                  type="url"
+                  required
+                  value={formData.brand_logo_url}
+                  onChange={(e) => setFormData({ ...formData, brand_logo_url: e.target.value })}
+                  placeholder="https://cdn.zodiacarena.com/logos/..."
+                  className="w-full bg-[#121424] border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#E8B429]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-[#94A3B8] uppercase mb-1">อีเมลติดต่อ *</label>
+                <input
+                  type="email"
+                  required
+                  value={formData.contact_email}
+                  onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+                  placeholder="sponsorships@luminaryglobal.com"
+                  className="w-full bg-[#121424] border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#E8B429]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-[#94A3B8] uppercase mb-1">Partnership Tier *</label>
+                <div className="grid grid-cols-1 gap-2">
+                  {TIER_OPTIONS.map((t) => (
+                    <div
+                      key={t.id}
+                      onClick={() => setFormData({ ...formData, tier: t.id })}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                        formData.tier === t.id
+                          ? 'bg-[#E8B429]/10 border-[#E8B429]'
+                          : 'bg-[#121424] border-white/10 hover:border-white/20'
+                      }`}
+                    >
+                      <div className="text-xs font-bold text-white flex items-center justify-between">
+                        {t.label}
+                        {formData.tier === t.id && <Sparkles className="w-3.5 h-3.5 text-[#E8B429]" />}
+                      </div>
+                      <div className="text-[10px] text-zinc-400 mt-0.5">{t.desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold text-zinc-300 transition-colors cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#E8B429] hover:bg-[#d4a222] text-xs font-bold text-[#0D0E1A] disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  {submitting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>REGISTER SPONSOR TIER</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* REJECT REASON MODAL */}
+      {rejectingSponsor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-xl border border-white/10 bg-[#1A1C2E] p-6 shadow-2xl space-y-4">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <XCircle className="w-4 h-4 text-red-400" />
+              <span>ปฏิเสธสปอนเซอร์ {rejectingSponsor.company_name}</span>
+            </h3>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="ระบุเหตุผลการปฏิเสธ (ไม่บังคับ)"
+              rows={3}
+              className="w-full bg-[#121424] border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#E8B429]"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setRejectingSponsor(null); setRejectReason(''); }}
+                className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold text-zinc-300 transition-colors cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => updateApproval(rejectingSponsor, 'REJECTED', rejectReason)}
+                className="px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-xs font-bold text-white disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                {submitting ? 'กำลังบันทึก...' : 'ยืนยันปฏิเสธ'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -3361,6 +4009,414 @@ export const ZodiacBuffCard: React.FC = () => {
 };
 </file>
 
+<file path="components/layout/ChromeGate.tsx">
+'use client';
+
+import React from 'react';
+import { usePathname } from 'next/navigation';
+import Navbar from '@/components/layout/Navbar';
+import ZodiacOracle from '@/components/ZodiacOracle';
+
+// เส้นทางที่ต้องเป็น Clean View ล้วน ๆ (เช่น OBS Browser Source overlay)
+// ห้ามมี Navbar / floating widget ใด ๆ ปนมาบนภาพสตรีมเด็ดขาด
+const CHROME_FREE_PREFIXES = ['/overlay'];
+
+export default function ChromeGate() {
+  const pathname = usePathname();
+  const isChromeFree = CHROME_FREE_PREFIXES.some((prefix) => pathname?.startsWith(prefix));
+
+  if (isChromeFree) return null;
+
+  return (
+    <>
+      <Navbar />
+      <ZodiacOracle />
+    </>
+  );
+}
+</file>
+
+<file path="components/layout/Navbar.tsx">
+// components/layout/Navbar.tsx
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { NavbarUser, NavbarUserSchema, ZodiacSign } from '@/types/navbar';
+import {
+  Coins,
+  LogOut,
+  Menu,
+  X,
+  User,
+} from 'lucide-react';
+
+function computeZodiacSign(dateOfBirth: string | null): ZodiacSign | null {
+  if (!dateOfBirth) return null;
+  const parsed = new Date(dateOfBirth);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const month = parsed.getUTCMonth() + 1;
+  const day = parsed.getUTCDate();
+
+  if ((month === 3 && day >= 21) || (month === 4 && day <= 19)) return 'Aries';
+  if ((month === 4 && day >= 20) || (month === 5 && day <= 20)) return 'Taurus';
+  if ((month === 5 && day >= 21) || (month === 6 && day <= 20)) return 'Gemini';
+  if ((month === 6 && day >= 21) || (month === 7 && day <= 22)) return 'Cancer';
+  if ((month === 7 && day >= 23) || (month === 8 && day <= 22)) return 'Leo';
+  if ((month === 8 && day >= 23) || (month === 9 && day <= 22)) return 'Virgo';
+  if ((month === 9 && day >= 23) || (month === 10 && day <= 22)) return 'Libra';
+  if ((month === 10 && day >= 23) || (month === 11 && day <= 21)) return 'Scorpio';
+  if ((month === 11 && day >= 22) || (month === 12 && day <= 21)) return 'Sagittarius';
+  if ((month === 12 && day >= 22) || (month === 1 && day <= 19)) return 'Capricorn';
+  if ((month === 1 && day >= 20) || (month === 2 && day <= 18)) return 'Aquarius';
+  return 'Pisces';
+}
+
+export default function Navbar() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [user, setUser] = useState<NavbarUser | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [loggingOut, setLoggingOut] = useState<boolean>(false);
+
+  // Feature Flag สำหรับ Sprint Demo วันที่ 23 ก.ย.
+  const isMarketplaceDemoEnabled = process.env.NEXT_PUBLIC_ENABLE_MARKETPLACE_DEMO === 'true';
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchUserProfile() {
+      try {
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+
+        if (authError || !authUser) {
+          if (isMounted) {
+            setUser(null);
+            setLoading(false);
+          }
+          return;
+        }
+
+        const { data: playerRow, error: playerError } = await supabase
+          .from('players')
+          .select('id, user_id, display_name, avatar_url, ap_balance, date_of_birth')
+          .eq('user_id', authUser.id)
+          .maybeSingle();
+
+        if (playerError || !playerRow) {
+          if (isMounted) {
+            setUser(null);
+            setLoading(false);
+          }
+          return;
+        }
+
+        const validatedUser = NavbarUserSchema.safeParse({
+          id: playerRow.id,
+          userId: playerRow.user_id,
+          displayName: playerRow.display_name || authUser.email?.split('@')[0] || 'Athlete',
+          avatarUrl: playerRow.avatar_url,
+          zodiacSign: computeZodiacSign(playerRow.date_of_birth),
+          apBalance: playerRow.ap_balance || 0
+        });
+
+        if (validatedUser.success && isMounted) {
+          setUser(validatedUser.data);
+        }
+      } catch (err) {
+        console.error('[Navbar Engine] Profile Fetch Error:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    fetchUserProfile();
+
+    // Realtime Balance & Profile Subscription
+    const channel = supabase
+      .channel('navbar-player-changes')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'players' },
+        (payload) => {
+          setUser((prev) => {
+            if (!prev || payload.new.id !== prev.id) return prev;
+            return {
+              ...prev,
+              apBalance: payload.new.ap_balance ?? prev.apBalance,
+              avatarUrl: payload.new.avatar_url ?? prev.avatarUrl,
+              displayName: payload.new.display_name ?? prev.displayName
+            };
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true);
+      await supabase.auth.signOut();
+      setUser(null);
+      setMobileMenuOpen(false);
+      router.push('/');
+      router.refresh();
+    } catch (err) {
+      console.error('[Navbar Engine] Logout Error:', err);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
+  const navLinks = [
+    { label: 'HOME', href: '/' },
+    { label: 'TOURNAMENT', href: '/tournament' },
+    { label: 'LEADERBOARD', href: '/leaderboard' },
+    { label: 'STORE', href: '/store' },
+    {
+      label: 'ATHLETE MARKET',
+      href: isMarketplaceDemoEnabled ? '/marketplace/athletes' : '/leaderboard',
+      isBadge: isMarketplaceDemoEnabled ? 'DEMO' : null
+    },
+    { label: 'AI ORACLE', href: '/chatbot' },
+    ...(user ? [{ label: 'DASHBOARD', href: '/dashboard' }] : [])
+  ];
+
+  const isActive = (path: string) => pathname === path;
+
+  return (
+    <>
+      <header className="sticky top-0 z-50 w-full bg-[#080810]/85 backdrop-blur-md border-b border-white/10 transition-all font-mono">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+
+          {/* BRAND LOGO */}
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#E8B429] via-[#00D4FF] to-[#8B5CF6] p-[1.5px] shadow-[0_0_15px_rgba(0,212,255,0.3)] group-hover:shadow-[0_0_22px_rgba(232,180,41,0.5)] transition-all">
+              <div className="w-full h-full bg-[#080810] rounded-[10.5px] flex items-center justify-center font-black text-white text-base tracking-tighter">
+                ZA
+              </div>
+            </div>
+            <div className="flex flex-col">
+              <span className="font-black text-base text-white tracking-wider flex items-center gap-1 group-hover:text-[#00D4FF] transition-colors">
+                ZODIAC <span className="text-[#E8B429]">ARENA</span>
+              </span>
+              <span className="text-[9px] text-neutral-400 tracking-widest font-bold -mt-1">
+                ESPORTS SAAS PROTOCOL
+              </span>
+            </div>
+          </Link>
+
+          {/* DESKTOP NAVIGATION LINKS */}
+          <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
+            {navLinks.map((link) => {
+              const active = isActive(link.href);
+              return (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  className={`relative px-3 py-1.5 rounded-lg text-xs font-bold tracking-wider transition-all flex items-center gap-1.5 ${
+                    active
+                      ? 'text-[#00D4FF] bg-[#00D4FF]/10 border border-[#00D4FF]/30 shadow-[0_0_10px_rgba(0,212,255,0.2)]'
+                      : 'text-neutral-300 hover:text-white hover:bg-white/5 border border-transparent'
+                  }`}
+                >
+                  {link.label}
+                  {link.isBadge && (
+                    <span className="bg-[#8B5CF6]/20 border border-[#8B5CF6]/50 text-[#8B5CF6] text-[9px] px-1.5 py-0.2 rounded font-black animate-pulse">
+                      {link.isBadge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* RIGHT ACTION CONTROLS */}
+          <div className="hidden sm:flex items-center gap-3">
+            {loading ? (
+              <div className="h-8 w-32 bg-white/5 rounded-lg animate-pulse" />
+            ) : user ? (
+              <div className="flex items-center gap-3">
+                {/* AP BALANCE PILL */}
+                <div className="bg-[#E8B429]/10 border border-[#E8B429]/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold text-[#E8B429] shadow-[0_0_10px_rgba(232,180,41,0.15)]">
+                  <Coins className="w-3.5 h-3.5" />
+                  <span>{user.apBalance.toLocaleString()} AP</span>
+                </div>
+
+                {/* ATHLETE PASSPORT PROFILE LINK */}
+                <Link
+                  href="/profile"
+                  className="flex items-center gap-2 p-1 pl-2 pr-3 rounded-xl bg-white/5 border border-white/10 hover:border-[#E8B429]/50 transition-all group"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-[#E8B429]/20 border border-[#E8B429] flex items-center justify-center text-xs font-bold text-[#E8B429] overflow-hidden">
+                    {user.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={user.avatarUrl} alt={user.displayName} className="w-full h-full object-cover" />
+                    ) : (
+                      user.displayName.substring(0, 2).toUpperCase()
+                    )}
+                  </div>
+                  <span className="text-xs font-bold text-neutral-200 group-hover:text-white max-w-[100px] truncate">
+                    {user.displayName}
+                  </span>
+                </Link>
+
+                {/* RED OUTLINE LOGOUT BUTTON (STRICT SPEC) */}
+                <button
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 border border-red-500/40 text-red-400 hover:text-red-300 hover:bg-red-500/10 active:bg-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)] hover:shadow-[0_0_15px_rgba(239,68,68,0.25)] disabled:opacity-50"
+                  title="Logout Session"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>{loggingOut ? 'EXITING...' : 'LOGOUT'}</span>
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="bg-[#E8B429]/10 border border-[#E8B429]/40 text-[#E8B429] hover:bg-[#E8B429]/20 hover:border-[#E8B429] text-xs font-bold px-4 py-2 rounded-lg transition-all shadow-[0_0_12px_rgba(232,180,41,0.2)] flex items-center gap-1.5"
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>LOGIN / REGISTER</span>
+              </Link>
+            )}
+          </div>
+
+          {/* MOBILE HAMBURGER BUTTON */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="lg:hidden p-2 rounded-lg bg-white/5 border border-white/10 text-neutral-300 hover:text-white"
+            aria-label="Toggle Navigation Menu"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5 text-red-400" /> : <Menu className="w-5 h-5 text-[#00D4FF]" />}
+          </button>
+        </div>
+      </header>
+
+      {/* MOBILE DRAWER OVERLAY */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 font-mono">
+          {/* BACKDROP */}
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+
+          {/* DRAWER PANEL */}
+          <div className="fixed top-0 right-0 w-80 max-w-[85vw] h-full bg-[#0D0E1A] border-l border-white/10 p-6 z-50 flex flex-col justify-between shadow-2xl overflow-y-auto">
+            <div className="space-y-6">
+              {/* DRAWER HEADER */}
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[#00D4FF]/20 border border-[#00D4FF] flex items-center justify-center font-bold text-xs text-[#00D4FF]">
+                    ZA
+                  </div>
+                  <span className="font-bold text-sm text-white">NAVIGATION</span>
+                </div>
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-1 rounded-lg bg-white/5 text-neutral-400 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* ATHLETE BALANCE HUD (MOBILE) */}
+              {user && (
+                <div className="bg-[#121424] border border-white/10 rounded-xl p-3.5 space-y-2.5">
+                  <div className="flex items-center gap-2.5 border-b border-white/5 pb-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-[#E8B429]/20 border border-[#E8B429] flex items-center justify-center text-xs font-bold text-[#E8B429]">
+                      {user.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={user.avatarUrl} alt={user.displayName} className="w-full h-full object-cover" />
+                      ) : (
+                        user.displayName.substring(0, 2).toUpperCase()
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-white">{user.displayName}</div>
+                      {user.zodiacSign && (
+                        <div className="text-[10px] text-[#00D4FF] font-bold">SIGN: {user.zodiacSign.toUpperCase()}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#E8B429]/10 border border-[#E8B429]/30 p-2 rounded-lg text-[#E8B429] flex items-center gap-1.5 text-xs font-bold">
+                    <Coins className="w-3.5 h-3.5" />
+                    <span>{user.apBalance.toLocaleString()} AP</span>
+                  </div>
+                </div>
+              )}
+
+              {/* MOBILE NAV LINKS */}
+              <div className="space-y-1.5">
+                {navLinks.map((link) => {
+                  const active = isActive(link.href);
+                  return (
+                    <Link
+                      key={link.label}
+                      href={link.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wider transition-all flex items-center justify-between ${
+                        active
+                          ? 'text-[#00D4FF] bg-[#00D4FF]/10 border border-[#00D4FF]/30'
+                          : 'text-neutral-300 hover:text-white hover:bg-white/5 border border-transparent'
+                      }`}
+                    >
+                      <span>{link.label}</span>
+                      {link.isBadge && (
+                        <span className="bg-[#8B5CF6]/20 border border-[#8B5CF6]/50 text-[#8B5CF6] text-[9px] px-1.5 py-0.2 rounded font-black">
+                          {link.isBadge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* DRAWER FOOTER ACTION */}
+            <div className="pt-6 border-t border-white/10 space-y-2">
+              {user ? (
+                <button
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border border-red-500/40 text-red-400 hover:text-red-300 hover:bg-red-500/10 active:bg-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.15)]"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>{loggingOut ? 'EXITING SESSION...' : 'LOGOUT ATHLETE'}</span>
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 bg-[#E8B429]/10 border border-[#E8B429]/40 text-[#E8B429] hover:bg-[#E8B429]/20"
+                >
+                  <User className="w-4 h-4" />
+                  <span>LOGIN / REGISTER</span>
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+</file>
+
 <file path="components/legal/LegalPageShell.tsx">
 import Image from 'next/image';
 import Link from 'next/link';
@@ -4300,135 +5356,6 @@ export function TicketPurchaseModal({ poolId, predictedTeamId, teamName, onClose
 }
 </file>
 
-<file path="components/profile/PlayerVerticalProfile.tsx">
-'use client';
-
-import React from 'react';
-import Image from 'next/image';
-
-export interface PlayerVerticalProfileProps {
-  playerId?: string;
-  riotId?: string;
-  avatarUrl?: string;
-  role?: 'Duelist' | 'Initiator' | 'Sentinel' | 'Controller';
-  tierTitle?: string;
-  zodiacPoints?: number;
-  apBalance?: number;
-  winRate?: number;
-  isLoading?: boolean;
-}
-
-export const PlayerVerticalProfile: React.FC<PlayerVerticalProfileProps> = ({
-  playerId = 'usr_unknown',
-  riotId = 'Operator#TH1',
-  avatarUrl,
-  role = 'Duelist',
-  tierTitle = 'Ascendant III',
-  zodiacPoints = 0,
-  apBalance = 0,
-  winRate = 0,
-  isLoading = false,
-}) => {
-  if (isLoading) {
-    return (
-      <div className="w-full h-full min-h-[400px] bg-[#1A1C2E]/60 border border-[#E8B429]/20 rounded-2xl p-6 flex flex-col items-center justify-between animate-pulse relative backdrop-blur-md">
-        <div className="w-full flex justify-between items-center">
-          <div className="h-4 w-16 bg-white/10 rounded" />
-          <div className="h-4 w-12 bg-white/10 rounded-full" />
-        </div>
-        <div className="h-24 w-24 rounded-2xl bg-white/10 mt-4" />
-        <div className="w-full space-y-2 mt-4 text-center">
-          <div className="h-5 w-32 bg-white/10 mx-auto rounded" />
-          <div className="h-3 w-20 bg-white/10 mx-auto rounded" />
-        </div>
-        <div className="w-full space-y-2 mt-6">
-          <div className="h-10 w-full bg-white/10 rounded-xl" />
-          <div className="h-10 w-full bg-white/10 rounded-xl" />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative w-full h-full bg-[#1A1C2E] border border-white/10 hover:border-[#E8B429]/50 rounded-2xl p-5 md:p-6 flex flex-col justify-between shadow-2xl backdrop-blur-md transition-all duration-300 group overflow-hidden">
-      {/* 1. Header: Player Tag & Role */}
-      <div>
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-mono tracking-widest text-[#75798c] uppercase">
-            ID: {playerId.slice(0, 8)}
-          </span>
-          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md tracking-wider border font-mono uppercase bg-[#E8B429]/10 text-[#E8B429] border-[#E8B429]/30">
-            {role}
-          </span>
-        </div>
-
-        {/* 2. Avatar */}
-        <div className="relative flex justify-center mt-6 mb-4">
-          <div className="relative w-24 h-24 rounded-2xl overflow-hidden bg-[#0D0E1A] border-2 border-[#E8B429]/30 group-hover:border-[#E8B429] transition-colors flex items-center justify-center">
-            {avatarUrl ? (
-              <Image
-                src={avatarUrl}
-                alt={riotId}
-                fill
-                className="object-cover"
-              />
-            ) : (
-              <span className="font-mono text-2xl font-black text-[#E8B429]">
-                {riotId.slice(0, 2).toUpperCase()}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* 3. Riot ID & Rank */}
-        <div className="text-center space-y-1">
-          <h2 className="text-lg font-black text-white tracking-wide truncate group-hover:text-[#E8B429] transition-colors font-mono">
-            {riotId}
-          </h2>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#0D0E1A] border border-white/10 text-[11px] font-semibold text-[#b2b6ca]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#34d399]" />
-            <span>{tierTitle}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Zodiac Stats (ZP, AP, WR%) */}
-      <div className="mt-6 space-y-2.5 pt-4 border-t border-white/10">
-        {/* Zodiac Points */}
-        <div className="bg-[#0D0E1A]/80 border border-white/5 rounded-xl p-3 flex justify-between items-center">
-          <div>
-            <div className="text-[10px] uppercase font-mono tracking-wider text-[#75798c] font-bold">
-              Zodiac Points
-            </div>
-            <div className="text-base font-black text-[#E8B429] font-mono">
-              {zodiacPoints.toLocaleString()} <span className="text-[11px] font-normal text-[#75798c]">ZP</span>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-[10px] uppercase font-mono tracking-wider text-[#75798c] font-bold">
-              Win Rate
-            </div>
-            <div className="text-sm font-bold text-[#34d399] font-mono">
-              {winRate}%
-            </div>
-          </div>
-        </div>
-
-        {/* AP Balance */}
-        <div className="bg-[#0D0E1A]/80 border border-white/5 rounded-xl p-2.5 flex justify-between items-center">
-          <div className="text-[9px] uppercase font-mono tracking-wider text-[#75798c] font-bold">
-            Action Points (AP)
-          </div>
-          <div className="text-xs font-black text-[#9184d9] font-mono">
-            {apBalance.toLocaleString()} AP
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-</file>
-
 <file path="components/providers/ThemeProvider.tsx">
 "use client";
 
@@ -5280,122 +6207,6 @@ export function MatchesMatrixView({ records }: MatchesMatrixViewProps) {
       </div>
     </div>
   );
-}
-</file>
-
-<file path="components/Navbar.tsx">
-'use client';
-
-import React from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { MAIN_NAV_ITEMS, getBrandHomeUrl } from '@/config/navigation';
-
-interface NavbarProps {
-  isAuthenticated?: boolean;
-}
-
-export default function Navbar({ isAuthenticated = false }: NavbarProps) {
-  const pathname = usePathname();
-  const brandHomeUrl = getBrandHomeUrl(isAuthenticated);
-
-  return (
-    <nav className="sticky top-0 z-50 flex h-[60px] items-center justify-between border-b border-[#E8B429]/20 bg-[#08090F]/95 px-6 md:px-10 backdrop-blur-md">
-      {/* 1. Brand Logo - สลับ URL หน้าแรกตามสถานะ Auth อัตโนมัติ */}
-      <Link href={brandHomeUrl} className="flex items-center gap-2.5 group">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md border-2 border-[#E8B429] bg-[#E8B429]/10 font-black text-sm text-[#E8B429] group-hover:bg-[#E8B429] group-hover:text-[#08090F] transition-all shadow-[0_0_10px_rgba(232,180,41,0.2)]">
-          Z
-        </div>
-        <span className="font-extrabold text-sm tracking-widest text-white uppercase font-orbitron">
-          ZODIAC <span className="text-[#E8B429]">ARENA</span>
-        </span>
-      </Link>
-
-      {/* 2. Navigation Items - ดึงมาจาก config/navigation.ts */}
-      <div className="hidden md:flex items-center gap-7 text-[13px] font-medium text-[#94A3B8]">
-        {MAIN_NAV_ITEMS.map((item) => {
-          const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`transition-colors hover:text-[#E8B429] py-1 relative ${
-                isActive ? 'text-[#E8B429] font-bold' : ''
-              }`}
-            >
-              {item.label}
-              {isActive && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#E8B429] shadow-[0_0_8px_#E8B429]" />
-              )}
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* 3. Auth Action Button */}
-      <div className="flex items-center gap-3">
-        {isAuthenticated ? (
-          <Link
-            href="/dashboard"
-            className="rounded-lg border border-[#E8B429]/40 bg-[#E8B429]/10 px-3.5 py-1.5 text-xs font-bold text-[#E8B429] hover:bg-[#E8B429] hover:text-black transition-all shadow-[0_0_10px_rgba(232,180,41,0.15)]"
-          >
-            DASHBOARD
-          </Link>
-        ) : (
-          <Link
-            href="/login"
-            className="rounded-lg bg-gradient-to-r from-[#E8B429] to-[#D4A017] px-4 py-1.5 text-xs font-black tracking-wider text-black hover:opacity-90 transition-all shadow-[0_0_15px_rgba(232,180,41,0.25)]"
-          >
-            LOGIN
-          </Link>
-        )}
-      </div>
-    </nav>
-  );
-}
-</file>
-
-<file path="components/ThemeInjector.tsx">
-'use client';
-
-import { useEffect } from 'react';
-
-interface ActiveThemeResponse {
-  data: {
-    custom_css_vars: Record<string, string>;
-  };
-}
-
-// T3.6-B01 — client-side only: ดึง GET /api/v1/themes/active แล้ว inject
-// custom_css_vars ลง document.documentElement เป็น CSS custom properties
-export default function ThemeInjector() {
-  useEffect(() => {
-    let cancelled = false;
-
-    async function applyActiveTheme() {
-      try {
-        const res = await fetch('/api/v1/themes/active');
-        if (!res.ok) return;
-
-        const json: ActiveThemeResponse = await res.json();
-        if (cancelled) return;
-
-        for (const [key, value] of Object.entries(json.data.custom_css_vars)) {
-          document.documentElement.style.setProperty(key, value);
-        }
-      } catch {
-        // เงียบไว้ — ธีมล้มเหลวไม่ควรบล็อกการใช้งานหน้าเว็บ ใช้ CSS default ต่อไปได้
-      }
-    }
-
-    applyActiveTheme();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return null;
 }
 </file>
 
@@ -7470,130 +8281,10 @@ export function SponsorSlot({ className = '' }: SponsorSlotProps) {
 }
 </file>
 
-<file path="components/tournament/MatchNode.tsx">
-'use client';
-
-import React from 'react';
-import type { BracketMatchNode } from '@/types/bracket';
-
-interface MatchNodeProps {
-  node: BracketMatchNode;
-  isAdminMode?: boolean;
-  onMatchClick?: (nodeId: string) => void;
-}
-
-export const MatchNode: React.FC<MatchNodeProps> = ({
-  node,
-  isAdminMode = false,
-  onMatchClick,
-}) => {
-  const isLive = node.status === 'LIVE';
-  const isCompleted = node.status === 'COMPLETED';
-  const isReady = node.status === 'READY';
-  const isClickable = isAdminMode || isLive || isCompleted || isReady;
-
-  const getCardStyles = () => {
-    if (isLive) {
-      return 'border-[#dc3232]/60 bg-gradient-to-r from-[#b41e1e]/20 via-[#1A1C2E] to-[#1A1C2E] shadow-[0_0_15px_rgba(220,50,50,0.25)]';
-    }
-    if (isCompleted) {
-      return 'border-white/10 bg-[#1A1C2E] hover:border-[#E8B429]/40';
-    }
-    if (isReady) {
-      return 'border-[#E8B429]/50 bg-[#1A1C2E] shadow-[0_0_12px_rgba(232,180,41,0.15)]';
-    }
-    return 'border-white/5 bg-[#121422]/70 opacity-60';
-  };
-
-  const isTeamAWinner = isCompleted && Boolean(node.winnerTeamId) && node.winnerTeamId === node.teamA?.id;
-  const isTeamBWinner = isCompleted && Boolean(node.winnerTeamId) && node.winnerTeamId === node.teamB?.id;
-
-  return (
-    <div
-      onClick={() => isClickable && onMatchClick?.(node.id)}
-      className={`relative w-64 rounded-xl border p-3 transition-all duration-200 ${getCardStyles()} ${
-        isClickable ? 'cursor-pointer hover:scale-[1.02]' : 'cursor-default'
-      }`}
-    >
-      {/* Header Info */}
-      <div className="flex items-center justify-between text-[9px] font-bold tracking-wider mb-2">
-        <span className="text-[#75798c] uppercase">
-          {node.label || `M${node.positionInRound}`}
-        </span>
-        <div className="flex items-center gap-1.5">
-          {isLive && (
-            <span className="flex items-center gap-1 text-[#ff4444] animate-pulse">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#ff4444]" />
-              LIVE
-            </span>
-          )}
-          {node.bestOf && (
-            <span className="text-[#9397ab] bg-white/5 px-1.5 py-0.5 rounded">
-              BO{node.bestOf}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        {/* Team A Row */}
-        <div
-          className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
-            isTeamAWinner
-              ? 'bg-[#E8B429]/15 text-[#E8B429] font-bold'
-              : 'text-[#e9e9ed] bg-black/20'
-          }`}
-        >
-          <div className="flex items-center gap-2 overflow-hidden">
-            <span className="truncate">
-              {node.teamA?.name ?? (node.teamA ? 'Loading...' : 'TBD')}
-            </span>
-          </div>
-          {node.scoreA !== undefined && node.scoreA !== null && (
-            <span
-              className={`font-mono text-xs font-black ${
-                isTeamAWinner ? 'text-[#E8B429]' : 'text-[#75798c]'
-              }`}
-            >
-              {node.scoreA}
-            </span>
-          )}
-        </div>
-
-        {/* Team B Row */}
-        <div
-          className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
-            isTeamBWinner
-              ? 'bg-[#E8B429]/15 text-[#E8B429] font-bold'
-              : 'text-[#e9e9ed] bg-black/20'
-          }`}
-        >
-          <div className="flex items-center gap-2 overflow-hidden">
-            <span className="truncate">
-              {node.teamB?.name ?? (node.teamB ? 'Loading...' : 'TBD')}
-            </span>
-          </div>
-          {node.scoreB !== undefined && node.scoreB !== null && (
-            <span
-              className={`font-mono text-xs font-black ${
-                isTeamBWinner ? 'text-[#E8B429]' : 'text-[#75798c]'
-              }`}
-            >
-              {node.scoreB}
-            </span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-</file>
-
 <file path="components/tournament-bracket-view.tsx">
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
 import type { BracketMatchNode, TournamentBracketPageData } from '@/types/bracket';
 
 export type BracketRoundTab = 'all' | 'upper' | 'lower' | 'gf';
@@ -7624,24 +8315,6 @@ export function TournamentBracketView({ data }: TournamentBracketViewProps) {
 
   return (
     <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-16 select-none">
-      {/* 1. TOP NAVBAR */}
-      <nav className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-[#E8B429]/20 bg-[#0D0E1A]/95 px-6 md:px-8 backdrop-blur-md">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#E8B429] font-black text-sm text-[#0D0E1A]">
-            ZA
-          </div>
-          <span className="font-extrabold text-sm tracking-wider text-white">
-            ZODIAC<span className="text-[#E8B429]">ARENA</span>
-          </span>
-        </div>
-        <div className="flex gap-7 text-[13px] font-medium text-[#9397ab]">
-          <Link href="/leaderboard" className="hover:text-white transition-colors">นักกีฬา</Link>
-          <Link href="/tournament" className="hover:text-white transition-colors">ทีม</Link>
-          <Link href="/tournament" className="hover:text-white transition-colors">ลีก</Link>
-          <Link href="/schedule" className="text-[#E8B429]">Rankings</Link>
-        </div>
-      </nav>
-
       {/* 2. TOURNAMENT HEADER BAR */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E8B429]/35 bg-gradient-to-r from-[#161030] via-[#1A1C2E] to-[#0D1420] px-6 md:px-8 py-4">
         <div className="flex items-center gap-4 flex-wrap">
@@ -7865,164 +8538,6 @@ export function TournamentBracketView({ data }: TournamentBracketViewProps) {
 }
 </file>
 
-<file path="components/ZodiacOracle.tsx">
-'use client';
-
-import React, { useState, useRef, useEffect } from 'react';
-import { Bot, X, Send, Sparkles } from 'lucide-react';
-
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-export default function ZodiacOracle() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    { 
-      role: 'assistant', 
-      content: 'สวัสดีครับ! ผมคือ ZODIAC ORACLE ผู้ช่วย AI ประจำ ZODIAC ARENA มีอะไรให้ผมช่วยเหลือเกี่ยวกับสายการแข่งขัน ตารางแข่ง กติการาศี หรือระบบ ZP ไหมครับ?' 
-    }
-  ]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
-
-    const userMessage = input.trim();
-    setInput('');
-    setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
-    setLoading(true);
-
-    try {
-      const res = await fetch('/api/oracle/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userMessage,
-          history: messages.slice(-6)
-        })
-      });
-
-      const data = await res.json();
-      if (data.reply) {
-        setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
-      } else {
-        setMessages((prev) => [...prev, { role: 'assistant', content: 'ขออภัยครับ ระบบประมวลผลขัดข้องชั่วคราว' }]);
-      }
-    } catch {
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'เกิดข้อผิดพลาดในการเชื่อมต่อเครือข่าย' }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed bottom-6 right-6 z-50 font-mono">
-      {!isOpen && (
-        <button
-          onClick={() => setIsOpen(true)}
-          className="bg-[#00D4FF] hover:bg-[#00D4FF]/80 text-black font-black p-4 rounded-full shadow-[0_0_20px_rgba(0,212,255,0.5)] flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer"
-          title="Open ZODIAC ORACLE"
-        >
-          <Bot className="w-6 h-6" />
-        </button>
-      )}
-
-      {isOpen && (
-        <div className="bg-[#0B0F17] border border-[#00D4FF]/40 rounded-2xl w-80 sm:w-96 h-120 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden backdrop-blur-xl">
-          {/* Header */}
-          <div className="bg-slate-950 p-3.5 border-b border-slate-800 flex justify-between items-center">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[#00D4FF]/10 border border-[#00D4FF]/40 flex items-center justify-center text-[#00D4FF]">
-                <Bot className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-white font-bold text-xs tracking-wider flex items-center gap-1.5">
-                  ZODIAC ORACLE <Sparkles className="w-3 h-3 text-[#C9A84C]" />
-                </h3>
-                <span className="text-[9px] text-[#00D4FF]/70 tracking-widest uppercase">12 SIGNS • ONE DESTINY</span>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="text-zinc-500 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-900 cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Messages Container */}
-          <div className="flex-1 p-3.5 overflow-y-auto space-y-3 selection:bg-[#00D4FF] selection:text-black">
-            {messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-xl p-3 text-xs leading-relaxed font-sans ${
-                    msg.role === 'user'
-                      ? 'bg-[#00D4FF] text-slate-950 font-medium rounded-br-xs shadow-md'
-                      : 'bg-slate-900 text-zinc-200 border border-slate-800 rounded-bl-xs shadow-inner'
-                  }`}
-                >
-                  {msg.content}
-                </div>
-              </div>
-            ))}
-            {loading && (
-              <div className="flex justify-start">
-                <div className="bg-slate-900 border border-slate-800 rounded-xl rounded-bl-xs p-3 text-xs text-[#00D4FF] animate-pulse flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#00D4FF] animate-ping" />
-                  ORACLE กำลังประมวลผลดวงดาว...
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input Area */}
-          <div className="p-2.5 border-t border-slate-800/80 bg-slate-950">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSend();
-              }}
-              className="flex items-center gap-2"
-            >
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="สอบถาม ZODIAC ORACLE ได้ที่นี่..."
-                className="flex-1 bg-slate-900 border border-slate-800 focus:border-[#00D4FF]/60 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-hidden transition-colors"
-              />
-              <button
-                type="submit"
-                disabled={loading || !input.trim()}
-                className="bg-[#00D4FF] hover:bg-[#00D4FF]/80 disabled:opacity-40 disabled:hover:bg-[#00D4FF] text-slate-950 font-black p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center shrink-0"
-              >
-                <Send className="w-3.5 h-3.5" />
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-</file>
-
 <file path="components/chatbot/MessageBubble.tsx">
 import ReactMarkdown from 'react-markdown';
 
@@ -8097,6 +8612,197 @@ export function TypingIndicator() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+</file>
+
+<file path="components/ZodiacOracle.tsx">
+'use client';
+
+import React, { useState, useRef, useEffect } from 'react';
+import { Bot, X, Send, Sparkles } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export default function ZodiacOracle() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([
+    { 
+      role: 'assistant', 
+      content: 'สวัสดีครับ! ผมคือ ZODIAC ORACLE ผู้ช่วย AI ประจำ ZODIAC ARENA\nมีอะไรให้ผมช่วยเหลือเกี่ยวกับสายการแข่งขัน ตารางแข่ง กติการาศี หรือระบบ ZP ไหมครับ?' 
+    }
+  ]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim() || loading) return;
+
+    const userMessage = input.trim();
+    setInput('');
+    setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/oracle/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userMessage,
+          history: messages.slice(-6)
+        })
+      });
+
+      const data = await res.json();
+      if (data.reply) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
+      } else {
+        setMessages((prev) => [...prev, { role: 'assistant', content: 'ขออภัยครับ ระบบประมวลผลขัดข้องชั่วคราว' }]);
+      }
+    } catch {
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'เกิดข้อผิดพลาดในการเชื่อมต่อเครือข่าย' }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed bottom-6 right-6 z-50 font-mono">
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="bg-[#00D4FF] hover:bg-[#00D4FF]/80 text-black font-black p-4 rounded-full shadow-[0_0_20px_rgba(0,212,255,0.5)] flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer"
+          title="Open ZODIAC ORACLE"
+        >
+          <Bot className="w-6 h-6" />
+        </button>
+      )}
+
+      {isOpen && (
+        <div className="bg-[#0B0F17] border border-[#00D4FF]/40 rounded-2xl w-80 sm:w-96 h-[480px] shadow-[0_0_30px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden backdrop-blur-xl">
+          {/* Header */}
+          <div className="bg-slate-950 p-3.5 border-b border-slate-800 flex justify-between items-center">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#00D4FF]/10 border border-[#00D4FF]/40 flex items-center justify-center text-[#00D4FF]">
+                <Bot className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-xs tracking-wider flex items-center gap-1.5">
+                  ZODIAC ORACLE <Sparkles className="w-3 h-3 text-[#C9A84C]" />
+                </h3>
+                <span className="text-[9px] text-[#00D4FF]/70 tracking-widest uppercase">12 SIGNS • ONE DESTINY</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="text-zinc-500 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-900 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Messages Container */}
+          <div className="flex-1 p-3.5 overflow-y-auto space-y-3 selection:bg-[#00D4FF] selection:text-black">
+            {messages.map((msg, index) => (
+              <div
+                key={index}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-xl p-3 text-xs leading-relaxed font-sans whitespace-pre-wrap break-words ${
+                    msg.role === 'user'
+                      ? 'bg-[#00D4FF] text-slate-950 font-medium rounded-br-none shadow-md'
+                      : 'bg-slate-900 text-zinc-200 border border-slate-800 rounded-bl-none shadow-inner'
+                  }`}
+                >
+                  <ReactMarkdown
+                    components={{
+                      // ตัวหนา (หัวข้อ/คีย์เวิร์ด): ใช้สีทองนีออน พร้อมเอฟเฟกต์โกลว์เบาๆ
+                      strong: ({ children }) => (
+                        <strong className="font-extrabold text-[#E8B429] drop-shadow-[0_0_8px_rgba(232,180,41,0.3)]">
+                          {children}
+                        </strong>
+                      ),
+                      // ลิงก์: ใช้สีฟ้าไซเบอร์
+                      a: ({ href, children }) => (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[#00D4FF] underline hover:text-white transition-colors"
+                        >
+                          {children}
+                        </a>
+                      ),
+                      // บล็อกโค้ด/ตัวเลขไฮไลท์: พื้นหลังเข้ม ขอบฟ้า
+                      code: ({ children }) => (
+                        <code className="bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/30 px-1 py-0.5 rounded text-[11px] font-mono">
+                          {children}
+                        </code>
+                      ),
+                      // ย่อหน้า
+                      p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
+                      // รายการจุดไข่ปลา
+                      li: ({ children }) => <li className="ml-3 list-disc marker:text-[#00D4FF]">{children}</li>,
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl rounded-bl-none p-3 text-xs text-[#00D4FF] animate-pulse flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#00D4FF] animate-ping" />
+                  ORACLE กำลังประมวลผลดวงดาว...
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input Area */}
+          <div className="p-2.5 border-t border-slate-800/80 bg-slate-950">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSend();
+              }}
+              className="flex items-center gap-2"
+            >
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="สอบถาม ZODIAC ORACLE ได้ที่นี่..."
+                className="flex-1 bg-slate-900 border border-slate-800 focus:border-[#00D4FF]/60 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none transition-colors font-sans"
+              />
+              <button
+                type="submit"
+                disabled={loading || !input.trim()}
+                className="bg-[#00D4FF] hover:bg-[#00D4FF]/80 disabled:opacity-40 disabled:hover:bg-[#00D4FF] text-slate-950 font-black p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center shrink-0"
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
