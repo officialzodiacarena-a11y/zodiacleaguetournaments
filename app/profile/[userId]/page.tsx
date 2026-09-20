@@ -335,13 +335,18 @@ export default function AthleteProfilePage() {
                       {[
                         { w: 'Vandal', img: 'https://media.valorant-api.com/weapons/9c82e19d-4575-0200-1a81-3eacf00cf872/displayicon.png', k: 1450, h: 45, b: 50, l: 5 },
                         { w: 'Phantom', img: 'https://media.valorant-api.com/weapons/ee8e8d15-496b-07ac-e5f6-8fae5d4c7b1a/displayicon.png', k: 890, h: 38, b: 58, l: 4 },
-                        { w: 'Sheriff', img: 'https://media.valorant-api.com/weapons/e8ce1fc4-47f2-1209-fa93-4a8e312946c5/displayicon.png', k: 420, h: 55, b: 40, l: 5 },
-                        { w: 'Operator', img: 'https://media.valorant-api.com/weapons/c4883e50-4494-202c-3ec3-6b8a9284f00b/displayicon.png', k: 210, h: 10, b: 85, l: 5 },
+                        { w: 'Sheriff', img: 'https://media.valorant-api.com/weapons/e336c6b8-418d-9340-d77f-7a9e4cfe0702/displayicon.png', k: 420, h: 55, b: 40, l: 5 },
+                        { w: 'Operator', img: 'https://media.valorant-api.com/weapons/a03b24d3-4319-996d-0f8c-94bbfba1dfc7/displayicon.png', k: 210, h: 10, b: 85, l: 5 },
                       ].map(row => (
                         <tr key={row.w} className="hover:bg-white/5">
                           <td className="p-4 font-bold text-white flex items-center gap-4">
                             <div className="w-16 h-8 flex items-center justify-center">
-                              <img src={row.img} alt={row.w} className="max-w-full max-h-full object-contain" />
+                              <img 
+                                src={row.img} 
+                                alt={row.w} 
+                                className="max-w-full max-h-full object-contain" 
+                                onError={(e) => { (e.target as HTMLElement).style.opacity = '0.3'; }}
+                              />
                             </div>
                             {row.w}
                           </td>
