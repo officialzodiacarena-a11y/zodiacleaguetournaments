@@ -89,4 +89,24 @@ Before outputting code or completing any task, execute this verification pass:
 4. Does this action attempt to directly modify, delete, or insert data in remote Supabase/Vercel production? If yes, STOP immediately, raise 🚩 RED FLAG, and present manual script/options for user confirmation.
 5. Does this action attempt to merge into `main` or push to `main` directly? If yes, STOP immediately, raise 🚩 RED FLAG, create a PR instead, and provide the GitHub PR link for CEO web review.
 
+---
+
+## 🎨 4. ART & ASSET PRODUCTION PROTOCOL (CANVA MCP + DESKTOP + AFFINITY)
+
+### 4.1 Master Asset Preservation Rule (100% Invariant)
+- **MANDATORY:** Raw master images provided by CEO / Partners (e.g. `public/images/sponser/`, `public/images/logo/`) must NEVER be deleted or overwritten.
+- **NAMING CONVENTION:** All AI-enhanced, Canva-exported, or Affinity-processed assets must use dedicated suffixes (e.g. `*_enhanced.png`, `*-canva.png`).
+
+### 4.2 Tri-Tier Art Toolchain
+1. **Tier 1 — Canva MCP Server (`canva-tool`):**
+   - Headless asset ingestion & design orchestration (`canva_upload_asset` ➔ `canva_create_design` ➔ `canva_export_design`).
+   - Server entry: `D:/tools/canva-mcp/dist/index.js`.
+2. **Tier 2 — Canva Desktop App (`Canva.exe`):**
+   - Installed at: `%LOCALAPPDATA%\Programs\Canva\Canva.exe`.
+   - Used for interactive visual refinement, Cloudflare-free UI workflow, and real-time project sync with MCP designs.
+3. **Tier 3 — Affinity Pro Suite (`Canva.Affinity`):**
+   - Installed at: `%LOCALAPPDATA%\Microsoft\WindowsApps\Affinity.exe`.
+   - Used for vector tracing, unsharp mask calibration, batch macro operations, and 4K/Retina asset optimization.
+
+
 
