@@ -280,22 +280,30 @@ BEGIN
     -- open question on whether this column is populated by any flow yet)
     SELECT COALESCE(jsonb_agg(
         jsonb_build_object(
-            'roleName', INITCAP(mp.role_played),
-            'roleKey', UPPER(mp.role_played),
-            'wins', COUNT(*) FILTER (WHERE m.winner_team_id = mp.team_id),
-            'losses', COUNT(*) FILTER (WHERE m.winner_team_id IS DISTINCT FROM mp.team_id),
-            'winRatePct', ROUND(100.0 * COUNT(*) FILTER (WHERE m.winner_team_id = mp.team_id) / COUNT(*), 1),
-            'kdaRatio', ROUND((SUM(mp.kills) + SUM(mp.assists))::numeric / GREATEST(1, SUM(mp.deaths)), 2),
-            'kills', SUM(mp.kills),
-            'deaths', SUM(mp.deaths),
-            'assists', SUM(mp.assists)
+            'roleName', INITCAP(r.role_played),
+            'roleKey', UPPER(r.role_played),
+            'wins', r.wins,
+            'losses', r.losses,
+            'winRatePct', ROUND(100.0 * r.wins / GREATEST(1, r.wins + r.losses), 1),
+            'kdaRatio', ROUND((r.kills + r.assists)::numeric / GREATEST(1, r.deaths), 2),
+            'kills', r.kills,
+            'deaths', r.deaths,
+            'assists', r.assists
         )
     ), '[]'::jsonb)
     INTO v_roles_breakdown
-    FROM public.match_participants mp
-    JOIN public.matches m ON m.id = mp.match_id
-    WHERE mp.player_id = p_player_id AND mp.role_played IS NOT NULL AND m.status = 'COMPLETED'
-    GROUP BY mp.role_played;
+    FROM (
+        SELECT mp.role_played,
+               COUNT(*) FILTER (WHERE m.winner_team_id = mp.team_id) AS wins,
+               COUNT(*) FILTER (WHERE m.winner_team_id IS DISTINCT FROM mp.team_id) AS losses,
+               SUM(mp.kills) AS kills,
+               SUM(mp.deaths) AS deaths,
+               SUM(mp.assists) AS assists
+        FROM public.match_participants mp
+        JOIN public.matches m ON m.id = mp.match_id
+        WHERE mp.player_id = p_player_id AND mp.role_played IS NOT NULL AND m.status = 'COMPLETED'
+        GROUP BY mp.role_played
+    ) r;
 
     -- 8. Top Weapons (Fix 5: real, from manual-entry table)
     SELECT COALESCE(jsonb_agg(
