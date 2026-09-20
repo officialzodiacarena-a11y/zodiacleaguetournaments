@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Shield, ShieldAlert, Search, Loader2 } from 'lucide-react';
+import { ShieldAlert, Search, Loader2 } from 'lucide-react';
 
 interface Player {
   id: string;
@@ -15,13 +15,11 @@ export default function AdminRolesPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const supabase = createClient();
+  // Use a stable reference for supabase client inside component if possible, 
+  // but since createClient doesn't change we can just omit it from deps or use useState
+  const [supabase] = useState(() => createClient());
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     // Fetch all players
     const { data: playersData, error: playersError } = await supabase
@@ -49,7 +47,11 @@ export default function AdminRolesPage() {
 
     setPlayers(merged);
     setLoading(false);
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleRoleAction = async (targetUserId: string, action: 'ASSIGN' | 'REVOKE', newRole?: string) => {
     const confirmMessage = action === 'ASSIGN' 
@@ -70,8 +72,9 @@ export default function AdminRolesPage() {
 
       alert('Success!');
       fetchData(); // Refresh data
-    } catch (err: any) {
-      alert(`Error: ${err.message}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Error: ${msg}`);
     }
   };
 
