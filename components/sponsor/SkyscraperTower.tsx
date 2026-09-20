@@ -135,14 +135,14 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
     <aside
       ref={containerRef}
       aria-label={`Sponsor Skyscraper ${isLeft ? 'Left' : 'Right'}`}
-      className={`hidden lg:block absolute top-20 xl:top-24 2xl:top-28 z-20 w-24 lg:w-28 xl:w-36 2xl:w-40 select-none pointer-events-auto ${
+      className={`hidden lg:block absolute top-11 sm:top-12 z-20 w-24 lg:w-28 xl:w-36 2xl:w-40 select-none pointer-events-auto ${
         isLeft ? 'left-2 lg:left-3 xl:left-5 2xl:left-8' : 'right-2 lg:right-3 xl:right-5 2xl:right-8'
       } ${className}`}
     >
       <Link
         href={activeBanner.target_url}
         onClick={() => trackEvent(activeBanner.id, 'CLICK')}
-        className={`group relative block w-24 lg:w-28 xl:w-36 2xl:w-40 h-[380px] lg:h-[460px] xl:h-[540px] 2xl:h-[600px] rounded-xl overflow-hidden bg-[#121424] border transition-all duration-300 ${
+        className={`group relative block w-24 lg:w-28 xl:w-36 2xl:w-40 h-[380px] lg:h-[460px] xl:h-[520px] 2xl:h-[580px] rounded-xl overflow-hidden bg-[#121424] border transition-all duration-300 ${
           isLeft
             ? 'border-[#00D4FF]/30 shadow-[0_0_25px_rgba(0,212,255,0.12)] hover:border-[#00D4FF] hover:shadow-[0_0_30px_rgba(0,212,255,0.3)]'
             : 'border-[#E8B429]/30 shadow-[0_0_25px_rgba(232,180,41,0.12)] hover:border-[#E8B429] hover:shadow-[0_0_30px_rgba(232,180,41,0.3)]'
