@@ -47,10 +47,10 @@ export async function POST(request: Request) {
       if (upsertError) throw upsertError;
 
       // Audit Log
-      // @ts-ignore: target_user_id was added directly via SQL, types not synced yet
       await supabase.from('audit_logs').insert({
         actor_id: user.id,
         action: 'GRANT',
+        // @ts-ignore: target_user_id was added directly via SQL, types not synced yet
         target_user_id: targetUserId,
         old_role: oldRole,
         new_role: role
@@ -67,10 +67,10 @@ export async function POST(request: Request) {
       if (deleteError) throw deleteError;
 
       // Audit Log
-      // @ts-ignore: target_user_id was added directly via SQL, types not synced yet
       await supabase.from('audit_logs').insert({
         actor_id: user.id,
         action: 'REVOKE',
+        // @ts-ignore: target_user_id was added directly via SQL, types not synced yet
         target_user_id: targetUserId,
         old_role: oldRole,
         new_role: 'NONE'
