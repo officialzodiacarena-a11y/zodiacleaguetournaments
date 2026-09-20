@@ -9,12 +9,7 @@ import {
   ExternalLink, 
   ArrowLeft, 
   ShieldCheck, 
-  Building2, 
-  Home, 
-  Building, 
-  Briefcase, 
-  Users, 
-  PhoneCall 
+  Building
 } from 'lucide-react';
 import { notFound } from 'next/navigation';
 

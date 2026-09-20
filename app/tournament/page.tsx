@@ -9,7 +9,6 @@ import { pickRelevantSeason, type SeasonLike } from '@/lib/season/pickRelevantSe
 import { selectSeasonAction } from '@/actions/tournament';
 
 const SEASONS: SeasonSplit[] = ['SPRING', 'SUMMER', 'FALL', 'WINTER'];
-import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
 import { OfficialSponsorsBar } from '@/components/sponsor/OfficialSponsorsBar';
 

@@ -5,7 +5,6 @@ import React, { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 const ROLES = ['GLOBAL', 'DUELIST', 'CONTROLLER', 'INITIATOR', 'SENTINEL'];
-import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
 import { OfficialSponsorsBar } from '@/components/sponsor/OfficialSponsorsBar';
 import { AthleteQuickPopover } from '@/components/profile/AthleteQuickPopover';

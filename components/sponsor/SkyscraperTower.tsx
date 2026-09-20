@@ -123,7 +123,8 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
   };
 
   const activeBanner = banner || defaultBanner;
-  const [imgSrc, setImgSrc] = useState<string>(activeBanner.image_url || logoSrc);
+  const [imgError, setImgError] = useState(false);
+  const imgSrc = imgError ? logoSrc : (activeBanner.image_url || logoSrc);
 
   // Auto-rotate Right Tower every 10 seconds (5 Season Cards)
   useEffect(() => {
@@ -134,12 +135,6 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
 
     return () => clearInterval(interval);
   }, [isLeft]);
-
-  useEffect(() => {
-    if (activeBanner?.image_url) {
-      setImgSrc(activeBanner.image_url);
-    }
-  }, [activeBanner?.image_url]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -267,7 +262,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
                 sizes="120px"
                 className="object-contain p-1"
                 priority
-                onError={() => setImgSrc(logoSrc)}
+                onError={() => setImgError(true)}
               />
             </div>
 
