@@ -228,7 +228,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
       ref={containerRef}
       aria-label={`Sponsor Skyscraper ${isLeft ? 'Left' : 'Right'}`}
       className={`hidden lg:block absolute top-[41px] z-20 w-[154px] xl:w-[198px] 2xl:w-[220px] select-none pointer-events-auto ${
-        isLeft ? 'left-[26px] xl:left-[34px] 2xl:left-[50px]' : 'right-[26px] xl:right-[34px] 2xl:right-[50px]'
+        isLeft ? 'left-[20px]' : 'right-[20px]'
       } ${className}`}
     >
       {isLeft ? (
