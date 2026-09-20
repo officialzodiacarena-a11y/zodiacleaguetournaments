@@ -231,7 +231,7 @@ export default function AthleteProfilePage() {
                                   { agent: 'Reyna', img: 'https://media.valorant-api.com/agents/a3bfb853-43b2-7238-a4f1-ad90e9e46bcc/displayicon.png', name: 'Wxtty', rank: 'Ascendant 2', kd: '0.95', acs: '192', kda: '18 / 19 / 4', hs: '16%' },
                                   { agent: 'Jett', img: 'https://media.valorant-api.com/agents/add6443a-41bd-e414-f6ad-e58d267f4e95/displayicon.png', name: 'THRIVE Kong', rank: 'Ascendant 3', kd: '1.26', acs: '276', kda: '25 / 17 / 5', hs: '21%' },
                                   { agent: 'Sage', img: 'https://media.valorant-api.com/agents/569fdd95-4d10-43ab-ca70-79becc718b46/displayicon.png', name: 'HiddenProfile', rank: 'Ascendant 1', kd: '0.80', acs: '150', kda: '12 / 15 / 10', hs: '18%', private: true },
-                                  { agent: 'Fade', img: 'https://media.valorant-api.com/agents/dade69b4-415a-8cb1-65ce-e0fceea21774/displayicon.png', name: 'MINIMA Demon', rank: 'Ascendant 3', kd: '1.09', acs: '239', kda: '22 / 20 / 7', hs: '27%' },
+                                  { agent: 'Fade', img: 'https://media.valorant-api.com/agents/dade69b4-4f5a-8528-247b-219e5a1facd6/displayicon.png', name: 'MINIMA Demon', rank: 'Ascendant 3', kd: '1.09', acs: '239', kda: '22 / 20 / 7', hs: '27%' },
                                 ].map((p, j) => (
                                   <tr key={j} className={`hover:bg-white/5 ${p.self ? 'bg-[#10B981]/5' : ''}`}>
                                     <td className="p-3">
