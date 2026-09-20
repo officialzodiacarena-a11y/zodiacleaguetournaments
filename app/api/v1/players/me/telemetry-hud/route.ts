@@ -19,27 +19,22 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    let targetPlayerId = req.nextUrl.searchParams.get('playerId');
+    let requestingUserId: string | null = null;
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, error: 'UNAUTHORIZED: Session invalid or expired' },
-        { status: 401 }
-      );
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      requestingUserId = user.id;
     }
-
-    const requestedPlayerId = req.nextUrl.searchParams.get('playerId');
-
-    if (requestedPlayerId && !UUID_RE.test(requestedPlayerId)) {
-      return NextResponse.json(
-        { success: false, error: 'INVALID_PLAYER_ID' },
-        { status: 400 }
-      );
-    }
-
-    let targetPlayerId = requestedPlayerId;
 
     if (!targetPlayerId) {
+      if (!user) {
+        return NextResponse.json(
+          { success: false, error: 'UNAUTHORIZED: Session invalid or expired' },
+          { status: 401 }
+        );
+      }
+
       const { data: player, error: playerError } = await supabase
         .from('players')
         .select('id')
@@ -54,6 +49,13 @@ export async function GET(req: NextRequest) {
       }
 
       targetPlayerId = player.id;
+    }
+
+    if (targetPlayerId && !UUID_RE.test(targetPlayerId)) {
+      return NextResponse.json(
+        { success: false, error: 'INVALID_PLAYER_ID' },
+        { status: 400 }
+      );
     }
 
     const { data, error: rpcError } = await supabase.rpc<
