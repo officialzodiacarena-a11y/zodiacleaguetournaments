@@ -326,7 +326,43 @@ export default function MatchBroadcastOverlay({
               const teamAParts = parts.filter((p: { team_id: string }) => p.team_id === teamAData.id);
               const teamBParts = parts.filter((p: { team_id: string }) => p.team_id === teamBData.id);
 
-              /* MOCK MODE ENABLED */
+              if (teamAParts.length > 0) {
+                setRosterA(
+                  teamAParts.map((p: { player_id: string; display_name: string; agent_played: string; kills: number; deaths: number; assists: number }, idx: number) => ({
+                    id: p.player_id || `a-${idx}`,
+                    name: p.display_name || DEFAULT_ROSTER_A[idx]?.name || `Player ${idx + 1}`,
+                    agent: p.agent_played || DEFAULT_ROSTER_A[idx]?.agent || "Agent",
+                    kills: p.kills ?? 0,
+                    deaths: p.deaths ?? 0,
+                    assists: p.assists ?? 0,
+                    ultPoints: DEFAULT_ROSTER_A[idx]?.ultPoints ?? 4,
+                    ultMax: DEFAULT_ROSTER_A[idx]?.ultMax ?? 7,
+                    armor: (DEFAULT_ROSTER_A[idx]?.armor as "HEAVY" | "LIGHT" | "NONE") ?? "HEAVY",
+                    weapon: DEFAULT_ROSTER_A[idx]?.weapon ?? "Vandal",
+                    credits: 2900,
+                    minNext: 2100,
+                  }))
+                );
+              }
+
+              if (teamBParts.length > 0) {
+                setRosterB(
+                  teamBParts.map((p: { player_id: string; display_name: string; agent_played: string; kills: number; deaths: number; assists: number }, idx: number) => ({
+                    id: p.player_id || `b-${idx}`,
+                    name: p.display_name || DEFAULT_ROSTER_B[idx]?.name || `Player ${idx + 1}`,
+                    agent: p.agent_played || DEFAULT_ROSTER_B[idx]?.agent || "Agent",
+                    kills: p.kills ?? 0,
+                    deaths: p.deaths ?? 0,
+                    assists: p.assists ?? 0,
+                    ultPoints: DEFAULT_ROSTER_B[idx]?.ultPoints ?? 4,
+                    ultMax: DEFAULT_ROSTER_B[idx]?.ultMax ?? 7,
+                    armor: (DEFAULT_ROSTER_B[idx]?.armor as "HEAVY" | "LIGHT" | "NONE") ?? "HEAVY",
+                    weapon: DEFAULT_ROSTER_B[idx]?.weapon ?? "Vandal",
+                    credits: 2900,
+                    minNext: 2100,
+                  }))
+                );
+              }
             }
           }
         } catch (partErr) {

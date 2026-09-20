@@ -196,8 +196,6 @@ export async function createScheduledMatchRoom(input: CreateScrimRoomInput) {
   }
 
   revalidatePath('/dashboard');
-  revalidatePath('/tournaments/room/[id]', 'page');
-  revalidatePath('/', 'layout');
   revalidatePath('/tournaments');
 
   return { success: true, data: createResult };
