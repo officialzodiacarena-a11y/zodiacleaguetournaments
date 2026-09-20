@@ -253,7 +253,7 @@ export function QuickScrimFlipCard() {
               <h3 className="text-[#00D4FF] font-black text-lg tracking-wider mb-2">CREATE ROOM?</h3>
               <p className="text-gray-400 text-sm font-mono mb-6">
                 You are about to create a {isPrivate ? "PRIVATE" : "PUBLIC"} room 
-                "{roomName}" with an AP stake of {apStake} AP.
+                &quot;{roomName}&quot; with an AP stake of {apStake} AP.
               </p>
               
               <div className="flex gap-3">
