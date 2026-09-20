@@ -135,6 +135,12 @@ export default function AthleteMarketplacePage() {
                 key={l.listing_id}
                 listingId={l.listing_id}
                 itemTitle={l.target_player?.display_name || 'Unknown Athlete'}
+                athleteId={l.target_player?.athlete_id}
+                avatarUrl={l.target_player?.avatar_url}
+                teamTag={l.seller_team?.tag}
+                teamName={l.seller_team?.name}
+                contractNote={l.contract_note}
+                stats={Array.isArray(l.target_player?.player_stats) ? l.target_player.player_stats[0] : l.target_player?.player_stats}
                 currentHighestBid={l.pricing.current_highest_bid_ap}
                 buyoutPrice={l.pricing.buyout_price_ap}
                 auctionEndsAt={l.expires_at}
