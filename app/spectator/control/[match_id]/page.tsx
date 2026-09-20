@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, use } from "react";
+import React, { useEffect, useState, useCallback, use } from "react";
 import { createClient, RealtimeChannel } from "@supabase/supabase-js";
 
 export type MatchStatus =
@@ -133,6 +133,7 @@ export default function SpectatorHUDControlPanel({
   });
   const [userRole, setUserRole] = useState<string | null>(null);
   const [currentScene, setCurrentScene] = useState<string>("LIVE");
+  const [showBuyPhase, setShowBuyPhase] = useState<boolean>(false);
   const [activeChannel, setActiveChannel] = useState<RealtimeChannel | null>(null);
   const [bannerType, setBannerType] = useState<string>("NORMAL");
   const [bannerMessage, setBannerMessage] = useState<string>("");
@@ -268,7 +269,15 @@ export default function SpectatorHUDControlPanel({
     runInit();
 
     const channelName = `match-realtime-${matchId}`;
-    const channel = supabase.channel(channelName);
+    const channel = supabase.channel(channelName)
+      .on("broadcast", { event: "toggle_buy_phase" }, (payload) => {
+        const data = payload.payload as { enabled?: boolean };
+        if (typeof data?.enabled === "boolean") {
+          if (isMounted) setShowBuyPhase(data.enabled);
+        } else {
+          if (isMounted) setShowBuyPhase((prev) => !prev);
+        }
+      });
 
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED" && isMounted) {
@@ -284,6 +293,38 @@ export default function SpectatorHUDControlPanel({
       supabase.removeChannel(channel);
     };
   }, [matchId]);
+
+  const toggleBuyPhaseHUD = useCallback(() => {
+    if (!activeChannel) {
+      setFeedback({ type: "error", msg: "สัญญาณเซิร์ฟเวอร์เรียลไทม์ออฟไลน์ กรุณาลองใหม่" });
+      return;
+    }
+
+    const nextState = !showBuyPhase;
+    setShowBuyPhase(nextState);
+    activeChannel.send({
+      type: "broadcast",
+      event: "toggle_buy_phase",
+      payload: { enabled: nextState },
+    });
+
+    setFeedback({
+      type: "info",
+      msg: `ส่งคำสั่งสลับ Buy Phase HUD [ ${nextState ? "ON (แสดงผล)" : "OFF (ซ่อน)"} ] สู่ OBS สำเร็จ (Alt+C)`,
+    });
+  }, [activeChannel, showBuyPhase]);
+
+  // Alt + C Hotkey สำหรับ Director / Spectator Control Room
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && (e.key === "c" || e.key === "C" || e.code === "KeyC")) {
+        e.preventDefault();
+        toggleBuyPhaseHUD();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleBuyPhaseHUD]);
 
   const changeLiveScene = (sceneName: "VETO" | "LIVE" | "AWAITING_RESULT") => {
     if (!activeChannel) {
@@ -627,6 +668,31 @@ export default function SpectatorHUDControlPanel({
                   <span>{scene}</span>
                 </button>
               ))}
+            </div>
+
+            {/* BUY PHASE HUD TOGGLE (ALT+C) */}
+            <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+              <div>
+                <span className="font-mono text-xs font-black text-[#00D4FF] flex items-center gap-2">
+                  <span>🎮 BUY PHASE HUD</span>
+                  <span className="px-1.5 py-0.2 bg-[#00D4FF]/20 text-[#00D4FF] border border-[#00D4FF]/40 rounded text-[9px]">
+                    Alt + C
+                  </span>
+                </span>
+                <span className="font-mono text-[10px] text-gray-400 block mt-0.5">
+                  สถานะ: {showBuyPhase ? "🟢 กำลังแสดงบนสตรีม OBS" : "⚪ ซ่อนอยู่"}
+                </span>
+              </div>
+              <button
+                onClick={toggleBuyPhaseHUD}
+                className={`px-4 py-2 rounded-lg font-mono text-xs font-black border transition-all ${
+                  showBuyPhase
+                    ? "bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                    : "bg-black/50 border-white/10 text-gray-300 hover:border-[#00D4FF]/50 hover:text-white"
+                }`}
+              >
+                {showBuyPhase ? "HUD: ACTIVE (Alt+C)" : "TOGGLE BUY PHASE"}
+              </button>
             </div>
           </div>
 
