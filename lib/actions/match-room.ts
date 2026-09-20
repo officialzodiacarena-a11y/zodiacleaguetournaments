@@ -12,6 +12,9 @@ export interface CreateScrimRoomInput {
   targetTierMin?: string;
   targetTierMax?: string;
   idempotencyKey?: string;
+  matchMode?: string;
+  isPrivate?: boolean;
+  passcode?: string;
 }
 
 export interface SendRoomMessageInput {
@@ -169,18 +172,33 @@ export async function createScheduledMatchRoom(input: CreateScrimRoomInput) {
 
   // Fix (False-Positive Success Bug): create_scrim_room() returns
   // { success: false, error } as a JSONB payload (not a thrown exception) on
-  // failures like insufficient AP — `error` above stays null in that case, so
-  // it must be checked separately or the caller reports success on a room
+  // Fix (False-Positive Success Bug): create_scrim_room() returns
+  // an object { success: boolean, room_id: string, error: string }
+  // we must parse this explicitly. Otherwise, Supabase RPC returns 200 OK for a logical failure
   // that was never created.
   const createResult = data as RpcJsonResult | null;
   if (!createResult || createResult.success === false) {
     return { success: false, error: createResult?.error || 'FAILED_TO_CREATE_SCRIM_ROOM' };
   }
 
+  // Update new fields if provided
+  if (input.matchMode || input.isPrivate !== undefined || input.passcode) {
+    const roomId = (createResult as { room_id?: string }).room_id;
+    if (roomId) {
+      await adminClient.from('match_rooms').update({
+        // @ts-expect-error: added via SQL directly
+        match_mode: input.matchMode || 'SCRIM_5V5',
+        is_private: input.isPrivate || false,
+        passcode: input.passcode || null,
+        room_access: input.isPrivate ? 'PRIVATE_INVITE' : 'PUBLIC_OPEN'
+      }).eq('id', roomId);
+    }
+  }
+
   revalidatePath('/dashboard');
   revalidatePath('/tournaments');
 
-  return { success: true, data };
+  return { success: true, data: createResult };
 }
 
 /**
