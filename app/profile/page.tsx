@@ -5,6 +5,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { CareerTimeline } from '@/components/profile/CareerTimeline';
 import { GameAccountModal } from '@/components/profile/GameAccountModal';
+import AthleteTelemetryHUD from '@/components/dashboard/AthleteTelemetryHUD';
 
 interface PlayerData {
   id: string;
@@ -499,6 +500,10 @@ export default function ProfilePage() {
           window.location.reload();
         }}
       />
+      
+      <div className="mt-8 border-t border-[#E8B429]/20 pt-8">
+        <AthleteTelemetryHUD />
+      </div>
     </div>
   );
 }
