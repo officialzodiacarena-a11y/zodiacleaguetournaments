@@ -183,7 +183,7 @@ export async function createScheduledMatchRoom(input: CreateScrimRoomInput) {
 
   // Update new fields if provided
   if (input.matchMode || input.isPrivate !== undefined || input.passcode) {
-    const roomId = (createResult as any).room_id;
+    const roomId = (createResult as { room_id?: string }).room_id;
     if (roomId) {
       await adminClient.from('match_rooms').update({
         // @ts-expect-error: added via SQL directly
