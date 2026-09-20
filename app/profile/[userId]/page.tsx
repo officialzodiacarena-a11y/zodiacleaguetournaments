@@ -121,7 +121,7 @@ export default function AthleteProfilePage() {
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as 'MATCHES' | 'TRENDS' | 'MAPS' | 'WEAPONS')}
                 className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-widest transition-all rounded-t-lg ${
                   activeTab === tab.id
                     ? 'bg-[#1A1C2E] border-t-2 border-t-cyan-400 text-cyan-400'
@@ -208,7 +208,7 @@ export default function AthleteProfilePage() {
                               <button className="bg-[#E8B429]/10 text-[#E8B429] px-4 py-1.5 rounded font-bold border border-[#E8B429]/30">Scoreboard</button>
                               <button className="text-neutral-500 hover:text-white transition-colors">Performance</button>
                             </div>
-                            <div className="text-neutral-400">Match ID: {Math.random().toString(36).substr(2, 9)}</div>
+                            <div className="text-neutral-400">Match ID: ssfef21lq</div>
                           </div>
 
                           {/* Team Table Scaffold */}

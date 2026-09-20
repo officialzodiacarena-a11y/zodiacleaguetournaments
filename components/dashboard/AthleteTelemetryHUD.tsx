@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Star, Crosshair, Shield, Swords, Navigation, ShieldCheck,
-  Cloud, ChevronDown, Filter, Calendar, Zap
+  Cloud
 } from 'lucide-react';
 import { TelemetryHudCompositePayload } from '@/types/athlete-telemetry-hud';
 
@@ -408,7 +408,7 @@ export default function AthleteTelemetryHUD({ playerId }: { playerId?: string })
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-white text-sm">{match.mapName}</span>
                         </div>
-                        <div className="text-[10px] text-neutral-400">{match.dateLabel} // {match.roundLabel}</div>
+                        <div className="text-[10px] text-neutral-400">{match.dateLabel} • {match.roundLabel}</div>
                       </div>
                     </div>
 
