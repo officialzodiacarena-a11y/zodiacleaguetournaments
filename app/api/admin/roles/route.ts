@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(request: Request) {
   try {
@@ -10,13 +11,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // RBAC Guard: Check if the requesting user is SUPER_ADMIN
-    const { data: adminRole } = await supabase
+    const adminSupabase = createAdminClient();
+
+    // Resolve Player ID from Auth User ID
+    const { data: player } = await adminSupabase
+      .from('players')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const requestingPlayerId = player?.id;
+
+    // RBAC Guard: Check if the requesting user or player is SUPER_ADMIN
+    const { data: adminRole } = await adminSupabase
       .from('user_roles')
       .select('role')
-      .eq('player_id', user.id)
+      .in('player_id', [user.id, ...(requestingPlayerId ? [requestingPlayerId] : [])])
       .eq('role', 'SUPER_ADMIN')
-      .single();
+      .maybeSingle();
 
     if (!adminRole) {
       return NextResponse.json({ error: 'FORBIDDEN: Must be SUPER_ADMIN' }, { status: 403 });
@@ -29,25 +41,25 @@ export async function POST(request: Request) {
     }
 
     // Get old role for audit logging
-    const { data: currentRoleData } = await supabase
+    const { data: currentRoleData } = await adminSupabase
       .from('user_roles')
       .select('role')
       .eq('player_id', targetUserId)
-      .single();
+      .maybeSingle();
     
     const oldRole = currentRoleData?.role || 'NONE';
 
     if (action === 'ASSIGN') {
       if (!role) return NextResponse.json({ error: 'Role is required for ASSIGN' }, { status: 400 });
       
-      const { error: upsertError } = await supabase
+      const { error: upsertError } = await adminSupabase
         .from('user_roles')
-        .upsert({ player_id: targetUserId, role }, { onConflict: 'player_id' });
+        .upsert({ player_id: targetUserId, role }, { onConflict: 'player_id, role' });
         
       if (upsertError) throw upsertError;
 
       // Audit Log
-      await supabase.from('audit_logs').insert({
+      await adminSupabase.from('audit_logs').insert({
         actor_id: user.id,
         action: 'GRANT',
         // @ts-expect-error: target_user_id was added directly via SQL, types not synced yet
@@ -59,7 +71,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: `Assigned ${role}` });
 
     } else if (action === 'REVOKE') {
-      const { error: deleteError } = await supabase
+      const { error: deleteError } = await adminSupabase
         .from('user_roles')
         .delete()
         .eq('player_id', targetUserId);
@@ -67,7 +79,7 @@ export async function POST(request: Request) {
       if (deleteError) throw deleteError;
 
       // Audit Log
-      await supabase.from('audit_logs').insert({
+      await adminSupabase.from('audit_logs').insert({
         actor_id: user.id,
         action: 'REVOKE',
         // @ts-expect-error: target_user_id was added directly via SQL, types not synced yet
