@@ -29,11 +29,13 @@ export default function AthleteTelemetryHUD({ playerId }: { playerId?: string })
   const [activeTab, setActiveTab] = useState<'overview' | 'roles-weapons' | 'matches'>('overview');
   const [hudData, setHudData] = useState<TelemetryHudCompositePayload | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchTelemetryData() {
       try {
         setIsLoading(true);
+        setError(null);
         const url = playerId
           ? `/api/v1/players/me/telemetry-hud?playerId=${encodeURIComponent(playerId)}`
           : '/api/v1/players/me/telemetry-hud';
@@ -41,9 +43,12 @@ export default function AthleteTelemetryHUD({ playerId }: { playerId?: string })
         const result = await response.json();
         if (result.success && result.data) {
           setHudData(result.data);
+        } else {
+          setError(result.error || 'Failed to fetch telemetry data');
         }
       } catch (err) {
         console.error('Failed to load telemetry HUD data', err);
+        setError('Network error: Failed to fetch telemetry data');
       } finally {
         setIsLoading(false);
       }
@@ -51,12 +56,24 @@ export default function AthleteTelemetryHUD({ playerId }: { playerId?: string })
     fetchTelemetryData();
   }, [playerId]);
 
-  if (isLoading || !hudData) {
+  if (isLoading) {
     return (
       <div className="w-full min-h-[600px] bg-[#0D0E1A] text-white flex items-center justify-center font-mono rounded-2xl">
         <div className="flex items-center gap-3 bg-[#121424] border border-[#E8B429]/30 px-6 py-4 rounded-2xl shadow-2xl">
           <div className="w-4 h-4 border-2 border-[#E8B429] border-t-transparent rounded-full animate-spin"></div>
           <span className="text-xs text-[#E8B429] font-bold tracking-wider">LOADING ATHLETE TELEMETRY HUD...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !hudData) {
+    return (
+      <div className="w-full min-h-[600px] bg-[#0D0E1A] text-white flex flex-col items-center justify-center font-mono rounded-2xl">
+        <div className="flex flex-col items-center gap-3 bg-[#121424] border border-red-500/30 px-6 py-6 rounded-2xl shadow-2xl text-center">
+          <Shield className="w-8 h-8 text-red-500 mb-2" />
+          <span className="text-sm text-red-400 font-bold tracking-wider">TELEMETRY UNAVAILABLE</span>
+          <span className="text-xs text-neutral-500">{error || 'No data found for this athlete.'}</span>
         </div>
       </div>
     );
