@@ -19,6 +19,17 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const isLeft = position === 'LEFT_TOWER';
+  const defaultBanner: SponsorBannerPublic = {
+    id: isLeft ? 'default-tower-left' : 'default-tower-right',
+    title: 'Luminary Global - Official Title Sponsor',
+    slot_position: position,
+    image_url: '/images/sponser/tier1_title_sponsor_canva.png',
+    target_url: 'https://luminaryglobal.com',
+    brand_name: 'LUMINARY GLOBAL',
+    priority: 100,
+  };
+
+  const activeBanner = banner || defaultBanner;
 
   useEffect(() => {
     let isCancelled = false;
@@ -66,7 +77,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
   }, []);
 
   useEffect(() => {
-    if (!banner || hasTrackedImpression || !containerRef.current) return;
+    if (!activeBanner || hasTrackedImpression || !containerRef.current) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -74,7 +85,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
         if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
           if (!timerRef.current) {
             timerRef.current = setTimeout(() => {
-              trackEvent(banner.id, 'IMPRESSION');
+              trackEvent(activeBanner.id, 'IMPRESSION');
               setHasTrackedImpression(true);
             }, 1000);
           }
@@ -96,32 +107,32 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
         clearTimeout(timerRef.current);
       }
     };
-  }, [banner, hasTrackedImpression, trackEvent]);
+  }, [activeBanner, hasTrackedImpression, trackEvent]);
 
-  if (loading || !banner) return null;
+  if (loading && !banner) return null;
 
   return (
     <aside
       ref={containerRef}
       aria-label={`Sponsor Skyscraper ${isLeft ? 'Left' : 'Right'}`}
-      className={`hidden 2xl:block fixed top-28 z-30 w-40 select-none ${
-        isLeft ? 'left-4' : 'right-4'
+      className={`hidden min-[1380px]:block fixed top-24 z-30 w-32 xl:w-36 2xl:w-40 select-none ${
+        isLeft ? 'left-2 xl:left-4 2xl:left-6' : 'right-2 xl:right-4 2xl:right-6'
       } ${className}`}
     >
       <Link
-        href={banner.target_url}
-        onClick={() => trackEvent(banner.id, 'CLICK')}
-        className={`group relative block w-40 h-[600px] rounded-xl overflow-hidden bg-[#121424] border transition-all duration-300 ${
+        href={activeBanner.target_url}
+        onClick={() => trackEvent(activeBanner.id, 'CLICK')}
+        className={`group relative block w-32 xl:w-36 2xl:w-40 h-[500px] xl:h-[580px] 2xl:h-[620px] rounded-xl overflow-hidden bg-[#121424] border transition-all duration-300 ${
           isLeft
             ? 'border-[#00D4FF]/30 shadow-[0_0_25px_rgba(0,212,255,0.12)] hover:border-[#00D4FF] hover:shadow-[0_0_30px_rgba(0,212,255,0.3)]'
             : 'border-[#E8B429]/30 shadow-[0_0_25px_rgba(232,180,41,0.12)] hover:border-[#E8B429] hover:shadow-[0_0_30px_rgba(232,180,41,0.3)]'
         }`}
       >
         <Image
-          src={banner.image_url}
-          alt={banner.title}
+          src={activeBanner.image_url}
+          alt={activeBanner.title}
           fill
-          sizes="160px"
+          sizes="(max-width: 1536px) 144px, 160px"
           className="object-cover group-hover:scale-105 group-hover:brightness-110 transition-all duration-500"
         />
 
@@ -136,7 +147,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
               : 'bg-[#0A0A0F]/80 text-[#E8B429] border-[#E8B429]/40'
           }`}
         >
-          {banner.brand_name ? banner.brand_name.toUpperCase() : 'SPONSOR'}
+          {activeBanner.brand_name ? activeBanner.brand_name.toUpperCase() : 'SPONSOR'}
         </div>
       </Link>
     </aside>

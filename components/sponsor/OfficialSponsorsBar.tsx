@@ -77,16 +77,17 @@ export function OfficialSponsorsBar() {
 
           {/* Logo Frame + Title Sponsor Badge (Placed Below Image so text is NEVER covered) */}
           <div className="flex flex-col items-center md:items-end gap-2.5">
-            <div className="relative w-56 h-36 md:w-64 md:h-40 rounded-xl overflow-hidden border-2 border-[#E8B429]/70 shadow-[0_4px_25px_rgba(232,180,41,0.25)] group hover:scale-105 transition-all duration-300 bg-[#121424]">
+            <div className="relative w-44 h-44 sm:w-48 sm:h-48 rounded-2xl overflow-hidden border-2 border-[#E8B429] shadow-[0_4px_30px_rgba(232,180,41,0.35)] group hover:scale-105 transition-all duration-300 bg-white flex items-center justify-center">
               <Image
                 src={titleSponsor.image}
                 alt={titleSponsor.name}
                 fill
-                sizes="(max-width: 768px) 224px, 256px"
-                className="object-contain p-2"
+                sizes="(max-width: 768px) 176px, 192px"
+                className="object-cover group-hover:scale-105 transition-transform duration-300"
+                priority
               />
             </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E8B429]/20 border border-[#E8B429]/60 text-xs font-mono font-bold text-[#E8B429] shadow-sm">
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#E8B429]/20 border border-[#E8B429]/60 text-xs font-mono font-bold text-[#E8B429] shadow-sm">
               <Sparkles className="w-3.5 h-3.5 text-[#E8B429]" />
               <span>OFFICIAL TITLE SPONSOR</span>
             </div>

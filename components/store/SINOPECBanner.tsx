@@ -9,13 +9,13 @@ export function SINOPECBanner() {
     >
       <div className="relative z-10 flex flex-col items-start gap-2">
         <span className="rounded-full border border-[#E8B429]/60 bg-[#E8B429]/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#E8B429]">
-          Official Partner
+          Title Sponsor & Partner
         </span>
         <h2 className="text-2xl font-black tracking-tight text-[#F9EDD8] sm:text-3xl">
-          SINOPEC <span className="text-[#E8B429]">× ZODIAC ARENA</span>
+          LUMINARY GLOBAL <span className="text-[#E8B429]">× ZODIAC ARENA</span>
         </h2>
         <p className="max-w-xl text-sm text-[#94A3B8]">
-          แลกแต้ม AP เป็นน้ำมันเครื่อง คูปองเติมน้ำมัน และสินค้าพรีเมียมจาก SINOPEC ได้แล้ววันนี้
+          แลกแต้ม AP เป็นสิทธิพิเศษ ส่วนลดบริการ และของรางวัลพรีเมียมจาก LUMINARY GLOBAL ได้แล้ววันนี้
         </p>
       </div>
       <div
