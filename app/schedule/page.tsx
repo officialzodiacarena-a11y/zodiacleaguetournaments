@@ -359,14 +359,14 @@ export default async function MatchSchedulePage() {
                     {renderMatchStatusBadge(m.status)}
                     {m.status === 'COMPLETED' ? (
                       <Link
-                        href={`/tournament`}
+                        href={`/spectate/${m.id}`}
                         className="rounded-md border border-[#E8B429]/40 bg-transparent px-4 py-1.5 text-xs font-bold text-[#E8B429] hover:bg-[#E8B429]/10"
                       >
-                        ดูผล
+                        ผล & รีเพลย์
                       </Link>
                     ) : m.status === 'LIVE' ? (
                       <Link
-                        href={`/overlay/match/${m.id}`}
+                        href={`/spectate/${m.id}`}
                         className="rounded-md bg-[#cc2828] px-4 py-1.5 text-xs font-bold text-white hover:bg-[#b02222]"
                       >
                         ดูสด

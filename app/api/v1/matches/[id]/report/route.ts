@@ -88,7 +88,7 @@ export async function POST(
       .eq('player_id', player.id)
       .eq('status', 'ACTIVE')
       .in('team_id', cleanIds(match.team_a_id, match.team_b_id))
-      .in('role', ['CAPTAIN', 'MANAGER', 'OWNER']);
+      .in('role', ['CAPTAIN', 'MANAGER', 'OWNER', 'COACH']);
 
     if (memberError || !member || member.length === 0) {
       return NextResponse.json(

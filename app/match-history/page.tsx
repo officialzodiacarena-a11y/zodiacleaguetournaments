@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import Link from 'next/link';
 
 interface CompletedMatchRow {
   id: string;
@@ -71,6 +72,7 @@ export default async function MatchHistoryPage() {
                   <th className="p-3.5">SCORE</th>
                   <th className="p-3.5 text-right">WINNER</th>
                   <th className="p-3.5 text-right">DATE</th>
+                  <th className="p-3.5 text-center">ACTION</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/50">
@@ -82,6 +84,14 @@ export default async function MatchHistoryPage() {
                     <td className="py-2.5 px-3.5 text-right font-bold text-green-400">{m.winnerName ?? '—'}</td>
                     <td className="py-2.5 px-3.5 text-right text-gray-500">
                       {m.endedAt ? new Date(m.endedAt).toLocaleDateString('th-TH') : '—'}
+                    </td>
+                    <td className="py-2.5 px-3.5 text-center">
+                      <Link
+                        href={`/spectate/${m.id}`}
+                        className="inline-block rounded border border-[#00D4FF]/40 px-3 py-1 text-[10px] font-bold text-[#00D4FF] hover:bg-[#00D4FF]/10 transition-colors"
+                      >
+                        ดูรีเพลย์
+                      </Link>
                     </td>
                   </tr>
                 ))}

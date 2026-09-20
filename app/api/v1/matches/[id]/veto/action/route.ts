@@ -70,16 +70,16 @@ export async function POST(
     return NextResponse.json({ error: 'INVALID_MAP: Map is not in stage map pool' }, { status: 422 });
   }
 
-  const { data: memberships } = await supabase
+  const { data: memberships, error: memberError } = await supabase
     .from('team_members')
     .select('team_id, role')
     .eq('player_id', player.id)
     .eq('status', 'ACTIVE')
     .in('team_id', cleanIds(match.team_a_id, match.team_b_id))
-    .in('role', ['CAPTAIN', 'MANAGER']);
+    .in('role', ['CAPTAIN', 'MANAGER', 'COACH']);
 
-  if (!memberships || memberships.length === 0) {
-    return NextResponse.json({ error: 'FORBIDDEN: Must be Captain or Manager' }, { status: 403 });
+  if (memberError || !memberships || memberships.length === 0) {
+    return NextResponse.json({ error: 'FORBIDDEN: Must be Captain, Manager, or Coach' }, { status: 403 });
   }
 
   const userTeamId = memberships[0].team_id;
