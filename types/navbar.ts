@@ -15,7 +15,8 @@ export const NavbarUserSchema = z.object({
   avatarUrl: z.string().url().nullable().optional(),
   zodiacSign: ZodiacSignEnum.nullable().default(null),
   apBalance: z.number().int().nonnegative().default(0),
-  verificationStatus: z.enum(['UNVERIFIED', 'PENDING', 'VERIFIED', 'MANUAL_REVIEW', 'REJECTED']).default('UNVERIFIED')
+  verificationStatus: z.enum(['UNVERIFIED', 'PENDING', 'VERIFIED', 'MANUAL_REVIEW', 'REJECTED']).default('UNVERIFIED'),
+  roles: z.array(z.string()).default([])
 });
 
 export type NavbarUser = z.infer<typeof NavbarUserSchema>;

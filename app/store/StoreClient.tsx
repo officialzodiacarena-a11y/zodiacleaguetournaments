@@ -5,7 +5,6 @@ import { StoreHeader } from '@/components/store/StoreHeader';
 import { CategoryFilter } from '@/components/store/CategoryFilter';
 import { SINOPECBanner } from '@/components/store/SINOPECBanner';
 import { ProductCard } from '@/components/store/ProductCard';
-import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { OfficialSponsorsBar } from '@/components/sponsor/OfficialSponsorsBar';
 
 interface Variant {
