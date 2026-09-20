@@ -90,9 +90,9 @@ export default function SeasonalGatewayPage() {
         .anim-summer-glow { animation: za-pulse-glow 3s ease-in-out infinite; }
       `}</style>
 
-      {/* Skyscraper Towers (ซ้าย-ขวา) */}
-      <SkyscraperTower position="LEFT_TOWER" />
-      <SkyscraperTower position="RIGHT_TOWER" />
+      {/* Skyscraper Towers (ซ้าย-ขวา) - ปิดชั่วคราวตามคำสั่ง */}
+      {/* <SkyscraperTower position="LEFT_TOWER" /> */}
+      {/* <SkyscraperTower position="RIGHT_TOWER" /> */}
 
       {/* Background Faceoff Image */}
       <div className="fixed inset-0 -z-20 opacity-30 pointer-events-none">
