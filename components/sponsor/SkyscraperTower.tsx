@@ -19,17 +19,26 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const isLeft = position === 'LEFT_TOWER';
+  const fallbackSrc = '/images/sponser/tier1_title_sponsor_canva.png';
+
   const defaultBanner: SponsorBannerPublic = {
     id: isLeft ? 'default-tower-left' : 'default-tower-right',
     title: 'Luminary Global - Official Title Sponsor',
     slot_position: position,
-    image_url: '/images/sponser/tier1_title_sponsor_canva.png',
+    image_url: fallbackSrc,
     target_url: 'https://luminaryglobal.com',
     brand_name: 'LUMINARY GLOBAL',
     priority: 100,
   };
 
   const activeBanner = banner || defaultBanner;
+  const [imgSrc, setImgSrc] = useState<string>(activeBanner.image_url || fallbackSrc);
+
+  useEffect(() => {
+    if (activeBanner?.image_url) {
+      setImgSrc(activeBanner.image_url);
+    }
+  }, [activeBanner?.image_url]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -40,7 +49,13 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
         if (!res.ok) throw new Error('Fetch failed');
         const json = await res.json();
         if (!isCancelled && json.data && json.data.length > 0) {
-          setBanner(json.data[0]);
+          const item = json.data[0];
+          // หากข้อมูลเก่าเป็น SINOPEC ให้ fallback เป็น Luminary Global
+          if (item.brand_name?.toUpperCase().includes('SINOPEC')) {
+            item.brand_name = 'LUMINARY GLOBAL';
+            item.image_url = fallbackSrc;
+          }
+          setBanner(item);
         }
       } catch (err) {
         console.error(`[SkyscraperTower ${position}] Load failed:`, err);
@@ -54,7 +69,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
     return () => {
       isCancelled = true;
     };
-  }, [position]);
+  }, [position, fallbackSrc]);
 
   const trackEvent = useCallback((bannerId: string, eventType: 'IMPRESSION' | 'CLICK') => {
     try {
@@ -111,11 +126,16 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
 
   if (loading && !banner) return null;
 
+  const displayBrand =
+    activeBanner.brand_name && !activeBanner.brand_name.toUpperCase().includes('SINOPEC')
+      ? activeBanner.brand_name.toUpperCase()
+      : 'LUMINARY GLOBAL';
+
   return (
     <aside
       ref={containerRef}
       aria-label={`Sponsor Skyscraper ${isLeft ? 'Left' : 'Right'}`}
-      className={`hidden min-[1380px]:block fixed top-24 z-30 w-32 xl:w-36 2xl:w-40 select-none ${
+      className={`hidden min-[1380px]:block absolute top-28 z-20 w-32 xl:w-36 2xl:w-40 select-none pointer-events-auto ${
         isLeft ? 'left-2 xl:left-4 2xl:left-6' : 'right-2 xl:right-4 2xl:right-6'
       } ${className}`}
     >
@@ -129,11 +149,12 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
         }`}
       >
         <Image
-          src={activeBanner.image_url}
+          src={imgSrc}
           alt={activeBanner.title}
           fill
           sizes="(max-width: 1536px) 144px, 160px"
           className="object-cover group-hover:scale-105 group-hover:brightness-110 transition-all duration-500"
+          onError={() => setImgSrc(fallbackSrc)}
         />
 
         {/* Shine Sweep Overlay */}
@@ -147,7 +168,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
               : 'bg-[#0A0A0F]/80 text-[#E8B429] border-[#E8B429]/40'
           }`}
         >
-          {activeBanner.brand_name ? activeBanner.brand_name.toUpperCase() : 'SPONSOR'}
+          {displayBrand}
         </div>
       </Link>
     </aside>
