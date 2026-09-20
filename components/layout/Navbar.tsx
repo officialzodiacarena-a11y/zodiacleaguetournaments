@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -198,9 +199,27 @@ export default function Navbar() {
 
           {/* BRAND LOGO */}
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#E8B429] via-[#00D4FF] to-[#8B5CF6] p-[1.5px] shadow-[0_0_15px_rgba(0,212,255,0.3)] group-hover:shadow-[0_0_22px_rgba(232,180,41,0.5)] transition-all">
-              <div className="w-full h-full bg-[#080810] rounded-[10.5px] flex items-center justify-center font-black text-white text-base tracking-tighter">
-                ZA
+            <div
+              className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#E8B429] via-[#00D4FF] to-[#8B5CF6] p-[1.5px] shadow-[0_0_15px_rgba(0,212,255,0.3)] group-hover:shadow-[0_0_22px_rgba(232,180,41,0.5)] transition-all flex-shrink-0"
+              style={{ perspective: '200px' }}
+            >
+              <div
+                className="w-full h-full bg-[#080810] rounded-[10.5px] overflow-hidden"
+                style={{
+                  transition: 'transform 0.6s cubic-bezier(0.4,0,0.2,1)',
+                  transformStyle: 'preserve-3d',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.transform = 'rotateY(360deg)')}
+                onMouseLeave={e => (e.currentTarget.style.transform = 'rotateY(0deg)')}
+              >
+                <Image
+                  src="/images/logo/navbar-icon-canva.png"
+                  alt="Zodiac Arena"
+                  width={36}
+                  height={36}
+                  className="w-full h-full object-cover"
+                  priority
+                />
               </div>
             </div>
             <div className="flex flex-col">
@@ -328,8 +347,14 @@ export default function Navbar() {
               {/* DRAWER HEADER */}
               <div className="flex items-center justify-between border-b border-white/10 pb-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-[#00D4FF]/20 border border-[#00D4FF] flex items-center justify-center font-bold text-xs text-[#00D4FF]">
-                    ZA
+                  <div className="w-7 h-7 rounded-lg border border-[#00D4FF] overflow-hidden">
+                    <Image
+                      src="/images/logo/navbar-icon-canva.png"
+                      alt="Zodiac Arena"
+                      width={28}
+                      height={28}
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                   <span className="font-bold text-sm text-white">NAVIGATION</span>
                 </div>

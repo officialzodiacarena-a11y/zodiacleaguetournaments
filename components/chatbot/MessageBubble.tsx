@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import ReactMarkdown from 'react-markdown';
 
 export interface ChatMessage {
@@ -33,7 +34,15 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
       >
         {!isUser && (
           <div className="mb-2 flex items-center gap-1.5 border-b border-white/10 pb-1.5">
-            <span className="text-xs">🔮</span>
+            <div className="relative w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
+              <Image
+                src="/images/logo/oracle-avatar.jpg"
+                alt="Zodiac Oracle"
+                width={16}
+                height={16}
+                className="w-full h-full object-cover"
+              />
+            </div>
             <span className="text-[11px] font-black uppercase tracking-wider text-[#E8B429]">
               ZODIAC ORACLE
             </span>
@@ -59,7 +68,15 @@ export function TypingIndicator() {
         className="flex items-center gap-2 rounded-2xl rounded-bl-sm border border-white/10 bg-[#1D203F]/90 px-4 py-3"
         style={{ boxShadow: '0 0 20px rgba(232,180,41,0.08)' }}
       >
-        <span className="text-xs">🔮</span>
+        <div className="relative w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
+          <Image
+            src="/images/logo/oracle-avatar.jpg"
+            alt="Zodiac Oracle"
+            width={16}
+            height={16}
+            className="w-full h-full object-cover"
+          />
+        </div>
         <span className="text-xs text-[#94A3B8]">กำลังค้นหาคำตอบ...</span>
         <div className="flex items-center gap-1 pl-1">
           {[0, 1, 2].map((i) => (
