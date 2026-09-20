@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const { data: adminRole } = await supabase
       .from('user_roles')
       .select('role')
-      .eq('user_id', user.id)
+      .eq('player_id', user.id)
       .eq('role', 'SUPER_ADMIN')
       .single();
 
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const { data: currentRoleData } = await supabase
       .from('user_roles')
       .select('role')
-      .eq('user_id', targetUserId)
+      .eq('player_id', targetUserId)
       .single();
     
     const oldRole = currentRoleData?.role || 'NONE';
@@ -42,14 +42,14 @@ export async function POST(request: Request) {
       
       const { error: upsertError } = await supabase
         .from('user_roles')
-        .upsert({ user_id: targetUserId, role }, { onConflict: 'user_id' });
+        .upsert({ player_id: targetUserId, role }, { onConflict: 'player_id' });
         
       if (upsertError) throw upsertError;
 
       // Audit Log
       await supabase.from('audit_logs').insert({
         actor_id: user.id,
-        action: 'ROLE_MUTATION_ASSIGN',
+        action: 'GRANT',
         target_user_id: targetUserId,
         old_role: oldRole,
         new_role: role
@@ -61,14 +61,14 @@ export async function POST(request: Request) {
       const { error: deleteError } = await supabase
         .from('user_roles')
         .delete()
-        .eq('user_id', targetUserId);
+        .eq('player_id', targetUserId);
 
       if (deleteError) throw deleteError;
 
       // Audit Log
       await supabase.from('audit_logs').insert({
         actor_id: user.id,
-        action: 'ROLE_MUTATION_REVOKE',
+        action: 'REVOKE',
         target_user_id: targetUserId,
         old_role: oldRole,
         new_role: 'NONE'

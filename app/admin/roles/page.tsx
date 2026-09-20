@@ -38,9 +38,9 @@ export default function AdminRolesPage() {
     // Fetch user_roles
     const { data: rolesData } = await supabase
       .from('user_roles')
-      .select('user_id, role');
+      .select('player_id, role');
 
-    const roleMap = new Map((rolesData || []).map(r => [r.user_id, r.role]));
+    const roleMap = new Map((rolesData || []).map(r => [r.player_id, r.role]));
 
     const merged = (playersData || []).map(p => ({
       ...p,
