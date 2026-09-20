@@ -1,6 +1,6 @@
 # 🌳 Zpdoac Arena Master Data Tree & Schema Map (V1.06)
 
-> 💎 **Last Updated:** เวลา 07:56:31 อังคาร 15/09/2026
+> 💎 **Last Updated:** เวลา 13:53:34 อาทิตย์ 20/09/2026
 
 ีวิธีใช้ = node update-tree.mjs
 
@@ -48,6 +48,11 @@ zodiac/
 │   │   │   ├── categories/
 │   │   │   │   └── page.tsx
 │   │   │   ├── shipments/
+│   │   │   │   └── page.tsx
+│   │   │   ├── sponsors/
+│   │   │   │   ├── [id]/
+│   │   │   │   │   └── metrics/
+│   │   │   │   │       └── page.tsx
 │   │   │   │   └── page.tsx
 │   │   │   └── page.tsx
 │   │   ├── valorant-tracker/
@@ -117,6 +122,13 @@ zodiac/
 │   │       │   │           │   └── route.ts
 │   │       │   │           └── void/
 │   │       │   │               └── route.ts
+│   │       │   ├── sponsors/
+│   │       │   │   ├── [id]/
+│   │       │   │   │   ├── approval/
+│   │       │   │   │   │   └── route.ts
+│   │       │   │   │   └── metrics/
+│   │       │   │   │       └── route.ts
+│   │       │   │   └── route.ts
 │   │       │   ├── store/
 │   │       │   │   ├── categories/
 │   │       │   │   │   ├── [id]/
@@ -296,9 +308,11 @@ zodiac/
 │   │       │   │   │   └── route.ts
 │   │       │   │   ├── payments/
 │   │       │   │   │   └── route.ts
-│   │       │   │   └── shipping-addresses/
-│   │       │   │       ├── [id]/
-│   │       │   │       │   └── route.ts
+│   │       │   │   ├── shipping-addresses/
+│   │       │   │   │   ├── [id]/
+│   │       │   │   │   │   └── route.ts
+│   │       │   │   │   └── route.ts
+│   │       │   │   └── telemetry-hud/
 │   │       │   │       └── route.ts
 │   │       │   └── search/
 │   │       │       └── route.ts
@@ -341,6 +355,9 @@ zodiac/
 │   │       ├── store/
 │   │       │   ├── categories/
 │   │       │   │   └── route.ts
+│   │       │   ├── coupons/
+│   │       │   │   └── verify/
+│   │       │   │       └── route.ts
 │   │       │   ├── items/
 │   │       │   │   └── route.ts
 │   │       │   ├── orders/
@@ -436,10 +453,14 @@ zodiac/
 │   │   └── page.tsx
 │   ├── home/
 │   │   └── page.tsx
+│   ├── layout/
 │   ├── leaderboard/
 │   │   └── page.tsx
 │   ├── login/
 │   │   └── page.tsx
+│   ├── marketplace/
+│   │   └── athletes/
+│   │       └── page.tsx
 │   ├── matches/
 │   │   ├── [id]/
 │   │   │   └── lobby/
@@ -464,6 +485,9 @@ zodiac/
 │   │   └── page.tsx
 │   ├── schedule/
 │   │   └── page.tsx
+│   ├── spectate/
+│   │   └── [id]/
+│   │       └── page.tsx
 │   ├── spectator/
 │   │   └── control/
 │   │       └── [match_id]/
