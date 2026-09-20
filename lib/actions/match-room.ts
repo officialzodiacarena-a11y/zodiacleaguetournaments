@@ -186,13 +186,13 @@ export async function createScheduledMatchRoom(input: CreateScrimRoomInput) {
     const roomId = (createResult as any).room_id;
     if (roomId) {
       await adminClient.from('match_rooms').update({
-        // @ts-ignore: added via SQL directly
+        // @ts-expect-error: added via SQL directly
         match_mode: input.matchMode || 'SCRIM_5V5',
-        // @ts-ignore: added via SQL directly
+        // @ts-expect-error: added via SQL directly
         is_private: input.isPrivate || false,
-        // @ts-ignore: added via SQL directly
+        // @ts-expect-error: added via SQL directly
         passcode: input.passcode || null,
-        // @ts-ignore: added via SQL directly
+        // @ts-expect-error: added via SQL directly
         room_access: input.isPrivate ? 'PRIVATE_INVITE' : 'PUBLIC_OPEN'
       }).eq('id', roomId);
     }
