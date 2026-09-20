@@ -130,7 +130,7 @@ export default function LeaderboardPage() {
   );
 
   return (
-    <main className="min-h-screen bg-[#0D0E1A] text-white pt-16 pb-16 px-4 md:px-8 font-mono relative select-none overflow-hidden">
+    <main className="min-h-screen bg-[#0D0E1A] text-white pt-4 pb-16 px-4 md:px-8 lg:px-[225px] font-mono relative select-none overflow-hidden">
       <SkyscraperTower position="LEFT_TOWER" />
       <SkyscraperTower position="RIGHT_TOWER" />
       {/* Ambient Lighting */}
@@ -138,7 +138,7 @@ export default function LeaderboardPage() {
       <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-[#E8B429]/5 rounded-full blur-[160px] pointer-events-none" />
 
       {/* Prize Pool Hero Card */}
-      <div className="flex flex-col items-center justify-center mb-8 mt-6">
+      <div className="flex flex-col items-center justify-center mb-6 mt-2">
         <div className="relative border border-[#E8B429]/40 bg-[#12121A]/90 px-8 py-5 rounded-lg text-center min-w-[320px] md:min-w-[420px] shadow-[0_0_30px_rgba(232,180,41,0.15)] ring-1 ring-[#E8B429]/20">
           <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-[#E8B429]" />
           <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-[#E8B429]" />

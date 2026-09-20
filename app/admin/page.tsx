@@ -15,7 +15,9 @@ import {
   Coins, 
   Terminal,
   ExternalLink,
-  Radio
+  Radio,
+  UserCog,
+  Crown
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -243,7 +245,7 @@ export default async function AdminMasterHubPage() {
             <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[#94A3B8]">
               SUB-SYSTEM GATEWAY MATRIX
             </h2>
-            <span className="text-[11px] font-mono text-zinc-500">6 Specialized Modules</span>
+            <span className="text-[11px] font-mono text-zinc-500">8 Specialized Modules</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -420,6 +422,64 @@ export default async function AdminMasterHubPage() {
               </p>
               <div className="mt-4 flex items-center gap-1.5 text-[11px] font-bold text-[#38BDF8]">
                 <span>จัดการการจัดส่ง</span>
+                <span>→</span>
+              </div>
+            </Link>
+
+            {/* 7. Role & Permission Management (Super Admin) */}
+            <Link
+              href="/admin/roles"
+              className={`group relative overflow-hidden rounded-xl border bg-[#1A1C2E] p-6 transition-all duration-200 hover:-translate-y-1 ${
+                isSuperAdmin 
+                  ? 'border-purple-500/40 hover:border-purple-400 hover:shadow-[0_8px_30px_rgba(168,85,247,0.2)]' 
+                  : 'opacity-40 pointer-events-none border-white/5'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-400">
+                  <UserCog className="w-5 h-5" />
+                </div>
+                <span className="rounded-full bg-purple-500/20 px-2.5 py-0.5 text-[10px] font-mono font-bold text-purple-300 border border-purple-500/40">
+                  SUPER ADMIN
+                </span>
+              </div>
+              <h3 className="text-lg font-black text-white group-hover:text-purple-300 transition-colors">
+                Role & Permission Matrix
+              </h3>
+              <p className="text-xs text-[#94A3B8] mt-1 line-clamp-2">
+                แต่งตั้ง ปรับเปลี่ยน และเพิกถอนสิทธิ์ Super Admin, Admin, Referee และ Marketplace Admin
+              </p>
+              <div className="mt-4 flex items-center gap-1.5 text-[11px] font-bold text-purple-400">
+                <span>จัดการสิทธิ์แอดมินทั้งหมด</span>
+                <span>→</span>
+              </div>
+            </Link>
+
+            {/* 8. Sponsors & Banners Operations */}
+            <Link
+              href="/admin/marketplace/sponsors"
+              className={`group relative overflow-hidden rounded-xl border bg-[#1A1C2E] p-6 transition-all duration-200 hover:-translate-y-1 ${
+                canAccessMarketplace 
+                  ? 'border-[#E8B429]/30 hover:border-[#E8B429] hover:shadow-[0_8px_30px_rgba(232,180,41,0.15)]' 
+                  : 'opacity-40 pointer-events-none border-white/5'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E8B429]/15 border border-[#E8B429]/30 text-[#E8B429]">
+                  <Crown className="w-5 h-5" />
+                </div>
+                <span className="rounded-full bg-[#E8B429]/15 px-2.5 py-0.5 text-[10px] font-mono font-bold text-[#E8B429] border border-[#E8B429]/30">
+                  SPONSORS & ADS
+                </span>
+              </div>
+              <h3 className="text-lg font-black text-white group-hover:text-[#E8B429] transition-colors">
+                Sponsor & Banner Ops
+              </h3>
+              <p className="text-xs text-[#94A3B8] mt-1 line-clamp-2">
+                จัดการข้อมูลสปอนเซอร์ แบนเนอร์ Skyscraper และแคมเปญโฆษณาพาร์ตเนอร์
+              </p>
+              <div className="mt-4 flex items-center gap-1.5 text-[11px] font-bold text-[#E8B429]">
+                <span>จัดการสปอนเซอร์ & แบนเนอร์</span>
                 <span>→</span>
               </div>
             </Link>

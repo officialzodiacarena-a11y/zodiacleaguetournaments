@@ -252,13 +252,49 @@ function renderStatusBadge(status: TournamentItem['status']) {
 export default async function TournamentRegistryPage() {
   const data = await getRegistryData();
 
+  const displayTournaments: TournamentItem[] =
+    data.tournaments.length > 0
+      ? data.tournaments
+      : [
+          {
+            id: 'mock-qualifier-1',
+            circuitSeasonText: `${data.activeSeason} CIRCUIT`,
+            name: `${data.activeSeason} OPEN QUALIFIER #1`,
+            status: 'NOT_YET_OPEN',
+            format: 'DOUBLE_ELIMINATION',
+            prizePoolZp: 1000,
+            entryFeeAp: 100,
+            prizeTopText: 'TOP 8',
+            dateRangeText: data.registrationDeadlineText !== 'TBA' ? data.registrationDeadlineText : 'SOON',
+            yearText: '2026',
+            registeredTeams: 0,
+            maxTeams: 12,
+            accentTheme: 'purple',
+          },
+          {
+            id: 'mock-qualifier-2',
+            circuitSeasonText: `${data.activeSeason} CIRCUIT`,
+            name: `${data.activeSeason} REGIONAL PREVIEW`,
+            status: 'NOT_YET_OPEN',
+            format: 'DOUBLE_ELIMINATION',
+            prizePoolZp: 2500,
+            entryFeeAp: 250,
+            prizeTopText: 'TOP 4',
+            dateRangeText: 'TBA',
+            yearText: '2026',
+            registeredTeams: 0,
+            maxTeams: 16,
+            accentTheme: 'gold',
+          },
+        ];
+
   return (
     <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 select-none relative">
       <SkyscraperTower position="LEFT_TOWER" />
       <SkyscraperTower position="RIGHT_TOWER" />
 
       {/* 2. PAGE HEADER */}
-      <div className="max-w-[1200px] mx-auto px-6 md:px-10 pt-12 pb-8">
+      <div className="max-w-[1200px] mx-auto px-6 md:px-10 lg:px-[210px] pt-4 pb-6">
         <div className="flex items-center gap-3 mb-2.5">
           <span className="text-[11px] font-bold tracking-[0.18em] text-[#E8B429]/60 uppercase">ลีก · LEAGUE</span>
           <div className="h-[1px] w-10 bg-gradient-to-r from-[#E8B429]/50 to-transparent" />
@@ -273,7 +309,7 @@ export default async function TournamentRegistryPage() {
       </div>
 
       {/* 3. SEASON SELECTOR */}
-      <div className="max-w-[1200px] mx-auto px-6 md:px-10">
+      <div className="max-w-[1200px] mx-auto px-6 md:px-10 lg:px-[210px]">
         <div className="flex items-end border-b border-[#E8B429]/15">
           {SEASONS.map((s) => {
             const isActive = s === data.activeSeason;
@@ -299,15 +335,8 @@ export default async function TournamentRegistryPage() {
       </div>
 
       {/* 4. TOURNAMENTS GRID */}
-      {data.tournaments.length === 0 ? (
-        <div className="max-w-[1200px] mx-auto px-6 md:px-10 mb-10">
-          <div className="rounded-xl border border-white/10 bg-[#1A1C2E] p-12 text-center text-sm text-[#75798c]">
-            ยังไม่มีทัวร์นาเมนต์ในซีซันนี้
-          </div>
-        </div>
-      ) : (
-        <div className="max-w-[1200px] mx-auto px-6 md:px-10 grid grid-cols-1 md:grid-cols-2 gap-5 mb-10">
-          {data.tournaments.map((tour) => {
+      <div className="max-w-[1200px] mx-auto px-6 md:px-10 lg:px-[210px] grid grid-cols-1 md:grid-cols-2 gap-5 mb-10">
+        {displayTournaments.map((tour) => {
             const fillPercentage = tour.maxTeams > 0 ? (tour.registeredTeams / tour.maxTeams) * 100 : 0;
             const isConcluded = tour.status === 'CONCLUDED';
             const isNotYetOpen = tour.status === 'NOT_YET_OPEN';
@@ -405,8 +434,7 @@ export default async function TournamentRegistryPage() {
               </div>
             );
           })}
-        </div>
-      )}
+      </div>
 
       {/* 5. ZP SUMMARY STRIP */}
       {data.userZpSummary && (

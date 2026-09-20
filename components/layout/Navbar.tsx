@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   User,
+  Shield,
 } from 'lucide-react';
 
 function computeZodiacSign(dateOfBirth: string | null): ZodiacSign | null {
@@ -78,13 +79,23 @@ export default function Navbar() {
           return;
         }
 
+        // Fetch active user roles
+        const { data: userRoles } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('player_id', playerRow.id)
+          .is('revoked_at', null);
+
+        const roles = (userRoles || []).map((r) => r.role);
+
         const validatedUser = NavbarUserSchema.safeParse({
           id: playerRow.id,
           userId: playerRow.user_id,
           displayName: playerRow.display_name || authUser.email?.split('@')[0] || 'Athlete',
           avatarUrl: playerRow.avatar_url,
           zodiacSign: computeZodiacSign(playerRow.date_of_birth),
-          apBalance: playerRow.ap_balance || 0
+          apBalance: playerRow.ap_balance || 0,
+          roles: roles
         });
 
         if (validatedUser.success && isMounted) {
@@ -140,6 +151,29 @@ export default function Navbar() {
     }
   };
 
+  const roleConfig = React.useMemo(() => {
+    const roles = user?.roles || [];
+    if (roles.includes('SUPER_ADMIN')) {
+      return { label: 'SUPER ADMIN', badge: 'ROOT', href: '/admin' };
+    }
+    if (roles.includes('ADMIN')) {
+      return { label: 'LEAGUE ADMIN', badge: 'ADMIN', href: '/admin' };
+    }
+    if (roles.includes('REFEREE')) {
+      return { label: 'REFEREE DESK', badge: 'OPS', href: '/admin/command-room' };
+    }
+    if (roles.includes('CASTER')) {
+      return { label: 'CASTER ROOM', badge: 'LIVE', href: '/spectate' };
+    }
+    if (roles.includes('MARKETPLACE_ADMIN')) {
+      return { label: 'MARKET ADMIN', badge: 'STORE', href: '/admin/marketplace' };
+    }
+    if (roles.includes('MODERATOR')) {
+      return { label: 'MODERATOR', badge: 'CREW', href: '/admin' };
+    }
+    return null;
+  }, [user?.roles]);
+
   const navLinks = [
     { label: 'HOME', href: '/' },
     { label: 'TOURNAMENT', href: '/tournament' },
@@ -151,7 +185,8 @@ export default function Navbar() {
       isBadge: isMarketplaceDemoEnabled ? 'DEMO' : null
     },
     { label: 'AI ORACLE', href: '/chatbot' },
-    ...(user ? [{ label: 'DASHBOARD', href: '/dashboard' }] : [])
+    ...(user ? [{ label: 'DASHBOARD', href: '/dashboard' }] : []),
+    ...(roleConfig ? [{ label: roleConfig.label, href: roleConfig.href, isBadge: roleConfig.badge }] : [])
   ];
 
   const isActive = (path: string) => pathname === path;
@@ -232,6 +267,18 @@ export default function Navbar() {
                     {user.displayName}
                   </span>
                 </Link>
+
+                {/* DYNAMIC ROLE BADGE BUTTON */}
+                {roleConfig && (
+                  <Link
+                    href={roleConfig.href}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black tracking-wider transition-all bg-red-950/60 border border-red-500/50 text-red-300 hover:bg-red-900/80 hover:border-red-400 shadow-[0_0_12px_rgba(239,68,68,0.25)] group"
+                    title={roleConfig.label}
+                  >
+                    <Shield className="w-3.5 h-3.5 text-red-400 group-hover:animate-pulse" />
+                    <span>{roleConfig.label}</span>
+                  </Link>
+                )}
 
                 {/* RED OUTLINE LOGOUT BUTTON (STRICT SPEC) */}
                 <button
