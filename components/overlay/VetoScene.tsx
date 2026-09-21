@@ -3,8 +3,9 @@
 // รวม Sponsor Tower ซ้าย/ขวา + รายละเอียดแมตช์ + ลำดับแมพของซีรีส์ทั้งหมด (BO1/BO3/BO5)
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { SkyscraperTower } from "@/components/sponsor/SkyscraperTower";
+import { parseVetoFormat, type VetoStep } from "@/lib/veto/engine";
 import {
   DetailCell,
   TEAM_A_TEXT,
@@ -28,10 +29,23 @@ export interface VetoSceneProps {
   seriesScoreB: number;
   vetoes: OverlayVeto[];
   games: OverlayGame[];
+  // ลำดับสเต็ปจาก tournament_stages.veto_format (ไม่ส่งมา = ลำดับเริ่มต้น 5 สเต็ป)
+  steps?: VetoStep[];
+  // เวลาหมดของสเต็ปปัจจุบัน (ms) — ไม่ส่ง/ null = ไม่แสดงเวลา
+  deadlineMs?: number | null;
 }
 
-// จำนวนสเต็ปของ Veto Board (BAN, BAN, PICK, PICK, BAN, BAN, DECIDER) — ตรงกับ finish_veto และ API auto-decider
-const TOTAL_STEPS = 7;
+// ลำดับสเต็ปเริ่มต้นเมื่อไม่มี veto_format (BAN, BAN, PICK, PICK, DECIDER)
+const DEFAULT_STEPS: VetoStep[] = parseVetoFormat(null).steps;
+
+function actionBadgeClass(action: string): string {
+  return action === "BAN"
+    ? "bg-rose-500/10 text-rose-400 border border-rose-500/30"
+    : action === "PICK"
+      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+      : "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30";
+}
+
 export function VetoScene({
   teamA,
   teamB,
@@ -44,8 +58,19 @@ export function VetoScene({
   seriesScoreB,
   vetoes,
   games,
+  steps,
+  deadlineMs = null,
 }: VetoSceneProps) {
-  const isComplete = vetoes.length >= TOTAL_STEPS;
+  const stepList = steps && steps.length > 0 ? steps : DEFAULT_STEPS;
+  const isComplete = vetoes.length >= stepList.length;
+
+  // นับเวลาถอยหลังของสเต็ปปัจจุบัน (อัปเดตทุกวินาที)
+  const [now, setNow] = useState<number>(() => Date.now());
+  useEffect(() => {
+    if (deadlineMs === null) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [deadlineMs]);
   const teamTextClass = (teamId: string | null) =>
     teamId === teamA.id ? TEAM_A_TEXT : teamId === teamB.id ? TEAM_B_TEXT : "text-gray-500";
   const teamTag = (teamId: string | null) =>
@@ -97,12 +122,15 @@ export function VetoScene({
           </div>
         </div>
 
-        {/* VETO STEPS */}
-        <div className="grid grid-cols-7 gap-4 mb-7">
-          {Array.from({ length: TOTAL_STEPS }).map((_, index) => {
-            const stepOrder = index + 1;
+        {/* VETO STEPS (จำนวนและลำดับตาม tournament_stages.veto_format) */}
+        <div className="grid gap-4 mb-7" style={{ gridTemplateColumns: `repeat(${stepList.length}, minmax(0, 1fr))` }}>
+          {stepList.map((planned) => {
+            const stepOrder = planned.step;
             const activeVeto = vetoes.find((v) => v.step_order === stepOrder);
-            const isCurrent = stepOrder === vetoes.length + 1;
+            const isCurrent = !activeVeto && stepOrder === vetoes.length + 1;
+            const plannedTeamId = planned.team === "A" ? teamA.id : planned.team === "B" ? teamB.id : null;
+            const secondsLeft = isCurrent && deadlineMs !== null ? Math.max(0, Math.ceil((deadlineMs - now) / 1000)) : null;
+            const badgeAction = activeVeto?.action ?? planned.action;
 
             return (
               <div
@@ -112,32 +140,26 @@ export function VetoScene({
                     ? "border-[#C9A84C] bg-[#C9A84C]/5 shadow-[0_0_15px_rgba(201,168,76,0.15)]"
                     : activeVeto
                       ? "border-white/5 bg-[#0D0E1A]/40"
-                      : "border-white/5 bg-transparent opacity-30"
+                      : "border-white/5 bg-transparent opacity-40"
                 }`}
               >
                 <div className="flex justify-between items-start">
                   <span className="font-mono text-xs font-black text-gray-500">#{stepOrder}</span>
-                  {activeVeto && (
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest ${
-                        activeVeto.action === "BAN"
-                          ? "bg-rose-500/10 text-rose-400 border border-rose-500/30"
-                          : activeVeto.action === "PICK"
-                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                            : "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30"
-                      }`}
-                    >
-                      {activeVeto.action}
-                    </span>
-                  )}
+                  <span className={`px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest ${actionBadgeClass(badgeAction)} ${activeVeto ? "" : "opacity-70"}`}>
+                    {badgeAction}
+                  </span>
                 </div>
 
                 <div className="my-4 text-center">
                   <p className="font-mono text-sm font-bold text-white truncate">
-                    {activeVeto ? activeVeto.map_name : isCurrent ? "WAITING..." : "—"}
+                    {activeVeto ? activeVeto.map_name : isCurrent ? (planned.action === "DECIDER" ? "DECIDING..." : "WAITING...") : "—"}
                   </p>
-                  <p className={`font-mono text-[9px] mt-1 uppercase font-bold ${activeVeto ? teamTextClass(activeVeto.team_id) : "text-gray-500"}`}>
-                    {activeVeto ? teamTag(activeVeto.team_id) : ""}
+                  <p
+                    className={`font-mono text-[9px] mt-1 uppercase font-bold ${
+                      activeVeto ? teamTextClass(activeVeto.team_id) : teamTextClass(plannedTeamId)
+                    }`}
+                  >
+                    {activeVeto ? teamTag(activeVeto.team_id) : plannedTeamId ? teamTag(plannedTeamId) : "SYSTEM"}
                   </p>
                 </div>
 
@@ -145,13 +167,17 @@ export function VetoScene({
                   {activeVeto?.action === "DECIDER" ? (
                     <span className="text-amber-500/80 font-bold">AUTO DECIDER</span>
                   ) : activeVeto?.was_auto ? (
-                    <span className="text-amber-500/80 animate-pulse font-bold">⚠️ AUTO TIMEOUT</span>
+                    <span className="text-amber-500/80 animate-pulse font-bold">AUTO TIMEOUT</span>
                   ) : activeVeto ? (
                     <span className="text-neutral-500">SELECTION LOCKED</span>
+                  ) : isCurrent && secondsLeft !== null ? (
+                    <span className={`font-bold tabular-nums ${secondsLeft <= 10 ? "text-rose-400 animate-pulse" : "text-[#C9A84C]"}`}>
+                      CHOOSING... {secondsLeft}s
+                    </span>
                   ) : isCurrent ? (
                     <span className="text-[#C9A84C] animate-pulse font-bold">CHOOSING...</span>
                   ) : (
-                    <span className="text-neutral-700">LOCKED</span>
+                    <span className="text-neutral-700">UPCOMING</span>
                   )}
                 </div>
               </div>

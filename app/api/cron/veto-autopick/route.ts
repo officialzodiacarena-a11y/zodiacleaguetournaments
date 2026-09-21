@@ -1,55 +1,36 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { resolveVetoProgress } from '@/lib/veto/service';
 
+// Cron สำรองของ Veto Auto-pick (ต้องมี CRON_SECRET)
+// เดิม: แบนแมพสุ่ม 1 อันในทุกแมตช์ VETO ทุกครั้งที่ถูกเรียก โดยไม่ตรวจเวลา ไม่ดูลำดับ และไม่ปิด Veto
+// ตอนนี้: ใช้ Veto Step Engine — เติมเฉพาะสเต็ปที่หมดเวลาตาม veto_format (BAN/PICK ตามลำดับ), DECIDER อัตโนมัติ, ปิด Veto (VETO -> LIVE) เมื่อครบ
+// หมายเหตุ: heartbeat หลักคือ POST /api/v1/matches/[id]/veto/tick ที่ Overlay เรียกทุก ~5 วินาที ตัว cron นี้เป็นตัวสำรองสำหรับตัวตั้งเวลาภายนอก
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
   if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const adminSupabase = await createAdminClient();
+  const admin = createAdminClient();
+  const { data: vetoMatches } = await admin.from('matches').select('id').eq('status', 'VETO');
 
-  const { data: vetoMatches } = await adminSupabase
-    .from('matches')
-    .select(`
-      id, status, team_a_id, team_b_id,
-      stage:tournament_stages(map_pool)
-    `)
-    .eq('status', 'VETO');
+  const processed: Array<{ matchId: string; applied: Array<{ step: number; action: string; map_name: string }>; complete: boolean }> = [];
 
-  const processed: Array<{ matchId: string; autoPickedMap: string }> = [];
-
-  for (const match of vetoMatches || []) {
-    const stageData = Array.isArray(match.stage) ? match.stage[0] : match.stage;
-    const mapPool: string[] = (stageData?.map_pool as string[]) || [];
-
-    const { data: doneVetoes } = await adminSupabase
-      .from('map_vetoes')
-      .select('step_order, map_name')
-      .eq('match_id', match.id)
-      .order('step_order', { ascending: true });
-
-    const usedMapNames = (doneVetoes || []).map((v) => v.map_name.toLowerCase());
-    const remainingMaps = mapPool.filter((m) => !usedMapNames.includes(m.toLowerCase()));
-
-    if (remainingMaps.length > 0) {
-      const randomMap = remainingMaps[Math.floor(Math.random() * remainingMaps.length)];
-      const nextStepOrder = (doneVetoes?.length || 0) + 1;
-      const isEven = nextStepOrder % 2 === 0;
-      const teamId = isEven ? match.team_b_id : match.team_a_id;
-
-      await adminSupabase.from('map_vetoes').insert({
-        match_id: match.id,
-        step_order: nextStepOrder,
-        action: 'BAN',
-        team_id: teamId,
-        map_name: randomMap,
-        was_auto: true,
-      });
-
-      processed.push({ matchId: match.id, autoPickedMap: randomMap });
+  for (const match of vetoMatches ?? []) {
+    try {
+      const progress = await resolveVetoProgress(admin, match.id);
+      if (progress && (progress.inserted.length > 0 || progress.finalized)) {
+        processed.push({
+          matchId: match.id,
+          applied: progress.inserted.map((r) => ({ step: r.step_order, action: r.action, map_name: r.map_name })),
+          complete: progress.complete,
+        });
+      }
+    } catch (error: unknown) {
+      console.error('[veto-autopick] failed for match', match.id, error instanceof Error ? error.message : error);
     }
   }
 
-  return NextResponse.json({ success: true, processed_count: processed.length, processed });
+  return NextResponse.json({ success: true, checked: vetoMatches?.length ?? 0, processed_count: processed.length, processed });
 }

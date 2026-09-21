@@ -1,140 +1,107 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { cleanIds } from '@/types/supabase-helpers';
+import { cleanIds, asInsert } from '@/types/supabase-helpers';
+import { teamIdForSide, validateAction } from '@/lib/veto/engine';
+import { loadVetoContext, resolveVetoProgress } from '@/lib/veto/service';
 
+// Ban / Pick แมพ โดยกัปตัน / ผู้จัดการ / โค้ชของทีมที่ถึงตา
+// ลำดับสเต็ป ทีมที่ต้องทำ ชนิด action และเวลา 60 วินาทีต่อสเต็ป มาจาก tournament_stages.veto_format (Veto Step Engine: lib/veto/engine.ts)
+// - สเต็ปที่หมดเวลาแล้วระบบเลือกแมพให้ก่อน (Auto-pick) แล้วจึงตรวจคำสั่งนี้
+// - DECIDER เลือกอัตโนมัติ และสถานะแมตช์เปลี่ยน VETO -> LIVE เมื่อครบทุกสเต็ป
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   const supabase = await createClient();
-  const resolvedParams = await params;
-  const matchId = resolvedParams.id;
+  const { id: matchId } = await params;
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: player } = await supabase
-    .from('players')
-    .select('id')
-    .eq('user_id', user.id)
-    .single();
-
+  const { data: player } = await supabase.from('players').select('id').eq('user_id', user.id).single();
   if (!player) {
     return NextResponse.json({ error: 'Player profile not found' }, { status: 404 });
   }
 
-  const body = await request.json();
-  const { action, map_name } = body;
-
-  if (!action || !map_name) {
-    return NextResponse.json({ error: 'action and map_name are required' }, { status: 400 });
+  let body: { action?: unknown; map_name?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+  const mapName = typeof body.map_name === 'string' ? body.map_name.trim() : '';
+  const action = typeof body.action === 'string' ? body.action : null;
+  if (!mapName) {
+    return NextResponse.json({ error: 'map_name is required' }, { status: 400 });
   }
 
-  const { data: match, error: matchErr } = await supabase
-    .from('matches')
-    .select(`
-      id, status, team_a_id, team_b_id,
-      stage:tournament_stages(map_pool, veto_format)
-    `)
-    .eq('id', matchId)
-    .single();
-
-  if (matchErr || !match) {
+  const admin = createAdminClient();
+  let ctx = await loadVetoContext(admin, matchId);
+  if (!ctx) {
     return NextResponse.json({ error: 'Match not found' }, { status: 404 });
   }
-
-  if (match.status !== 'VETO') {
+  if (ctx.match.status !== 'VETO') {
     return NextResponse.json({ error: 'MATCH_NOT_IN_VETO: Match is not in VETO status' }, { status: 422 });
   }
 
-  const { data: completedSteps } = await supabase
-    .from('map_vetoes')
-    .select('*')
-    .eq('match_id', matchId)
-    .order('step_order', { ascending: true });
-
-  const stepsDone = completedSteps || [];
-  const currentStepOrder = stepsDone.length + 1;
-
-  const alreadyUsed = stepsDone.some((s) => s.map_name.toLowerCase() === map_name.toLowerCase());
-  if (alreadyUsed) {
-    return NextResponse.json({ error: 'MAP_ALREADY_VETOED: Map has already been picked or banned' }, { status: 409 });
+  // 1) เติมสเต็ปที่หมดเวลาไปแล้ว (Auto-pick) ก่อนตรวจว่าตอนนี้ถึงตาใคร
+  const before = await resolveVetoProgress(admin, matchId);
+  if (before?.complete) {
+    return NextResponse.json({ error: 'VETO_COMPLETE: Veto ครบทุกสเต็ปแล้ว (สเต็ปที่หมดเวลาถูกระบบเลือกให้)' }, { status: 409 });
   }
+  ctx = (await loadVetoContext(admin, matchId)) ?? ctx;
 
-  const stageData = Array.isArray(match.stage) ? match.stage[0] : match.stage;
-  const mapPool: string[] = (stageData?.map_pool as string[]) || [];
-  if (mapPool.length > 0 && !mapPool.some((m) => m.toLowerCase() === map_name.toLowerCase())) {
-    return NextResponse.json({ error: 'INVALID_MAP: Map is not in stage map pool' }, { status: 422 });
-  }
-
+  // 2) สิทธิ์: ต้องเป็น CAPTAIN / MANAGER / COACH ที่ ACTIVE ของทีมใดทีมหนึ่งในแมตช์นี้
   const { data: memberships, error: memberError } = await supabase
     .from('team_members')
     .select('team_id, role')
     .eq('player_id', player.id)
     .eq('status', 'ACTIVE')
-    .in('team_id', cleanIds(match.team_a_id, match.team_b_id))
+    .in('team_id', cleanIds(ctx.match.team_a_id, ctx.match.team_b_id))
     .in('role', ['CAPTAIN', 'MANAGER', 'COACH']);
 
   if (memberError || !memberships || memberships.length === 0) {
     return NextResponse.json({ error: 'FORBIDDEN: Must be Captain, Manager, or Coach' }, { status: 403 });
   }
+  const side = memberships[0].team_id === ctx.match.team_a_id ? 'A' : 'B';
 
-  const userTeamId = memberships[0].team_id;
-  const isEvenStep = currentStepOrder % 2 === 0;
-  const expectedTeamId = isEvenStep ? match.team_b_id : match.team_a_id;
-
-  if (userTeamId !== expectedTeamId) {
-    return NextResponse.json({ error: 'NOT_YOUR_TURN: It is not your turn to veto' }, { status: 403 });
+  // 3) ตรวจตามลำดับใน veto_format (ตาของทีม, ชนิด action, แมพใน Pool, แมพซ้ำ)
+  const check = validateAction(ctx.config, ctx.pool, ctx.rows, { side, action, mapName }, ctx.vetoStartMs);
+  if (!check.ok) {
+    return NextResponse.json({ error: `${check.code}: ${check.message}` }, { status: check.httpStatus });
   }
 
-  const adminSupabase = await createAdminClient();
-
-  const { data: newVeto, error: insertErr } = await adminSupabase
+  const { data: newVeto, error: insertErr } = await admin
     .from('map_vetoes')
-    .insert({
-      match_id: matchId,
-      step_order: currentStepOrder,
-      action,
-      team_id: userTeamId,
-      map_name,
-      was_auto: false,
-    })
+    .insert(
+      asInsert<'map_vetoes'>({
+        match_id: matchId,
+        step_order: check.step.step,
+        action: check.step.action,
+        team_id: teamIdForSide(check.step.team, ctx.match.team_a_id, ctx.match.team_b_id),
+        map_name: check.mapName,
+        was_auto: false,
+        deadline_at: check.deadlineMs === null ? null : new Date(check.deadlineMs).toISOString(),
+      })
+    )
     .select()
     .single();
 
   if (insertErr) {
+    if (insertErr.code === '23505') {
+      return NextResponse.json({ error: 'STEP_ALREADY_TAKEN: สเต็ปนี้ถูกบันทึกไปแล้ว' }, { status: 409 });
+    }
     return NextResponse.json({ error: insertErr.message }, { status: 500 });
   }
 
-  const remainingMaps = mapPool.filter((m) => !stepsDone.some((s) => s.map_name.toLowerCase() === m.toLowerCase()) && m.toLowerCase() !== map_name.toLowerCase());
+  // 4) เติม DECIDER อัตโนมัติและปิด Veto (VETO -> LIVE) ถ้าถึงสเต็ปสุดท้าย
+  const after = await resolveVetoProgress(admin, matchId);
 
-  if (remainingMaps.length === 1) {
-    await adminSupabase.from('map_vetoes').insert({
-      match_id: matchId,
-      step_order: currentStepOrder + 1,
-      action: 'DECIDER',
-      team_id: null,
-      map_name: remainingMaps[0],
-      was_auto: true,
-    });
-
-    const nowIso = new Date().toISOString();
-    await adminSupabase
-      .from('matches')
-      .update({ status: 'LIVE', started_at: nowIso, updated_at: nowIso })
-      .eq('id', matchId);
-
-    await adminSupabase.from('match_state_transitions').insert({
-      match_id: matchId,
-      from_status: 'VETO',
-      to_status: 'LIVE',
-      trigger_source: 'SYSTEM',
-      reason: 'Veto process completed with decider map determined',
-    });
-  }
-
-  return NextResponse.json(newVeto, { status: 201 });
+  return NextResponse.json(
+    { ...newVeto, veto_complete: Boolean(after?.complete), match_status: after?.status ?? ctx.match.status },
+    { status: 201 }
+  );
 }
