@@ -4,6 +4,41 @@ import React, { useEffect, useState, useCallback, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
+
+export type MatchStatus = 'SCHEDULED' | 'READY_CHECK' | 'VETO' | 'LIVE' | 'PAUSED' | 'AWAITING_RESULT' | 'DISPUTED' | 'COMPLETED' | 'FORFEITED' | 'WALKOVER' | 'BYE' | 'CANCELLED';
+
+export interface MatchData {
+  tournament_id: string;
+  format_config?: any;
+  id: string;
+  status: MatchStatus;
+  team_a_id: string | null;
+  team_b_id: string | null;
+  score_a: number;
+  score_b: number;
+  rounds_won_a: number;
+  rounds_won_b: number;
+  lobby_code: string | null;
+  external_stream_url: string | null;
+  team_a?: { name: string; tag: string };
+  team_b?: { name: string; tag: string };
+  tournament_stages?: any;
+}
+
+export interface StreamTelemetry {
+  is_connected: boolean;
+  current_fps: number;
+  current_bitrate_kbps: number;
+  health_status: 'HEALTHY' | 'DEGRADED' | 'DISCONNECTED';
+  connected_at: string | null;
+}
+
+export interface MatchFormatConfig {
+  sequence: any[];
+  team_a_first: boolean;
+  time_limit_seconds: number;
+}
+
 const ALLOWED_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
   SCHEDULED: ["READY_CHECK", "CANCELLED"],
   READY_CHECK: ["VETO", "CANCELLED", "FORFEITED", "WALKOVER"],
@@ -15,6 +50,7 @@ const ALLOWED_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
   COMPLETED: [],
   FORFEITED: [],
   WALKOVER: [],
+  BYE: [],
   CANCELLED: [],
 };
 

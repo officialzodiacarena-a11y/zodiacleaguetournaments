@@ -302,10 +302,10 @@ export default function MatchBroadcastOverlay({
           const agentsA = ['Jett', 'Reyna', 'Omen', 'Killjoy', 'Sova'];
           const agentsB = ['Raze', 'Phoenix', 'Brimstone', 'Cypher', 'Breach'];
           const newRosterA = teamMembers.filter(m => m.team_id === teamAData.id).map((m, idx) => ({
-            id: m.id, name: m.players.display_name, agent: agentsA[idx % 5], kills: 0, deaths: 0, assists: 0, ultPoints: 0, ultMax: 7, armor: 'HEAVY', weapon: 'Vandal', credits: 8000, minNext: 2000
+            id: m.id, name: (Array.isArray(m.players) ? m.players[0]?.display_name : (m.players as any)?.display_name) || "Unknown", agent: agentsA[idx % 5], kills: 0, deaths: 0, assists: 0, ultPoints: 0, ultMax: 7, armor: "HEAVY" as const, weapon: 'Vandal', credits: 8000, minNext: 2000
           }));
           const newRosterB = teamMembers.filter(m => m.team_id === teamBData.id).map((m, idx) => ({
-            id: m.id, name: m.players.display_name, agent: agentsB[idx % 5], kills: 0, deaths: 0, assists: 0, ultPoints: 0, ultMax: 7, armor: 'HEAVY', weapon: 'Phantom', credits: 8000, minNext: 2000
+            id: m.id, name: (Array.isArray(m.players) ? m.players[0]?.display_name : (m.players as any)?.display_name) || "Unknown", agent: agentsB[idx % 5], kills: 0, deaths: 0, assists: 0, ultPoints: 0, ultMax: 7, armor: "HEAVY" as const, weapon: 'Phantom', credits: 8000, minNext: 2000
           }));
           if (newRosterA.length) setRosterA(newRosterA);
           if (newRosterB.length) setRosterB(newRosterB);
