@@ -27,8 +27,12 @@ export interface OverlayGame {
   winner_team_id?: string | null;
 }
 
-export const TEAM_A_TEXT = "text-[#00D4FF]";
-export const TEAM_B_TEXT = "text-[#FF4655]";
+// สีประจำทีม ให้ตรงกับล็อบบี้ของเกม Valorant: ทีม A = Attackers (แดง), ทีม B = Defenders (เขียวอมฟ้า)
+// ที่เดียวที่กำหนดสี — class ของ Tailwind ต้องเขียนเป็นข้อความตรงๆ จึงมี 2 คู่ต้องแก้พร้อมกัน
+export const TEAM_A_HEX = "#FF4655";
+export const TEAM_B_HEX = "#2DD4BF";
+export const TEAM_A_TEXT = "text-[#FF4655]";
+export const TEAM_B_TEXT = "text-[#2DD4BF]";
 
 export function DetailCell({ label, value, valueClass = "text-white" }: { label: string; value: string; valueClass?: string }) {
   return (

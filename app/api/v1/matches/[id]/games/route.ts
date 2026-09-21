@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireBroadcastRole } from '@/lib/auth/require-broadcast-role';
+import { loadSeriesState } from '@/lib/overlay/match-series';
+import { planAfterGameRecorded } from '@/lib/overlay/series-flow';
+import { asUpdate } from '@/types/supabase-helpers';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function GET(
@@ -34,10 +38,9 @@ export async function POST(
   const resolvedParams = await params;
   const matchId = resolvedParams.id;
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  // บันทึกผลเกม/สถิติผู้เล่น: เฉพาะ REFEREE / ADMIN / SUPER_ADMIN (เดิมตรวจแค่ล็อกอิน แล้วเขียนด้วย admin client)
+  const auth = await requireBroadcastRole(supabase);
+  if (!auth.ok) return auth.response;
 
   const body = await request.json();
   const {
@@ -111,12 +114,15 @@ export async function POST(
     return NextResponse.json({ error: insertErr.message }, { status: 500 });
   }
 
-  // ปรับ Match สถานะเป็น AWAITING_RESULT หาก Match กำลัง LIVE อยู่
-  if (match.status === 'LIVE' || match.status === 'VETO') {
-    await adminSupabase
-      .from('matches')
-      .update({ status: 'AWAITING_RESULT', updated_at: new Date().toISOString() })
-      .eq('id', matchId);
+  // ปรับสถานะเป็น AWAITING_RESULT เฉพาะเมื่อซีรีส์ตัดสินผลครบแล้ว (ชนะครบ / ครบ best_of) ตามสเปก T2.3-C01
+  // ระหว่างซีรีส์ต้องคงสถานะ LIVE ไว้ เพราะ trigger ใน DB ไม่ให้ AWAITING_RESULT กลับเป็น LIVE (ไปได้แค่ COMPLETED / DISPUTED)
+  // ฉาก Overlay ระหว่างเกมจำไว้ใน format_config.overlay_scene (ผูกกับจำนวนเกมที่จบแล้ว)
+  const state = await loadSeriesState(adminSupabase, matchId);
+  if (state) {
+    const matchUpdate = planAfterGameRecorded(state, new Date().toISOString());
+    if (matchUpdate) {
+      await adminSupabase.from('matches').update(asUpdate<'matches'>(matchUpdate)).eq('id', matchId);
+    }
   }
 
   return NextResponse.json(newGame, { status: 201 });
