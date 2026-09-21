@@ -20,8 +20,8 @@ export interface MatchData {
   score_b: number;
   rounds_won_a: number;
   rounds_won_b: number;
-  lobby_code: string | null;
-  external_stream_url: string | null;
+  lobby_code?: string | null;
+  external_stream_url?: string | null;
   team_a?: { name: string; tag: string };
   team_b?: { name: string; tag: string };
   tournament_stages?: any;
@@ -31,7 +31,7 @@ export interface StreamTelemetry {
   is_connected: boolean;
   current_fps: number;
   current_bitrate_kbps: number;
-  health_status: 'HEALTHY' | 'DEGRADED' | 'DISCONNECTED';
+  health_status: "HEALTHY" | "DEGRADED" | "DISCONNECTED" | "UNSTABLE";
   connected_at: string | null;
 }
 
