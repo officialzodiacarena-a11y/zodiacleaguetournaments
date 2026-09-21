@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { requireBroadcastRole } from '@/lib/auth/require-broadcast-role';
 import { loadSeriesState } from '@/lib/overlay/match-series';
+import { planAfterGameRecorded } from '@/lib/overlay/series-flow';
 import { asUpdate } from '@/types/supabase-helpers';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -116,18 +117,10 @@ export async function POST(
   // ปรับสถานะเป็น AWAITING_RESULT เฉพาะเมื่อซีรีส์ตัดสินผลครบแล้ว (ชนะครบ / ครบ best_of) ตามสเปก T2.3-C01
   // ระหว่างซีรีส์ต้องคงสถานะ LIVE ไว้ เพราะ trigger ใน DB ไม่ให้ AWAITING_RESULT กลับเป็น LIVE (ไปได้แค่ COMPLETED / DISPUTED)
   // ฉาก Overlay ระหว่างเกมจำไว้ใน format_config.overlay_scene (ผูกกับจำนวนเกมที่จบแล้ว)
-  if (match.status === 'LIVE' || match.status === 'AWAITING_RESULT') {
-    const state = await loadSeriesState(adminSupabase, matchId);
-    if (state) {
-      const baseConfig =
-        state.match.format_config && typeof state.match.format_config === 'object' && !Array.isArray(state.match.format_config)
-          ? (state.match.format_config as Record<string, unknown>)
-          : {};
-      const matchUpdate: Record<string, unknown> = {
-        updated_at: new Date().toISOString(),
-        format_config: { ...baseConfig, overlay_scene: 'AWAITING_RESULT', overlay_scene_games: state.completedCount },
-      };
-      if (match.status === 'LIVE' && state.seriesOver) matchUpdate.status = 'AWAITING_RESULT';
+  const state = await loadSeriesState(adminSupabase, matchId);
+  if (state) {
+    const matchUpdate = planAfterGameRecorded(state, new Date().toISOString());
+    if (matchUpdate) {
       await adminSupabase.from('matches').update(asUpdate<'matches'>(matchUpdate)).eq('id', matchId);
     }
   }

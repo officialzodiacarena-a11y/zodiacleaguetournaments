@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireBroadcastRole } from '@/lib/auth/require-broadcast-role';
 import { loadSeriesState } from '@/lib/overlay/match-series';
+import { withSceneMemory } from '@/lib/overlay/series-flow';
 import { asUpdate } from '@/types/supabase-helpers';
 
 // บันทึกฉาก OBS Overlay ที่ผู้คุมเลือก ลง matches.format_config.overlay_scene
@@ -44,14 +45,9 @@ export async function PATCH(
       return NextResponse.json({ error: { code: 'MATCH_NOT_FOUND', message: 'ไม่พบข้อมูลแมตช์' } }, { status: 404 });
     }
 
-    const baseConfig =
-      match.format_config && typeof match.format_config === 'object' && !Array.isArray(match.format_config)
-        ? (match.format_config as Record<string, unknown>)
-        : {};
-
     const { error } = await admin
       .from('matches')
-      .update(asUpdate<'matches'>({ format_config: { ...baseConfig, overlay_scene: parsed.data.scene, overlay_scene_games: state.completedCount }, updated_at: new Date().toISOString() }))
+      .update(asUpdate<'matches'>({ format_config: withSceneMemory(match.format_config, parsed.data.scene, state.completedCount), updated_at: new Date().toISOString() }))
       .eq('id', matchId);
 
     if (error) {

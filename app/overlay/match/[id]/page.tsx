@@ -7,6 +7,7 @@ import { IntermissionScene } from "@/components/overlay/IntermissionScene";
 import { BuyPhaseHud, type BuyPhasePlayer } from "@/components/overlay/BuyPhaseHud";
 import { LiveRosterSidebar } from "@/components/overlay/LiveRosterSidebar";
 import { LiveScoreboard } from "@/components/overlay/LiveScoreboard";
+import { resolveDisplayScene } from "@/lib/overlay/series-flow";
 import { SponsorBadge } from "@/components/overlay/SponsorBadge";
 import { buildSeriesGames, countSeriesWins, isGameDone, type OverlayGameStats, type OverlayParticipantStat } from "@/components/overlay/series";
 
@@ -396,19 +397,10 @@ export default function MatchBroadcastOverlay({
   }
 
   const { team_a, team_b, status, score_a, score_b, rounds_won_a, rounds_won_b } = match;
-  // ฉากที่ผู้คุมเลือกไว้ (บันทึกใน DB): ระหว่างซีรีส์ BO3/BO5 สถานะแมตช์ยังเป็น LIVE (DB ไม่ให้ AWAITING_RESULT กลับเป็น LIVE)
-  // ฉาก Intermission ระหว่างเกม และฉาก LIVE ของเกมถัดไปจึงต้องจำไว้ เพื่อให้ OBS ที่รีเฟรชกลางเกมขึ้นฉากถูก
-  // ใช้เฉพาะเมื่อจำนวนเกมที่จบแล้วตรงกับตอนที่เลือกฉาก (กันค่าค้างจากรอบเทสก่อน)
+  // ฉากที่แสดง: Broadcast จากผู้คุม (ทันที) → ฉากที่จำไว้ใน DB (ช่วงแข่ง, ตรงกับจำนวนเกมที่จบ) → สถานะแมตช์
+  // ระหว่างซีรีส์ BO3/BO5 สถานะแมตช์ยังเป็น LIVE (DB ไม่ให้ AWAITING_RESULT กลับเป็น LIVE) จึงต้องจำฉากไว้ให้ OBS ที่รีเฟรชกลางเกม
   const completedGames = games.filter((g) => isGameDone(g)).length;
-  const savedScene = typeof match.format_config?.overlay_scene === "string" ? match.format_config.overlay_scene : null;
-  const savedSceneGames = typeof match.format_config?.overlay_scene_games === "number" ? match.format_config.overlay_scene_games : null;
-  const savedGameScene =
-    (status === "LIVE" || status === "AWAITING_RESULT") &&
-    (savedScene === "LIVE" || savedScene === "AWAITING_RESULT") &&
-    savedSceneGames === completedGames
-      ? savedScene
-      : null;
-  const displayStatus = broadcastScene ?? savedGameScene ?? status;
+  const displayStatus = resolveDisplayScene({ status, broadcastScene, formatConfig: match.format_config, completedGames });
   const showScoreboard = displayStatus === "LIVE" || status === "PAUSED";
   // แมพที่กำลังแข่ง: match_games ถูกสร้างเมื่อเกมจบเท่านั้น จึงหาจากลำดับ Veto (PICK/DECIDER) — เกมที่ LIVE ก่อน ถ้าไม่มีใช้เกมถัดไปที่ยังไม่จบ
   const { totalGames, seriesGames, nextGameNumber } = buildSeriesGames(match.best_of ?? 3, vetoes, games);
