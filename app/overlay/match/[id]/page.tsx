@@ -293,6 +293,24 @@ export default function MatchBroadcastOverlay({
         };
 
         setMatch(refinedMatch);
+        const { data: teamMembers } = await supabase
+          .from('team_members')
+          .select('id, team_id, players!team_members_player_id_fkey(display_name)')
+          .in('team_id', [teamAData.id, teamBData.id]);
+
+        if (teamMembers) {
+          const agentsA = ['Jett', 'Reyna', 'Omen', 'Killjoy', 'Sova'];
+          const agentsB = ['Raze', 'Phoenix', 'Brimstone', 'Cypher', 'Breach'];
+          const newRosterA = teamMembers.filter(m => m.team_id === teamAData.id).map((m, idx) => ({
+            id: m.id, name: m.players.display_name, agent: agentsA[idx % 5], kills: 0, deaths: 0, assists: 0, ultPoints: 0, ultMax: 7, armor: 'HEAVY', weapon: 'Vandal', credits: 8000, minNext: 2000
+          }));
+          const newRosterB = teamMembers.filter(m => m.team_id === teamBData.id).map((m, idx) => ({
+            id: m.id, name: m.players.display_name, agent: agentsB[idx % 5], kills: 0, deaths: 0, assists: 0, ultPoints: 0, ultMax: 7, armor: 'HEAVY', weapon: 'Phantom', credits: 8000, minNext: 2000
+          }));
+          if (newRosterA.length) setRosterA(newRosterA);
+          if (newRosterB.length) setRosterB(newRosterB);
+        }
+
 
         const { data: gamesData, error: gamesError } = await supabase
           .from("match_games")
@@ -564,6 +582,53 @@ export default function MatchBroadcastOverlay({
               <span className="font-mono text-[10px] font-black text-rose-400 uppercase tracking-[3px]">MATCH POINT</span>
             </div>
           )}
+        </section>
+      )}
+
+      
+      {/* SPONSOR LOGO */}
+      {showScoreboard && (
+        <section className="absolute bottom-8 left-8 z-40">
+          <div className="bg-white/10 backdrop-blur-md px-6 py-4 rounded-xl border border-white/20">
+            <div className="text-xs font-mono text-gray-400 mb-2 uppercase tracking-widest">Official Sponsor</div>
+            <div className="text-xl font-black text-white italic">ZODIAC LOGO</div>
+          </div>
+        </section>
+      )}
+
+      {/* LEFT SIDEBAR (TEAM A) */}
+      {showScoreboard && (
+        <section className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-40 w-[300px]">
+          {rosterA.map((player) => (
+            <div key={player.id} className="flex items-center gap-3 bg-[#0A0A0F]/80 backdrop-blur-md border border-[#00D4FF]/50 rounded-r-xl p-2 shadow-lg">
+              <div className="w-12 h-12 bg-gray-800 rounded-md border border-white/20 flex items-center justify-center text-xs font-black text-[#00D4FF]">{player.agent.slice(0,2).toUpperCase()}</div>
+              <div className="flex-1">
+                <div className="text-xs font-bold text-white truncate">{player.name}</div>
+                <div className="w-full h-1.5 bg-gray-700 mt-1 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#00D4FF] w-[100%]" />
+                </div>
+              </div>
+              <div className="text-xs font-mono font-bold text-gray-300 w-12 text-right">100 HP</div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* RIGHT SIDEBAR (TEAM B) */}
+      {showScoreboard && (
+        <section className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-40 w-[300px]">
+          {rosterB.map((player) => (
+            <div key={player.id} className="flex items-center gap-3 bg-[#0A0A0F]/80 backdrop-blur-md border border-[#FF4655]/50 rounded-l-xl p-2 shadow-lg flex-row-reverse">
+              <div className="w-12 h-12 bg-gray-800 rounded-md border border-white/20 flex items-center justify-center text-xs font-black text-[#FF4655]">{player.agent.slice(0,2).toUpperCase()}</div>
+              <div className="flex-1 text-right">
+                <div className="text-xs font-bold text-white truncate">{player.name}</div>
+                <div className="w-full h-1.5 bg-gray-700 mt-1 rounded-full overflow-hidden flex justify-end">
+                  <div className="h-full bg-[#FF4655] w-[100%]" />
+                </div>
+              </div>
+              <div className="text-xs font-mono font-bold text-gray-300 w-12 text-left">100 HP</div>
+            </div>
+          ))}
         </section>
       )}
 
