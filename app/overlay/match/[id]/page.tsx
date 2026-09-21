@@ -3,6 +3,7 @@
 import React, { useEffect, useState, use } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { VetoScene } from "@/components/overlay/VetoScene";
+import { IntermissionScene } from "@/components/overlay/IntermissionScene";
 
 export type MatchStatus =
   | "SCHEDULED"
@@ -672,80 +673,20 @@ export default function MatchBroadcastOverlay({
         />
       )}
 
-      {/* 4. INTERMISSION & STATS TRANSITIONS */}
-      {displayStatus === "AWAITING_RESULT" && (
-        <section className="absolute inset-0 flex items-center justify-end bg-black/90 backdrop-blur-md z-30 p-20">
-          <div className="flex gap-10 max-w-[1400px] w-full">
-            <div className="flex-1 bg-[#12121A]/80 border border-gray-800 rounded-2xl p-8 relative shadow-2xl">
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-[#C9A84C]/30 bg-[#C9A84C]/10 text-[#C9A84C] tracking-wider uppercase font-bold">
-                MAP SERIES RESULTS
-              </span>
-              <h2 className="text-2xl font-black text-white font-mono tracking-widest uppercase mt-2 mb-6">
-                Match Intermission
-              </h2>
-
-              <div className="space-y-4">
-                {games.map((g) => (
-                  <div key={g.id} className="flex justify-between items-center bg-[#0D0E1A]/60 p-5 rounded-xl border border-white/5">
-                    <div>
-                      <p className="font-mono text-[10px] text-gray-500">MAP {g.game_number}</p>
-                      <p className="font-mono text-lg font-black text-white">{g.map_name || "PENDING MAP"}</p>
-                    </div>
-                    <div className="flex items-center gap-6 font-mono">
-                      <span className={`text-2xl font-black ${g.score_a > g.score_b ? "text-[#C9A84C]" : "text-neutral-500"}`}>
-                        {g.score_a}
-                      </span>
-                      <span className="text-xs text-neutral-600">vs</span>
-                      <span className={`text-2xl font-black ${g.score_b > g.score_a ? "text-[#C9A84C]" : "text-neutral-500"}`}>
-                        {g.score_b}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {mvp && (
-              <div className="w-[450px] bg-gradient-to-b from-[#12121A]/95 to-[#0A0A0F] border-2 border-[#C9A84C]/50 rounded-2xl p-8 relative overflow-hidden shadow-2xl flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-center border-b border-white/5 pb-4 mb-6">
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-[#00D4FF]/30 bg-[#00D4FF]/10 text-[#00D4FF] tracking-wider uppercase font-bold">
-                      MVP FOR CURRENT MAP
-                    </span>
-                    <span className="font-mono text-sm text-[#C9A84C] font-black">{mvp.team_tag}</span>
-                  </div>
-
-                  <div className="text-center my-6">
-                    <div className="inline-flex h-20 w-20 items-center justify-center rounded-xl bg-gradient-to-br from-[#1b1c2b] to-[#252740] border border-[#C9A84C]/30 text-white font-mono text-2xl font-black mb-3">
-                      {mvp.display_name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <h3 className="font-mono text-2xl font-black text-white uppercase tracking-wider">{mvp.display_name}</h3>
-                    <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mt-1">AGENT: {mvp.agent_played}</p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3 my-6">
-                    <div className="bg-white/5 rounded-lg p-3 text-center border border-white/5">
-                      <p className="font-mono text-[9px] text-gray-500 uppercase">K / D / A</p>
-                      <p className="font-mono text-sm font-black text-white mt-1">{mvp.kills}/{mvp.deaths}/{mvp.assists}</p>
-                    </div>
-                    <div className="bg-white/5 rounded-lg p-3 text-center border border-white/5">
-                      <p className="font-mono text-[9px] text-gray-500 uppercase">AVG ACS</p>
-                      <p className="font-mono text-sm font-black text-[#00D4FF] mt-1">{mvp.acs}</p>
-                    </div>
-                    <div className="bg-white/5 rounded-lg p-3 text-center border border-white/5">
-                      <p className="font-mono text-[9px] text-gray-500 uppercase">HS RATE</p>
-                      <p className="font-mono text-sm font-black text-[#C9A84C] mt-1">{mvp.headshot_pct}%</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t border-white/5 pt-4 text-center">
-                  <span className="font-mono text-[9px] text-neutral-500 uppercase">ZODIAC ARENA PERFORMANCE ENGINE</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
+      {/* 4. INTERMISSION & STATS TRANSITIONS (Sponsor Towers + Series Score + All Games + MVP) */}
+      {displayStatus === "AWAITING_RESULT" && team_a && team_b && (
+        <IntermissionScene
+          teamA={team_a}
+          teamB={team_b}
+          bestOf={match.best_of ?? 3}
+          matchCode={match.id.slice(0, 8).toUpperCase()}
+          tournamentName={tournamentName}
+          stageName={stageName}
+          roundLabel={match.round_label ?? null}
+          vetoes={vetoes}
+          games={games}
+          mvp={mvp}
+        />
       )}
 
       {/* 5. BUY PHASE HUD OVERLAY (TOGGLED VIA ALT+C OR REALTIME BROADCAST) */}
