@@ -4,6 +4,7 @@ import React, { useEffect, useState, use } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { VetoScene } from "@/components/overlay/VetoScene";
 import { IntermissionScene } from "@/components/overlay/IntermissionScene";
+import type { OverlayGameStats, OverlayParticipantStat } from "@/components/overlay/series";
 
 export type MatchStatus =
   | "SCHEDULED"
@@ -44,6 +45,7 @@ export interface MatchData {
   team_b_ready_at: string | null;
   lobby_code: string | null;
   round_label?: string | null;
+  winner_team_id?: string | null;
   team_a?: TeamMetadata;
   team_b?: TeamMetadata;
 }
@@ -237,6 +239,7 @@ export default function MatchBroadcastOverlay({
   const [rosterB, setRosterB] = useState<BuyPhasePlayer[]>(DEFAULT_ROSTER_B);
   const [tournamentName, setTournamentName] = useState<string | null>(null);
   const [stageName, setStageName] = useState<string | null>(null);
+  const [seriesStats, setSeriesStats] = useState<OverlayGameStats[]>([]);
 
   // บังคับพื้นหลังโปร่งใสให้ OBS Browser Source ดึงไปใช้ได้จริง
   useEffect(() => {
@@ -363,6 +366,14 @@ export default function MatchBroadcastOverlay({
           if (partRes.ok && isMounted) {
             const partJson = await partRes.json();
             if (partJson.games && partJson.games.length > 0) {
+              // สถิติผู้เล่นรายเกมทั้งหมด ใช้สรุปรวมทั้งซีรีส์บนฉากแมตช์จบ
+              setSeriesStats(
+                (partJson.games as Array<{ game_number: number; map_name: string | null; participants?: OverlayParticipantStat[] }>).map((g) => ({
+                  game_number: g.game_number,
+                  map_name: g.map_name,
+                  participants: g.participants ?? [],
+                }))
+              );
               const latestGame = partJson.games[partJson.games.length - 1];
               const parts = latestGame.participants || [];
               const teamAParts = parts.filter((p: { team_id: string }) => p.team_id === teamAData.id);
@@ -673,8 +684,8 @@ export default function MatchBroadcastOverlay({
         />
       )}
 
-      {/* 4. INTERMISSION & STATS TRANSITIONS (Sponsor Towers + Series Score + All Games + MVP) */}
-      {displayStatus === "AWAITING_RESULT" && team_a && team_b && (
+      {/* 4. INTERMISSION (AWAITING_RESULT) & FINAL RESULT (COMPLETED): Sponsor Towers + Series Score + All Games + MVP */}
+      {(displayStatus === "AWAITING_RESULT" || displayStatus === "COMPLETED") && team_a && team_b && (
         <IntermissionScene
           teamA={team_a}
           teamB={team_b}
@@ -686,6 +697,11 @@ export default function MatchBroadcastOverlay({
           vetoes={vetoes}
           games={games}
           mvp={mvp}
+          isFinal={displayStatus === "COMPLETED"}
+          winnerTeamId={match.winner_team_id ?? null}
+          fallbackScoreA={score_a ?? 0}
+          fallbackScoreB={score_b ?? 0}
+          stats={seriesStats}
         />
       )}
 
