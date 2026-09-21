@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, use } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { VetoScene } from "@/components/overlay/VetoScene";
 
 export type MatchStatus =
   | "SCHEDULED"
@@ -41,6 +42,7 @@ export interface MatchData {
   team_a_ready_at: string | null;
   team_b_ready_at: string | null;
   lobby_code: string | null;
+  round_label?: string | null;
   team_a?: TeamMetadata;
   team_b?: TeamMetadata;
 }
@@ -232,6 +234,8 @@ export default function MatchBroadcastOverlay({
   const [showBuyPhase, setShowBuyPhase] = useState<boolean>(false);
   const [rosterA, setRosterA] = useState<BuyPhasePlayer[]>(DEFAULT_ROSTER_A);
   const [rosterB, setRosterB] = useState<BuyPhasePlayer[]>(DEFAULT_ROSTER_B);
+  const [tournamentName, setTournamentName] = useState<string | null>(null);
+  const [stageName, setStageName] = useState<string | null>(null);
 
   // บังคับพื้นหลังโปร่งใสให้ OBS Browser Source ดึงไปใช้ได้จริง
   useEffect(() => {
@@ -293,6 +297,25 @@ export default function MatchBroadcastOverlay({
         };
 
         setMatch(refinedMatch);
+
+        // ชื่อทัวร์นาเมนต์ / Stage สำหรับแถบรายละเอียดแมตช์ (ดึงแยก: ถ้าพลาดจะแสดง "—" และไม่กระทบ Overlay)
+        try {
+          const [tournamentRes, stageRes] = await Promise.all([
+            matchData.tournament_id
+              ? supabase.from("tournaments").select("name").eq("id", matchData.tournament_id).maybeSingle()
+              : Promise.resolve({ data: null }),
+            matchData.stage_id
+              ? supabase.from("tournament_stages").select("name").eq("id", matchData.stage_id).maybeSingle()
+              : Promise.resolve({ data: null }),
+          ]);
+          if (isMounted) {
+            setTournamentName(tournamentRes.data?.name ?? null);
+            setStageName(stageRes.data?.name ?? null);
+          }
+        } catch (nameErr) {
+          console.error("Failed to fetch tournament/stage names:", nameErr);
+        }
+
         const { data: teamMembers } = await supabase
           .from('team_members')
           .select('id, team_id, players!team_members_player_id_fkey(display_name)')
@@ -302,10 +325,10 @@ export default function MatchBroadcastOverlay({
           const agentsA = ['Jett', 'Reyna', 'Omen', 'Killjoy', 'Sova'];
           const agentsB = ['Raze', 'Phoenix', 'Brimstone', 'Cypher', 'Breach'];
           const newRosterA = teamMembers.filter(m => m.team_id === teamAData.id).map((m, idx) => ({
-            id: m.id, name: (Array.isArray(m.players) ? m.players[0]?.display_name : (m.players as any)?.display_name) || "Unknown", agent: agentsA[idx % 5], kills: 0, deaths: 0, assists: 0, ultPoints: 0, ultMax: 7, armor: "HEAVY" as const, weapon: 'Vandal', credits: 8000, minNext: 2000
+            id: m.id, name: (Array.isArray(m.players) ? m.players[0]?.display_name : (m.players as { display_name?: string } | null)?.display_name) || "Unknown", agent: agentsA[idx % 5], kills: 0, deaths: 0, assists: 0, ultPoints: 0, ultMax: 7, armor: "HEAVY" as const, weapon: 'Vandal', credits: 8000, minNext: 2000
           }));
           const newRosterB = teamMembers.filter(m => m.team_id === teamBData.id).map((m, idx) => ({
-            id: m.id, name: (Array.isArray(m.players) ? m.players[0]?.display_name : (m.players as any)?.display_name) || "Unknown", agent: agentsB[idx % 5], kills: 0, deaths: 0, assists: 0, ultPoints: 0, ultMax: 7, armor: "HEAVY" as const, weapon: 'Phantom', credits: 8000, minNext: 2000
+            id: m.id, name: (Array.isArray(m.players) ? m.players[0]?.display_name : (m.players as { display_name?: string } | null)?.display_name) || "Unknown", agent: agentsB[idx % 5], kills: 0, deaths: 0, assists: 0, ultPoints: 0, ultMax: 7, armor: "HEAVY" as const, weapon: 'Phantom', credits: 8000, minNext: 2000
           }));
           if (newRosterA.length) setRosterA(newRosterA);
           if (newRosterB.length) setRosterB(newRosterB);
@@ -632,86 +655,21 @@ export default function MatchBroadcastOverlay({
         </section>
       )}
 
-      {/* 3. MAP VETO OVERLAY */}
-      {displayStatus === "VETO" && (
-        <section className="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-md z-30 p-20">
-          <div className="w-[1200px] bg-[#12121A]/80 border border-gray-800 rounded-2xl p-8 relative shadow-[0_0_50px_rgba(0,212,255,0.05)]">
-            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-[#00D4FF]/40 to-transparent" />
-            <div className="flex justify-between items-center border-b border-white/5 pb-6 mb-8">
-              <div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-[#00D4FF]/30 bg-[#00D4FF]/10 text-[#00D4FF] tracking-wider uppercase font-bold">
-                  BAN/PICK STAGE ACTIVE
-                </span>
-                <h2 className="text-3xl font-black text-white font-mono tracking-widest uppercase mt-2">
-                  Map Veto Dashboard
-                </h2>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-neutral-500 font-mono">BO3 SERIES CONFIG</p>
-                <p className="text-sm font-black text-[#C9A84C] font-mono mt-1">{team_a?.tag} VS {team_b?.tag}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-7 gap-4 mb-8">
-              {Array.from({ length: 7 }).map((_, index) => {
-                const stepOrder = index + 1;
-                const activeVeto = vetoes.find((v) => v.step_order === stepOrder);
-                const isCurrent = stepOrder === vetoes.length + 1;
-
-                return (
-                  <div
-                    key={stepOrder}
-                    className={`rounded-xl border p-4 flex flex-col justify-between h-[180px] transition-all duration-300 ${
-                      isCurrent
-                        ? "border-[#C9A84C] bg-[#C9A84C]/5 shadow-[0_0_15px_rgba(201,168,76,0.15)]"
-                        : activeVeto
-                          ? "border-white/5 bg-[#0D0E1A]/40"
-                          : "border-white/5 bg-transparent opacity-30"
-                    }`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <span className="font-mono text-xs font-black text-gray-500">#{stepOrder}</span>
-                      {activeVeto && (
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest ${
-                            activeVeto.action === "BAN"
-                              ? "bg-rose-500/10 text-rose-400 border border-rose-500/30"
-                              : activeVeto.action === "PICK"
-                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                                : "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30"
-                          }`}
-                        >
-                          {activeVeto.action}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="my-4 text-center">
-                      <p className="font-mono text-sm font-bold text-white truncate">
-                        {activeVeto ? activeVeto.map_name : isCurrent ? "WAITING..." : "—"}
-                      </p>
-                      <p className="font-mono text-[9px] text-gray-500 mt-1 uppercase">
-                        {activeVeto?.team_id === team_a?.id ? team_a?.tag : activeVeto?.team_id === team_b?.id ? team_b?.tag : "DECIDER"}
-                      </p>
-                    </div>
-
-                    <div className="border-t border-white/5 pt-2 text-[9px] font-mono text-center">
-                      {activeVeto?.was_auto ? (
-                        <span className="text-amber-500/80 animate-pulse font-bold">⚠️ AUTO TIMEOUT</span>
-                      ) : activeVeto ? (
-                        <span className="text-neutral-500">SELECTION LOCKED</span>
-                      ) : isCurrent ? (
-                        <span className="text-[#C9A84C] animate-pulse font-bold">CHOOSING...</span>
-                      ) : (
-                        <span className="text-neutral-700">LOCKED</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
+      {/* 3. MAP VETO OVERLAY (Sponsor Towers + Match Details + Series Map Order) */}
+      {displayStatus === "VETO" && team_a && team_b && (
+        <VetoScene
+          teamA={team_a}
+          teamB={team_b}
+          bestOf={match.best_of ?? 3}
+          matchCode={match.id.slice(0, 8).toUpperCase()}
+          tournamentName={tournamentName}
+          stageName={stageName}
+          roundLabel={match.round_label ?? null}
+          seriesScoreA={score_a ?? 0}
+          seriesScoreB={score_b ?? 0}
+          vetoes={vetoes}
+          games={games}
+        />
       )}
 
       {/* 4. INTERMISSION & STATS TRANSITIONS */}

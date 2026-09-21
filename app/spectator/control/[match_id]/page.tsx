@@ -11,7 +11,7 @@ export interface MatchData {
   tournament_id: string;
   stage_id: string | null;
   best_of?: number;
-  format_config?: any;
+  format_config?: Record<string, unknown>;
   id: string;
   status: MatchStatus;
   team_a_id: string | null;
@@ -24,7 +24,7 @@ export interface MatchData {
   external_stream_url?: string | null;
   team_a?: { name: string; tag: string };
   team_b?: { name: string; tag: string };
-  tournament_stages?: any;
+  tournament_stages?: unknown;
 }
 
 export interface StreamTelemetry {
@@ -36,10 +36,13 @@ export interface StreamTelemetry {
 }
 
 export interface MatchFormatConfig {
-  sequence: any[];
-  team_a_first: boolean;
-  time_limit_seconds: number;
+  sequence?: unknown[];
+  team_a_first?: boolean;
+  time_limit_seconds?: number;
   stream_platform?: string;
+  lobby_code?: string;
+  stream_url?: string;
+  [key: string]: unknown;
 }
 
 const ALLOWED_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
