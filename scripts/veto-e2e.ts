@@ -11,11 +11,13 @@
 //   --match <matchId>   แมตช์เป้าหมาย (ค่าเริ่มต้น: แมตช์ทดสอบ a7606ae5-d83a-46f5-b422-652d5017b644)
 //   --maps a,b,c,d      แมพของสเต็ป BAN/PICK ที่เหลือ ตามลำดับ (ไม่ใส่/ไม่ครบ = ใช้แมพแรกที่ยังเหลือใน Pool)
 //   --apply             เขียนจริง (ต้องมี SUPABASE_SERVICE_ROLE_KEY ใน .env.local และสถานะแมตช์เป็น VETO)
+//   --ready             (ใช้คู่กับ --apply) ทำให้ทั้งสองทีม Ready แทนการกดที่หน้า Lobby: SCHEDULED -> READY_CHECK -> VETO
+//                       ไม่แตะรายชื่อสมาชิกทีม (การกดปุ่ม Ready ที่หน้าเว็บจะเพิ่มผู้กดเป็น CAPTAIN ของทีมนั้น) เริ่มนับเวลา 60 วินาทีของสเต็ปแรกทันที
 import fs from 'node:fs';
 import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database.types';
-import { asInsert } from '@/types/supabase-helpers';
+import { asInsert, asUpdate } from '@/types/supabase-helpers';
 import {
   currentStep,
   isVetoComplete,
@@ -49,6 +51,92 @@ function fail(message: string): never {
   process.exit(1);
 }
 
+type Db = ReturnType<typeof createClient<Database>>;
+
+// จำลองการกด Ready ของทั้งสองทีม (ขั้นตอนเดียวกับ POST /api/v1/matches/[id]/ready แต่ไม่ต้องล็อกอินและไม่เพิ่มสมาชิกทีม)
+// SCHEDULED -> READY_CHECK (ทีม A Ready, ตั้ง forfeit_deadline_at 15 นาที) -> VETO (ทีม B Ready)
+// trigger ใน DB บังคับลำดับ SCHEDULED -> READY_CHECK -> VETO จึงอัปเดตสองครั้ง พร้อมบันทึก match_state_transitions
+async function readyBothTeams(db: Db, ctx: NonNullable<Awaited<ReturnType<typeof loadVetoContext>>>, apply: boolean) {
+  const { match } = ctx;
+  console.log('\nโหมด --ready: ทำให้ทั้งสองทีม Ready แล้วเข้าสู่ VETO');
+  console.log(`  ทีม A ready_at: ${match.team_a_ready_at ?? '(ยังไม่ Ready)'}  |  ทีม B ready_at: ${match.team_b_ready_at ?? '(ยังไม่ Ready)'}`);
+
+  if (match.status !== 'SCHEDULED' && match.status !== 'READY_CHECK') {
+    const note = `สถานะแมตช์เป็น ${match.status} ใช้ --ready ได้เฉพาะ SCHEDULED หรือ READY_CHECK (รีเซ็ตแมตช์เป็น SCHEDULED ก่อน)`;
+    if (apply) fail(note);
+    console.log(`\n⚠ ${note}`);
+  }
+  if (ctx.config.source !== 'stage') fail('Stage นี้ไม่มี veto_format — แมตช์จะข้าม Veto ไป LIVE เอง ไม่ต้องใช้ --ready');
+  if (ctx.rows.length > 0) {
+    const note = `มีแถวใน map_vetoes อยู่แล้ว ${ctx.rows.length} แถว — ต้องล้างก่อนเริ่ม Veto ใหม่ (ไม่เช่นนั้นจะชน unique (match_id, step_order))`;
+    if (apply) fail(note);
+    console.log(`\n⚠ ${note}`);
+  }
+
+  console.log('\nแผน:');
+  if (match.status === 'SCHEDULED') console.log('  1) SCHEDULED → READY_CHECK  (ทีม A Ready, ตั้ง forfeit_deadline_at = +15 นาที)');
+  console.log('  2) READY_CHECK → VETO       (ทีม B Ready — เวลาถอยหลัง 60 วินาทีของสเต็ปแรกเริ่มนับจากตรงนี้)');
+  console.log('  ไม่แตะตาราง team_members');
+
+  if (!apply) {
+    console.log('\nนี่คือ dry-run — ยังไม่ได้เขียนอะไร ถ้าต้องการเขียนจริงเพิ่ม --apply');
+    return;
+  }
+
+  const t1 = new Date().toISOString();
+  if (match.status === 'SCHEDULED') {
+    const { data, error } = await db
+      .from('matches')
+      .update(
+        asUpdate<'matches'>({
+          status: 'READY_CHECK',
+          team_a_ready_at: match.team_a_ready_at ?? t1,
+          forfeit_deadline_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          updated_at: t1,
+        })
+      )
+      .eq('id', match.id)
+      .eq('status', 'SCHEDULED')
+      .select('id');
+    if (error) fail(`SCHEDULED → READY_CHECK ไม่สำเร็จ: ${error.message}`);
+    if (!data || data.length === 0) fail('สถานะแมตช์เปลี่ยนไประหว่างรัน (ไม่ใช่ SCHEDULED แล้ว) — ลองรันใหม่');
+    await db.from('match_state_transitions').insert({
+      match_id: match.id,
+      from_status: 'SCHEDULED',
+      to_status: 'READY_CHECK',
+      trigger_source: 'SYSTEM',
+      reason: 'E2E helper: team A ready',
+    });
+    console.log('  ✓ SCHEDULED → READY_CHECK');
+  }
+
+  const t2 = new Date().toISOString();
+  const { data, error } = await db
+    .from('matches')
+    .update(
+      asUpdate<'matches'>({
+        status: 'VETO',
+        team_a_ready_at: match.team_a_ready_at ?? t1,
+        team_b_ready_at: match.team_b_ready_at ?? t2,
+        updated_at: t2,
+      })
+    )
+    .eq('id', match.id)
+    .eq('status', 'READY_CHECK')
+    .select('id');
+  if (error) fail(`READY_CHECK → VETO ไม่สำเร็จ: ${error.message}`);
+  if (!data || data.length === 0) fail('สถานะแมตช์ไม่ใช่ READY_CHECK ตอนจะเข้า VETO — ตรวจสถานะแล้วลองใหม่');
+  await db.from('match_state_transitions').insert({
+    match_id: match.id,
+    from_status: 'READY_CHECK',
+    to_status: 'VETO',
+    trigger_source: 'SYSTEM',
+    reason: 'E2E helper: both teams ready',
+  });
+  console.log('  ✓ READY_CHECK → VETO');
+  console.log('\nแมตช์เข้าสู่ VETO แล้ว — เปิด Overlay ดูเวลาถอยหลัง 60 วินาที แล้วรันต่อด้วย: npx tsx scripts/veto-e2e.ts --maps ... --apply');
+}
+
 async function main() {
   const apply = process.argv.includes('--apply');
   const matchId = argValue('--match') ?? DEFAULT_MATCH_ID;
@@ -71,6 +159,12 @@ async function main() {
   console.log(`Veto ที่มีแล้ว: ${ctx.rows.length ? ctx.rows.map((r) => `${r.step_order}:${r.action}:${r.map_name}`).join(' | ') : '(ยังไม่มี)'}`);
 
   if (ctx.problems.length > 0) fail(`ตั้งค่า Veto ของ Stage ไม่ถูกต้อง: ${ctx.problems.join('; ')}`);
+
+  if (process.argv.includes('--ready')) {
+    await readyBothTeams(db, ctx, apply);
+    return;
+  }
+
   if (ctx.match.status !== 'VETO') {
     const note = `สถานะแมตช์เป็น ${ctx.match.status} ไม่ใช่ VETO (ต้องให้ทั้งสองทีมกด Ready จนเข้า VETO ก่อน)`;
     if (apply) fail(note);
