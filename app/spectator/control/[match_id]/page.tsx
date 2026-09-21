@@ -9,6 +9,7 @@ export type MatchStatus = 'SCHEDULED' | 'READY_CHECK' | 'VETO' | 'LIVE' | 'PAUSE
 
 export interface MatchData {
   tournament_id: string;
+  stage_id: string | null;
   format_config?: any;
   id: string;
   status: MatchStatus;
@@ -37,6 +38,7 @@ export interface MatchFormatConfig {
   sequence: any[];
   team_a_first: boolean;
   time_limit_seconds: number;
+  stream_platform?: string;
 }
 
 const ALLOWED_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
