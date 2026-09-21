@@ -1,5 +1,7 @@
 "use client";
 
+import { TEAM_A_HEX, TEAM_B_HEX } from "@/components/overlay/series";
+
 import React, { useEffect, useState, useCallback, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -25,6 +27,21 @@ export interface MatchData {
   team_a?: { name: string; tag: string };
   team_b?: { name: string; tag: string };
   tournament_stages?: unknown;
+}
+
+// สถานะซีรีส์สำหรับแผงกรอกสกอร์รอบ (GET /api/v1/matches/[id]/rounds)
+interface SeriesPanelState {
+  status: string;
+  best_of: number;
+  rounds_won_a: number;
+  rounds_won_b: number;
+  maps_won_a: number;
+  maps_won_b: number;
+  wins_needed: number;
+  completed_games: number;
+  series_over: boolean;
+  current_game_number: number | null;
+  current_map_name: string | null;
 }
 
 export interface StreamTelemetry {
@@ -121,6 +138,8 @@ export default function SpectatorHUDControlPanel({
   });
   const [userRole, setUserRole] = useState<string | null>(null);
   const [currentScene, setCurrentScene] = useState<string>("LIVE");
+  const [seriesState, setSeriesState] = useState<SeriesPanelState | null>(null);
+  const [roundBusy, setRoundBusy] = useState<boolean>(false);
   const [showBuyPhase, setShowBuyPhase] = useState<boolean>(false);
   const [activeChannel, setActiveChannel] = useState<RealtimeChannel | null>(null);
   const [bannerType, setBannerType] = useState<string>("NORMAL");
@@ -319,6 +338,7 @@ export default function SpectatorHUDControlPanel({
       return;
     }
 
+    // สลับทันทีด้วย Broadcast แล้วบันทึกลง DB เพื่อให้ OBS ที่รีเฟรชกลางเกมยังขึ้นฉากเดิม
     activeChannel.send({
       type: "broadcast",
       event: "scene_change",
@@ -327,6 +347,109 @@ export default function SpectatorHUDControlPanel({
 
     setCurrentScene(sceneName);
     setFeedback({ type: "info", msg: `สับเปลี่ยนหน้าจอ OBS Overlay เป็น [ ${sceneName} ] สำเร็จ` });
+    void persistScene(sceneName);
+  };
+
+  const persistScene = async (sceneName: "VETO" | "LIVE" | "AWAITING_RESULT") => {
+    try {
+      const res = await fetch(`/api/v1/matches/${matchId}/scene`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scene: sceneName }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        setFeedback({
+          type: "error",
+          msg: `สลับฉากแล้ว แต่บันทึกฉากลงระบบไม่สำเร็จ (${json?.error?.message || res.status}) — ถ้า OBS รีเฟรชฉากอาจกลับไปตามสถานะแมตช์`,
+        });
+      }
+    } catch {
+      setFeedback({ type: "error", msg: "สลับฉากแล้ว แต่บันทึกฉากลงระบบไม่สำเร็จ (เครือข่าย)" });
+    }
+  };
+
+  const refreshSeriesState = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/v1/matches/${matchId}/rounds`, { cache: "no-store" });
+      if (res.ok) setSeriesState((await res.json()) as SeriesPanelState);
+    } catch {
+      // ค่าเดิมยังคงอยู่ รอบโพลถัดไป
+    }
+  }, [matchId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/v1/matches/${matchId}/rounds`, { cache: "no-store" });
+        if (res.ok && !cancelled) setSeriesState((await res.json()) as SeriesPanelState);
+      } catch {
+        // ค่าเดิมยังคงอยู่ รอบโพลถัดไป
+      }
+    };
+    load();
+    const timer = setInterval(load, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [matchId]);
+
+  // กรอกสกอร์รอบ (ค่าสัมบูรณ์) — อัปเดตหน้าจอทันทีแล้วส่งเข้าระบบ Overlay รับผ่าน Realtime
+  const setRounds = async (roundsA: number, roundsB: number) => {
+    if (!seriesState || roundBusy) return;
+    const a = Math.max(0, Math.min(50, roundsA));
+    const b = Math.max(0, Math.min(50, roundsB));
+    const previous = seriesState;
+    setSeriesState({ ...seriesState, rounds_won_a: a, rounds_won_b: b });
+    setRoundBusy(true);
+    try {
+      const res = await fetch(`/api/v1/matches/${matchId}/rounds`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rounds_won_a: a, rounds_won_b: b }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        setSeriesState(previous);
+        setFeedback({ type: "error", msg: `บันทึกสกอร์รอบไม่สำเร็จ: ${json?.error?.message || res.status}` });
+      }
+    } catch {
+      setSeriesState(previous);
+      setFeedback({ type: "error", msg: "บันทึกสกอร์รอบไม่สำเร็จ (เครือข่าย)" });
+    } finally {
+      setRoundBusy(false);
+    }
+  };
+
+  // จบแมพ: บันทึกผลเกมจากสกอร์รอบ -> รีเซ็ตรอบเป็น 0-0 -> ขึ้นฉาก Intermission
+  const finishCurrentMap = async () => {
+    if (!seriesState || roundBusy) return;
+    const label = `MAP ${seriesState.current_game_number ?? "-"}${seriesState.current_map_name ? ` (${seriesState.current_map_name})` : ""}`;
+    if (!window.confirm(`จบ ${label} ที่สกอร์ ${seriesState.rounds_won_a} - ${seriesState.rounds_won_b} ใช่หรือไม่?\nระบบจะบันทึกผลเกม รีเซ็ตสกอร์รอบ และสลับ OBS ไปฉาก Intermission`)) return;
+    setRoundBusy(true);
+    try {
+      const res = await fetch(`/api/v1/matches/${matchId}/rounds/finish`, { method: "POST" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setFeedback({ type: "error", msg: `จบแมพไม่สำเร็จ: ${json?.error?.message || res.status}` });
+      } else {
+        activeChannel?.send({ type: "broadcast", event: "scene_change", payload: { scene: "AWAITING_RESULT" } });
+        setCurrentScene("AWAITING_RESULT");
+        setFeedback({ type: "info", msg: `จบ MAP ${json.game_number} เรียบร้อย (${json.score_a}-${json.score_b}) — OBS สลับเป็นฉาก Intermission แล้ว` });
+      }
+    } catch {
+      setFeedback({ type: "error", msg: "จบแมพไม่สำเร็จ (เครือข่าย)" });
+    } finally {
+      setRoundBusy(false);
+      refreshSeriesState();
+    }
+  };
+
+  // เริ่มแมพถัดไป: สลับ OBS กลับฉาก LIVE (สถานะแมตช์ใน DB ยังเป็น AWAITING_RESULT ระหว่างซีรีส์)
+  const startNextMap = () => {
+    changeLiveScene("LIVE");
   };
 
   const dispatchHUDNotification = () => {
@@ -681,6 +804,96 @@ export default function SpectatorHUDControlPanel({
                 {showBuyPhase ? "HUD: ACTIVE (Alt+C)" : "TOGGLE BUY PHASE"}
               </button>
             </div>
+          </div>
+
+          {/* ROUND SCORE & MAP CONTROL */}
+          <div className="bg-[#12121A] border border-white/5 rounded-xl p-5">
+            <h2 className="font-mono text-sm font-black text-[#C9A84C] uppercase tracking-wider mb-4 border-b border-white/5 pb-2">
+              🏁 Round Score &amp; Map Control
+            </h2>
+            {!seriesState ? (
+              <p className="font-mono text-[10px] text-gray-500">กำลังโหลดสถานะซีรีส์...</p>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between font-mono text-[10px] text-gray-400 uppercase tracking-wider">
+                  <span>
+                    MAP {seriesState.current_game_number ?? "-"}
+                    {seriesState.current_map_name ? ` • ${seriesState.current_map_name}` : ""}
+                  </span>
+                  <span>
+                    BO{seriesState.best_of} • MAPS{" "}
+                    <span style={{ color: TEAM_A_HEX }}>{seriesState.maps_won_a}</span> –{" "}
+                    <span style={{ color: TEAM_B_HEX }}>{seriesState.maps_won_b}</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {(["A", "B"] as const).map((side) => {
+                    const hex = side === "A" ? TEAM_A_HEX : TEAM_B_HEX;
+                    const value = side === "A" ? seriesState.rounds_won_a : seriesState.rounds_won_b;
+                    const tag = side === "A" ? match?.team_a?.tag : match?.team_b?.tag;
+                    const change = (delta: number) =>
+                      side === "A"
+                        ? setRounds(seriesState.rounds_won_a + delta, seriesState.rounds_won_b)
+                        : setRounds(seriesState.rounds_won_a, seriesState.rounds_won_b + delta);
+                    return (
+                      <div key={side} className="rounded-lg border bg-black/40 p-3 text-center" style={{ borderColor: `${hex}66` }}>
+                        <div className="font-mono text-[10px] font-black tracking-widest" style={{ color: hex }}>
+                          {tag || `TEAM ${side}`}
+                        </div>
+                        <div className="font-mono text-4xl font-black text-white my-2 tabular-nums">{value}</div>
+                        <div className="flex gap-2 justify-center">
+                          <button
+                            onClick={() => change(-1)}
+                            disabled={roundBusy || value <= 0}
+                            className="w-12 py-1.5 rounded border border-white/10 bg-black/50 font-mono text-lg font-black text-gray-300 hover:border-white/30 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            −
+                          </button>
+                          <button
+                            onClick={() => change(1)}
+                            disabled={roundBusy}
+                            className="w-12 py-1.5 rounded border font-mono text-lg font-black hover:bg-white/10 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                            style={{ borderColor: hex, color: hex }}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => setRounds(0, 0)}
+                    disabled={roundBusy || (seriesState.rounds_won_a === 0 && seriesState.rounds_won_b === 0)}
+                    className="py-2 rounded border border-white/10 bg-black/40 font-mono text-[10px] font-bold text-gray-300 hover:text-white disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    RESET 0–0
+                  </button>
+                  <button
+                    onClick={finishCurrentMap}
+                    disabled={roundBusy || seriesState.series_over}
+                    className="py-2 rounded border border-emerald-500/50 bg-emerald-500/10 font-mono text-[10px] font-black text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    END MAP
+                  </button>
+                  <button
+                    onClick={startNextMap}
+                    disabled={seriesState.series_over}
+                    className="py-2 rounded border border-[#C9A84C]/50 bg-[#C9A84C]/10 font-mono text-[10px] font-black text-[#C9A84C] hover:bg-[#C9A84C]/20 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    START NEXT MAP
+                  </button>
+                </div>
+
+                <p className="font-mono text-[9px] text-gray-500 leading-relaxed">
+                  * กด + / − ทุกครั้งที่จบรอบ (OBS อัปเดตทันที) • END MAP บันทึกผลเกมจากสกอร์รอบแล้วรีเซ็ต 0–0 และสลับไปฉาก Intermission •
+                  START NEXT MAP สลับกลับฉาก LIVE • แก้ได้เฉพาะสถานะ LIVE / PAUSED / AWAITING_RESULT (ตอนนี้ {seriesState.status})
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="bg-[#12121A] border border-white/5 rounded-xl p-5">

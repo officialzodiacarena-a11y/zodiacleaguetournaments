@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireBroadcastRole } from '@/lib/auth/require-broadcast-role';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asInsert } from '@/types/supabase-helpers';
 
@@ -27,10 +28,9 @@ export async function POST(
   const matchId = resolvedParams.id;
   const gameNumber = parseInt(resolvedParams.game_number);
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  // บันทึกผลเกม/สถิติผู้เล่น: เฉพาะ REFEREE / ADMIN / SUPER_ADMIN (เดิมตรวจแค่ล็อกอิน แล้วเขียนด้วย admin client)
+  const auth = await requireBroadcastRole(supabase);
+  if (!auth.ok) return auth.response;
 
   const { data: game, error: gameErr } = await supabase
     .from('match_games')
