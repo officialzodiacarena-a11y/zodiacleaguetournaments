@@ -8,6 +8,7 @@ import { BuyPhaseHud, type BuyPhasePlayer } from "@/components/overlay/BuyPhaseH
 import { LiveRosterSidebar } from "@/components/overlay/LiveRosterSidebar";
 import { LiveScoreboard } from "@/components/overlay/LiveScoreboard";
 import { resolveDisplayScene } from "@/lib/overlay/series-flow";
+import { currentDeadlineMs, parseVetoFormat, vetoStartMsFromMatch, type VetoConfig } from "@/lib/veto/engine";
 import { SponsorBadge } from "@/components/overlay/SponsorBadge";
 import { buildSeriesGames, countSeriesWins, isGameDone, type OverlayGameStats, type OverlayParticipantStat } from "@/components/overlay/series";
 
@@ -78,6 +79,8 @@ export interface MapVeto {
   map_name: string;
   side_choice: string | null;
   was_auto: boolean;
+  created_at?: string | null;
+  deadline_at?: string | null;
 }
 
 export interface MVPlayerStats {
@@ -119,6 +122,7 @@ export default function MatchBroadcastOverlay({
   const [rosterB, setRosterB] = useState<BuyPhasePlayer[]>([]);
   const [tournamentName, setTournamentName] = useState<string | null>(null);
   const [stageName, setStageName] = useState<string | null>(null);
+  const [vetoConfig, setVetoConfig] = useState<VetoConfig>(() => parseVetoFormat(null));
   const [seriesStats, setSeriesStats] = useState<OverlayGameStats[]>([]);
   const statusRef = useRef<MatchStatus | null>(null);
 
@@ -133,6 +137,19 @@ export default function MatchBroadcastOverlay({
       document.body.style.background = prevBodyBg;
     };
   }, []);
+
+  // Veto heartbeat: ระหว่างสถานะ VETO เรียกระบบเติมสเต็ปที่หมดเวลา (Auto-pick) และ DECIDER ทุก ~5 วินาที
+  // (Vercel Hobby ตั้ง cron ถี่ระดับวินาทีไม่ได้; ผลลัพธ์ถูกกำหนดจากเวลา + veto_format จึงเรียกซ้ำได้ปลอดภัย)
+  const isVetoStatus = match?.status === "VETO";
+  useEffect(() => {
+    if (!isVetoStatus) return;
+    const tick = () => {
+      fetch(`/api/v1/matches/${matchId}/veto/tick`, { method: "POST" }).catch(() => undefined);
+    };
+    tick();
+    const timer = setInterval(tick, 5000);
+    return () => clearInterval(timer);
+  }, [isVetoStatus, matchId]);
 
   // Hotkey listener สำหรับ Alt+C เพื่อ Toggle Buy Phase HUD
   useEffect(() => {
@@ -191,12 +208,13 @@ export default function MatchBroadcastOverlay({
               ? supabase.from("tournaments").select("name").eq("id", matchData.tournament_id).maybeSingle()
               : Promise.resolve({ data: null }),
             matchData.stage_id
-              ? supabase.from("tournament_stages").select("name").eq("id", matchData.stage_id).maybeSingle()
+              ? supabase.from("tournament_stages").select("name, veto_format").eq("id", matchData.stage_id).maybeSingle()
               : Promise.resolve({ data: null }),
           ]);
           if (isMounted) {
             setTournamentName(tournamentRes.data?.name ?? null);
             setStageName(stageRes.data?.name ?? null);
+            setVetoConfig(parseVetoFormat((stageRes.data as { veto_format?: unknown } | null)?.veto_format ?? null));
           }
         } catch (nameErr) {
           console.error("Failed to fetch tournament/stage names:", nameErr);
@@ -494,6 +512,8 @@ export default function MatchBroadcastOverlay({
           seriesScoreB={score_b ?? 0}
           vetoes={vetoes}
           games={games}
+          steps={vetoConfig.steps}
+          deadlineMs={status === "VETO" ? currentDeadlineMs(vetoConfig, vetoes, vetoStartMsFromMatch({ team_a_ready_at: match.team_a_ready_at, team_b_ready_at: match.team_b_ready_at, updated_at: (match as { updated_at?: string }).updated_at ?? new Date(0).toISOString() })) : null}
         />
       )}
 
