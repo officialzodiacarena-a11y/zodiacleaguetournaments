@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asUpdate, cleanIds } from '@/types/supabase-helpers';
 import type { Database } from '@/types/database.types';
+import { decideReadyAccess, isStaffRole } from '@/lib/match/ready-access';
 
 interface MatchReadyUpdatePayload {
   updated_at: string;
@@ -59,22 +60,23 @@ export async function POST(
     );
   }
 
-  let bodySide: string | null = null;
+  let rawSide: unknown = null;
   try {
     const body = await request.json();
-    bodySide = body?.side ?? null;
+    rawSide = body?.side ?? null;
   } catch {
     // empty body is fine
   }
 
-  // 4. ตรวจสอบบทบาทของ Player (Referee / Admin / Team Member)
+  // 4. ตรวจสิทธิ์: ต้องเป็นสตาฟ (ADMIN / SUPER_ADMIN / REFEREE ของแมตช์) หรือผู้นำทีม (OWNER / CAPTAIN / MANAGER / COACH) ที่ ACTIVE ของทีมนั้น
+  //    ห้ามสร้างหรือแก้ team_members จากปุ่ม Ready (O12) — ตัดสินด้วย decideReadyAccess ใน lib/match/ready-access.ts
   const { data: userRoles } = await supabase
     .from('user_roles')
     .select('role')
     .eq('player_id', player.id)
     .is('revoked_at', null);
 
-  const isStaff = (userRoles ?? []).some((r) => ['ADMIN', 'SUPER_ADMIN', 'REFEREE', 'CASTER'].includes(r.role)) || match.referee_id === player.id;
+  const isStaff = isStaffRole((userRoles ?? []).map((r) => r.role)) || match.referee_id === player.id;
 
   const { data: memberships } = await supabase
     .from('team_members')
@@ -83,49 +85,22 @@ export async function POST(
     .eq('status', 'ACTIVE')
     .in('team_id', cleanIds(match.team_a_id, match.team_b_id));
 
-  let userTeamId: string | null = memberships?.[0]?.team_id ?? null;
-
-  // หากระบุ side มา หรือยังไม่มีทีม ให้นั่งลงทีมนั้นอัตโนมัติ
-  const adminSupabase = await createAdminClient();
-  if (bodySide === 'team_a' && match.team_a_id) {
-    userTeamId = match.team_a_id;
-    await adminSupabase.from('team_members').upsert({
-      team_id: match.team_a_id,
-      player_id: player.id,
-      role: 'CAPTAIN',
-      status: 'ACTIVE',
-    }, { onConflict: 'team_id,player_id' });
-  } else if (bodySide === 'team_b' && match.team_b_id) {
-    userTeamId = match.team_b_id;
-    await adminSupabase.from('team_members').upsert({
-      team_id: match.team_b_id,
-      player_id: player.id,
-      role: 'CAPTAIN',
-      status: 'ACTIVE',
-    }, { onConflict: 'team_id,player_id' });
-  } else if (!userTeamId && !isStaff) {
-    // กำหนดให้นั่งฝั่งที่ยังว่าง/ยังไม่ Ready
-    if (!match.team_a_ready_at && match.team_a_id) {
-      userTeamId = match.team_a_id;
-      await adminSupabase.from('team_members').upsert({
-        team_id: match.team_a_id,
-        player_id: player.id,
-        role: 'CAPTAIN',
-        status: 'ACTIVE',
-      }, { onConflict: 'team_id,player_id' });
-    } else if (match.team_b_id) {
-      userTeamId = match.team_b_id;
-      await adminSupabase.from('team_members').upsert({
-        team_id: match.team_b_id,
-        player_id: player.id,
-        role: 'CAPTAIN',
-        status: 'ACTIVE',
-      }, { onConflict: 'team_id,player_id' });
-    }
+  const access = decideReadyAccess({
+    rawSide,
+    teamAId: match.team_a_id,
+    teamBId: match.team_b_id,
+    teamAReadyAt: match.team_a_ready_at,
+    isStaff,
+    memberships: memberships ?? [],
+  });
+  if (!access.ok) {
+    return NextResponse.json({ error: `${access.code}: ${access.message}` }, { status: access.httpStatus });
   }
 
+  const adminSupabase = await createAdminClient();
+  const userTeamId = access.teamId;
   const nowIso = new Date().toISOString();
-  const isTeamA = bodySide === 'team_a' || userTeamId === match.team_a_id || (!match.team_a_ready_at && isStaff);
+  const isTeamA = access.side === 'A';
 
   const updatePayload: MatchReadyUpdatePayload = {
     updated_at: nowIso,
