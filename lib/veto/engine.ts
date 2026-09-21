@@ -161,6 +161,24 @@ export function teamIdForSide(side: TeamSide | null, teamAId: string | null, tea
   return null;
 }
 
+// บทบาทในทีมที่ Ban/Pick แทนทีมได้
+export const VETO_TEAM_ROLES: readonly string[] = ['CAPTAIN', 'MANAGER', 'COACH'];
+
+// ฝั่งของผู้ใช้ในแมตช์นี้จากสมาชิกภาพ ACTIVE: ต้องเป็นผู้นำ (CAPTAIN / MANAGER / COACH) ของทีมเดียวเท่านั้น
+// เป็นผู้นำของทั้งสองทีม (ข้อมูลเก่าที่เกิดจาก O12) หรือไม่ใช่ผู้นำเลย = null (ทำ Ban/Pick ไม่ได้)
+export function vetoSideForMemberships(
+  memberships: { team_id: string; role: string }[],
+  teamAId: string | null,
+  teamBId: string | null
+): TeamSide | null {
+  const leads = (teamId: string | null) => Boolean(teamId) && memberships.some((m) => m.team_id === teamId && VETO_TEAM_ROLES.includes(m.role));
+  const isA = leads(teamAId);
+  const isB = leads(teamBId);
+  if (isA && !isB) return 'A';
+  if (isB && !isA) return 'B';
+  return null;
+}
+
 // เวลาเริ่มของสเต็ปปัจจุบัน = เวลาที่แถวล่าสุดถูกบันทึก (Auto-pick ใช้เวลาหมดเวลาของสเต็ปนั้น) ไม่มีแถวเลย = เวลาที่เริ่ม Veto
 export function currentStepStartMs(rows: VetoRowLike[], vetoStartMs: number): number {
   if (rows.length === 0) return vetoStartMs;

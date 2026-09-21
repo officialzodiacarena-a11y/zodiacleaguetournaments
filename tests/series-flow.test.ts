@@ -9,6 +9,7 @@ import {
   planAfterGameRecorded,
   planFinishMap,
   resolveDisplayScene,
+  validateSceneChange,
   withSceneMemory,
   type FinishMapPlan,
 } from '@/lib/overlay/series-flow';
@@ -316,4 +317,26 @@ test('สกอร์ซีรีส์: ใช้ winner_team_id ก่อน �
   assert.equal(state.winsA, 0);
   assert.equal(state.winsB, 1);
   assert.equal(state.completedCount, 1);
+});
+
+test('ฉาก COMPLETED: กดได้เมื่อซีรีส์ตัดสินแล้วเท่านั้น ฉากอื่นกดได้เสมอ', () => {
+  const blocked = validateSceneChange('COMPLETED', false);
+  assert.equal(blocked.ok, false);
+  if (!blocked.ok) assert.equal(blocked.code, 'SERIES_NOT_DECIDED');
+  assert.deepEqual(validateSceneChange('COMPLETED', true), { ok: true });
+  for (const scene of ['VETO', 'LIVE', 'AWAITING_RESULT'] as const) {
+    assert.deepEqual(validateSceneChange(scene, false), { ok: true });
+  }
+});
+
+test('ฉาก COMPLETED ที่จำไว้: แสดงระหว่างรอผู้ตัดสิน (AWAITING_RESULT) เมื่อจำนวนเกมที่จบตรงกัน และไม่ค้างข้ามรอบ', () => {
+  const saved = withSceneMemory({}, 'COMPLETED', 2);
+  // OBS รีเฟรชหลังกด COMPLETED: ยังเห็นฉากสรุปผลแม้สถานะแมตช์ยังเป็น AWAITING_RESULT
+  assert.equal(resolveDisplayScene({ status: 'AWAITING_RESULT', broadcastScene: null, formatConfig: saved, completedGames: 2 }), 'COMPLETED');
+  // จำนวนเกมไม่ตรง (ค่าค้างจากรอบเทสก่อน) = ไม่ใช้
+  assert.equal(resolveDisplayScene({ status: 'AWAITING_RESULT', broadcastScene: null, formatConfig: saved, completedGames: 1 }), 'AWAITING_RESULT');
+  // Broadcast มาก่อนเสมอ
+  assert.equal(resolveDisplayScene({ status: 'AWAITING_RESULT', broadcastScene: 'AWAITING_RESULT', formatConfig: saved, completedGames: 2 }), 'AWAITING_RESULT');
+  // แมตช์จบจริงแล้ว: ใช้สถานะแมตช์
+  assert.equal(resolveDisplayScene({ status: 'COMPLETED', broadcastScene: null, formatConfig: saved, completedGames: 2 }), 'COMPLETED');
 });

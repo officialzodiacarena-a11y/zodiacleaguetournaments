@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireBroadcastRole } from '@/lib/auth/require-broadcast-role';
 import { loadSeriesState } from '@/lib/overlay/match-series';
-import { withSceneMemory } from '@/lib/overlay/series-flow';
+import { validateSceneChange, withSceneMemory } from '@/lib/overlay/series-flow';
 import { asUpdate } from '@/types/supabase-helpers';
 
 // บันทึกฉาก OBS Overlay ที่ผู้คุมเลือก ลง matches.format_config.overlay_scene
@@ -12,7 +12,7 @@ import { asUpdate } from '@/types/supabase-helpers';
 // overlay_scene_games = จำนวนเกมที่จบแล้ว ณ ตอนที่เลือกฉาก — Overlay ใช้ค่านี้เฉพาะเมื่อยังตรงกับจำนวนเกมที่จบจริง (กันฉากค้างจากรอบเทสก่อน)
 // Overlay ใช้ค่านี้เป็นฉากตั้งต้น และยังรับ Broadcast เพื่อสลับทันที
 const SceneSchema = z.object({
-  scene: z.enum(['VETO', 'LIVE', 'AWAITING_RESULT']),
+  scene: z.enum(['VETO', 'LIVE', 'AWAITING_RESULT', 'COMPLETED']),
 });
 
 export async function PATCH(
@@ -35,7 +35,7 @@ export async function PATCH(
 
     const parsed = SceneSchema.safeParse(rawBody);
     if (!parsed.success) {
-      return NextResponse.json({ error: { code: 'VALIDATION_ERROR', message: 'scene ต้องเป็น VETO, LIVE หรือ AWAITING_RESULT' } }, { status: 400 });
+      return NextResponse.json({ error: { code: 'VALIDATION_ERROR', message: 'scene ต้องเป็น VETO, LIVE, AWAITING_RESULT หรือ COMPLETED' } }, { status: 400 });
     }
 
     const admin = createAdminClient();
@@ -43,6 +43,11 @@ export async function PATCH(
     const match = state?.match;
     if (!state || !match) {
       return NextResponse.json({ error: { code: 'MATCH_NOT_FOUND', message: 'ไม่พบข้อมูลแมตช์' } }, { status: 404 });
+    }
+
+    const allowed = validateSceneChange(parsed.data.scene, state.seriesOver);
+    if (!allowed.ok) {
+      return NextResponse.json({ error: { code: allowed.code, message: allowed.message } }, { status: 422 });
     }
 
     const { error } = await admin

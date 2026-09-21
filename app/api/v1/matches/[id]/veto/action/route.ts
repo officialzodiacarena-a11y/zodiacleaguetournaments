@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { cleanIds, asInsert } from '@/types/supabase-helpers';
-import { teamIdForSide, validateAction } from '@/lib/veto/engine';
+import { teamIdForSide, validateAction, vetoSideForMemberships } from '@/lib/veto/engine';
 import { loadVetoContext, resolveVetoProgress } from '@/lib/veto/service';
 
 // Ban / Pick แมพ โดยกัปตัน / ผู้จัดการ / โค้ชของทีมที่ถึงตา
@@ -66,7 +66,10 @@ export async function POST(
   if (memberError || !memberships || memberships.length === 0) {
     return NextResponse.json({ error: 'FORBIDDEN: Must be Captain, Manager, or Coach' }, { status: 403 });
   }
-  const side = memberships[0].team_id === ctx.match.team_a_id ? 'A' : 'B';
+  const side = vetoSideForMemberships(memberships, ctx.match.team_a_id, ctx.match.team_b_id);
+  if (!side) {
+    return NextResponse.json({ error: 'FORBIDDEN: Must be Captain, Manager, or Coach of exactly one team in this match' }, { status: 403 });
+  }
 
   // 3) ตรวจตามลำดับใน veto_format (ตาของทีม, ชนิด action, แมพใน Pool, แมพซ้ำ)
   const check = validateAction(ctx.config, ctx.pool, ctx.rows, { side, action, mapName }, ctx.vetoStartMs);

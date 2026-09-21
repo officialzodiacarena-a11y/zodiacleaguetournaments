@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 
+export type SceneName = "VETO" | "LIVE" | "AWAITING_RESULT" | "COMPLETED";
+
 export type MatchStatus = 'SCHEDULED' | 'READY_CHECK' | 'VETO' | 'LIVE' | 'PAUSED' | 'AWAITING_RESULT' | 'DISPUTED' | 'COMPLETED' | 'FORFEITED' | 'WALKOVER' | 'BYE' | 'CANCELLED';
 
 export interface MatchData {
@@ -332,7 +334,7 @@ export default function SpectatorHUDControlPanel({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [toggleBuyPhaseHUD]);
 
-  const changeLiveScene = (sceneName: "VETO" | "LIVE" | "AWAITING_RESULT") => {
+  const changeLiveScene = (sceneName: SceneName) => {
     if (!activeChannel) {
       setFeedback({ type: "error", msg: "สัญญาณเซิร์ฟเวอร์เรียลไทม์ออฟไลน์ กรุณาลองใหม่" });
       return;
@@ -350,7 +352,7 @@ export default function SpectatorHUDControlPanel({
     void persistScene(sceneName);
   };
 
-  const persistScene = async (sceneName: "VETO" | "LIVE" | "AWAITING_RESULT") => {
+  const persistScene = async (sceneName: SceneName) => {
     try {
       const res = await fetch(`/api/v1/matches/${matchId}/scene`, {
         method: "PATCH",
@@ -763,22 +765,31 @@ export default function SpectatorHUDControlPanel({
               * สลับเลย์เอาต์หน้าจอ OBS Overlay แบบเรียลไทม์โดยไม่เพิ่มภาระเขียนฐานข้อมูล
             </p>
 
-            <div className="grid grid-cols-3 gap-3">
-              {(["VETO", "LIVE", "AWAITING_RESULT"] as const).map((scene) => (
-                <button
-                  key={scene}
-                  onClick={() => changeLiveScene(scene)}
-                  className={`py-3 px-2 rounded-lg font-mono text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 ${
-                    currentScene === scene
-                      ? "bg-[#C9A84C]/10 border-[#C9A84C] text-[#C9A84C] shadow-[0_0_15px_rgba(201,168,76,0.15)]"
-                      : "bg-black/40 border-white/5 text-gray-400 hover:text-white hover:border-white/20"
-                  }`}
-                >
-                  <span className="text-[10px]">SCENE</span>
-                  <span>{scene}</span>
-                </button>
-              ))}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {(["VETO", "LIVE", "AWAITING_RESULT", "COMPLETED"] as const).map((scene) => {
+                // COMPLETED (ฉากสรุปผลซีรีส์) กดได้เมื่อซีรีส์ตัดสินแล้วเท่านั้น (ฝั่งเซิร์ฟเวอร์ตรวจซ้ำ)
+                const locked = scene === "COMPLETED" && !seriesState?.series_over;
+                return (
+                  <button
+                    key={scene}
+                    onClick={() => changeLiveScene(scene)}
+                    disabled={locked}
+                    title={locked ? "ยังกดไม่ได้ — ซีรีส์ยังไม่ตัดสินผล (กด END MAP จนมีผู้ชนะซีรีส์)" : undefined}
+                    className={`py-3 px-2 rounded-lg font-mono text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${
+                      currentScene === scene
+                        ? "bg-[#C9A84C]/10 border-[#C9A84C] text-[#C9A84C] shadow-[0_0_15px_rgba(201,168,76,0.15)]"
+                        : "bg-black/40 border-white/5 text-gray-400 hover:text-white hover:border-white/20"
+                    }`}
+                  >
+                    <span className="text-[10px]">SCENE</span>
+                    <span>{scene}</span>
+                  </button>
+                );
+              })}
             </div>
+            <p className="mt-2 font-mono text-[10px] text-gray-500 leading-relaxed">
+              COMPLETED = ฉากสรุปผลซีรีส์ (ผู้ชนะ + สถิติ + Series MVP) ปลดล็อกเมื่อซีรีส์ตัดสินผลแล้ว
+            </p>
 
             {/* BUY PHASE HUD TOGGLE (ALT+C) */}
             <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">

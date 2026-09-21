@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { AthleteQuickPopover } from '@/components/profile/AthleteQuickPopover';
@@ -247,6 +248,16 @@ export default function MatchLobbyPage() {
           {lobby.status}
         </span>
       </header>
+
+      {lobby.status === 'VETO' && (
+        <Link
+          href={`/matches/${matchId}/veto`}
+          className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[#C9A84C]/60 bg-[#C9A84C]/10 px-4 py-3 text-sm font-black uppercase tracking-wider text-[#C9A84C] hover:bg-[#C9A84C]/20 transition-colors"
+        >
+          <span>ทั้งสองทีมพร้อมแล้ว — เข้าห้อง Veto เพื่อ Ban / Pick แมพ</span>
+          <span aria-hidden>→</span>
+        </Link>
+      )}
 
       {error && (
         <div className="mb-4 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
