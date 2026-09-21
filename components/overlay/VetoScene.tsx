@@ -5,34 +5,20 @@
 
 import React from "react";
 import { SkyscraperTower } from "@/components/sponsor/SkyscraperTower";
-
-export type VetoSceneAction = "BAN" | "PICK" | "DECIDER" | "SIDE_PICK";
-
-export interface VetoSceneTeam {
-  id: string;
-  name: string;
-  tag: string;
-}
-
-export interface VetoSceneVeto {
-  step_order: number;
-  action: VetoSceneAction;
-  team_id: string | null;
-  map_name: string;
-  was_auto: boolean;
-}
-
-export interface VetoSceneGame {
-  game_number: number;
-  map_name: string | null;
-  score_a: number;
-  score_b: number;
-  status: string;
-}
+import {
+  DetailCell,
+  TEAM_A_TEXT,
+  TEAM_B_TEXT,
+  buildSeriesGames,
+  isGameDone,
+  type OverlayGame,
+  type OverlayTeam,
+  type OverlayVeto,
+} from "@/components/overlay/series";
 
 export interface VetoSceneProps {
-  teamA: VetoSceneTeam;
-  teamB: VetoSceneTeam;
+  teamA: OverlayTeam;
+  teamB: OverlayTeam;
   bestOf: number;
   matchCode: string;
   tournamentName: string | null;
@@ -40,24 +26,12 @@ export interface VetoSceneProps {
   roundLabel: string | null;
   seriesScoreA: number;
   seriesScoreB: number;
-  vetoes: VetoSceneVeto[];
-  games: VetoSceneGame[];
+  vetoes: OverlayVeto[];
+  games: OverlayGame[];
 }
 
 // จำนวนสเต็ปของ Veto Board (BAN, BAN, PICK, PICK, BAN, BAN, DECIDER) — ตรงกับ finish_veto และ API auto-decider
 const TOTAL_STEPS = 7;
-const TEAM_A_TEXT = "text-[#00D4FF]";
-const TEAM_B_TEXT = "text-[#FF4655]";
-
-function DetailCell({ label, value, valueClass = "text-white" }: { label: string; value: string; valueClass?: string }) {
-  return (
-    <div className="rounded-xl border border-white/5 bg-[#0D0E1A]/60 px-4 py-3 min-w-0">
-      <p className="text-[9px] font-mono tracking-[0.16em] text-neutral-500 uppercase">{label}</p>
-      <p className={`mt-1 text-sm font-black font-mono truncate ${valueClass}`}>{value}</p>
-    </div>
-  );
-}
-
 export function VetoScene({
   teamA,
   teamB,
@@ -77,23 +51,7 @@ export function VetoScene({
   const teamTag = (teamId: string | null) =>
     teamId === teamA.id ? teamA.tag : teamId === teamB.id ? teamB.tag : "DECIDER";
 
-  // แมพที่ถูก PICK / DECIDER ตามลำดับสเต็ป = ลำดับแมพที่จะแข่ง (Game 1, 2, 3, ...)
-  const playedMaps = [...vetoes]
-    .filter((v) => v.action === "PICK" || v.action === "DECIDER")
-    .sort((a, b) => a.step_order - b.step_order);
-
-  const totalGames = Math.max(1, bestOf);
-  const seriesGames = Array.from({ length: totalGames }, (_, i) => {
-    const gameNumber = i + 1;
-    const game = games.find((g) => g.game_number === gameNumber);
-    const veto = playedMaps[i];
-    const mapName = game?.map_name || veto?.map_name || null;
-    const gameStatus = (game?.status || "").toUpperCase();
-    return { gameNumber, game, veto, mapName, gameStatus };
-  });
-  const nextGameNumber = seriesGames.find(
-    (g) => g.mapName && g.gameStatus !== "COMPLETED" && g.gameStatus !== "FINISHED"
-  )?.gameNumber;
+  const { totalGames, seriesGames, nextGameNumber } = buildSeriesGames(bestOf, vetoes, games);
 
   const stageLine = [stageName, roundLabel].filter(Boolean).join(" • ") || "—";
 
@@ -213,7 +171,7 @@ export function VetoScene({
           {seriesGames.map(({ gameNumber, game, veto, mapName, gameStatus }) => {
             const hasMap = Boolean(mapName);
             const isLive = gameStatus === "LIVE";
-            const isDone = gameStatus === "COMPLETED" || gameStatus === "FINISHED";
+            const isDone = isGameDone(game);
             const showScore = Boolean(game) && (isLive || isDone);
             const statusLabel = isLive
               ? "LIVE"
