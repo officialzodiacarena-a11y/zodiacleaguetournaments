@@ -3,7 +3,16 @@
 // ทดสอบด้วย: npx tsx --test tests/series-flow.test.ts
 import type { SeriesState } from '@/lib/overlay/match-series';
 
-export type OverlayScene = 'VETO' | 'LIVE' | 'AWAITING_RESULT';
+export type OverlayScene = 'VETO' | 'LIVE' | 'AWAITING_RESULT' | 'COMPLETED';
+
+// ผู้คุมสลับฉากสรุปผลซีรีส์ (COMPLETED) ได้เฉพาะเมื่อซีรีส์ตัดสินแล้ว กันกดผิดกลางซีรีส์ BO3/BO5
+// (ฉากนี้แสดงผู้ชนะจากผลรายเกม จึงใช้ได้ตั้งแต่สถานะแมตช์ยังเป็น AWAITING_RESULT ก่อนผู้ตัดสินยืนยันผล)
+export function validateSceneChange(scene: OverlayScene, seriesOver: boolean): { ok: true } | { ok: false; code: string; message: string } {
+  if (scene === 'COMPLETED' && !seriesOver) {
+    return { ok: false, code: 'SERIES_NOT_DECIDED', message: 'ยังสลับไปฉาก COMPLETED ไม่ได้ ซีรีส์ยังไม่ตัดสินผล (กด END MAP จนมีผู้ชนะซีรีส์ก่อน)' };
+  }
+  return { ok: true };
+}
 
 function asConfig(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -136,7 +145,7 @@ export function resolveDisplayScene(input: {
   const savedGames = typeof config.overlay_scene_games === 'number' ? config.overlay_scene_games : null;
 
   const inPlay = input.status === 'LIVE' || input.status === 'AWAITING_RESULT';
-  const savedApplies = inPlay && (savedScene === 'LIVE' || savedScene === 'AWAITING_RESULT') && savedGames === input.completedGames;
+  const savedApplies = inPlay && (savedScene === 'LIVE' || savedScene === 'AWAITING_RESULT' || savedScene === 'COMPLETED') && savedGames === input.completedGames;
 
   return input.broadcastScene ?? (savedApplies ? (savedScene as string) : null) ?? input.status;
 }

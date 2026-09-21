@@ -13,6 +13,7 @@ import {
   seededRng,
   validateAction,
   validateConfig,
+  vetoSideForMemberships,
   type VetoConfig,
   type VetoRowLike,
 } from '@/lib/veto/engine';
@@ -252,4 +253,21 @@ test('ไม่ปล่อยให้เกินสเต็ป: Pool เล�
   assert.deepEqual(planAutoSteps(c, tinyPool, [], { ...ctx(), nowMs: T0 + 10 * 60_000 }), []);
   const v = validateAction(c, tinyPool, [], { side: 'A', mapName: 'Ascent' }, T0);
   assert.equal(!v.ok && v.code, 'VETO_CONFIG_INVALID');
+});
+
+test('ฝั่งของผู้ใช้: ต้องเป็น CAPTAIN / MANAGER / COACH ของทีมเดียวเท่านั้น', () => {
+  assert.equal(vetoSideForMemberships([{ team_id: 'ta', role: 'CAPTAIN' }], 'ta', 'tb'), 'A');
+  assert.equal(vetoSideForMemberships([{ team_id: 'tb', role: 'COACH' }], 'ta', 'tb'), 'B');
+  assert.equal(vetoSideForMemberships([{ team_id: 'ta', role: 'MANAGER' }], 'ta', 'tb'), 'A');
+  // ผู้เล่นทั่วไป / ไม่ใช่สมาชิก / ทีมไม่ตรงแมตช์ = ไม่มีฝั่ง
+  assert.equal(vetoSideForMemberships([{ team_id: 'ta', role: 'PLAYER' }], 'ta', 'tb'), null);
+  assert.equal(vetoSideForMemberships([], 'ta', 'tb'), null);
+  assert.equal(vetoSideForMemberships([{ team_id: 'tx', role: 'CAPTAIN' }], 'ta', 'tb'), null);
+  // ผู้นำของทั้งสองทีม (ข้อมูลเก่าจาก O12) = ไม่มีฝั่ง (เดิมระบบเดาเป็นทีมแรกที่เจอ)
+  assert.equal(
+    vetoSideForMemberships([{ team_id: 'ta', role: 'CAPTAIN' }, { team_id: 'tb', role: 'CAPTAIN' }], 'ta', 'tb'),
+    null
+  );
+  // ทีมที่ยังไม่ถูกจับสาย (null) ไม่ทำให้ null === null จับคู่ผิด
+  assert.equal(vetoSideForMemberships([{ team_id: 'ta', role: 'CAPTAIN' }], 'ta', null), 'A');
 });

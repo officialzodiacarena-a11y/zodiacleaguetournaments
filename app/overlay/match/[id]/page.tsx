@@ -115,7 +115,7 @@ export default function MatchBroadcastOverlay({
   const [mvp, setMvp] = useState<MVPlayerStats | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [broadcastScene, setBroadcastScene] = useState<"VETO" | "LIVE" | "AWAITING_RESULT" | null>(null);
+  const [broadcastScene, setBroadcastScene] = useState<"VETO" | "LIVE" | "AWAITING_RESULT" | "COMPLETED" | null>(null);
   const [hudBanner, setHudBanner] = useState<{ type: string; message: string } | null>(null);
   const [showBuyPhase, setShowBuyPhase] = useState<boolean>(false);
   const [rosterA, setRosterA] = useState<BuyPhasePlayer[]>([]);
@@ -363,7 +363,7 @@ export default function MatchBroadcastOverlay({
       })
       .on("broadcast", { event: "scene_change" }, (payload) => {
         const scene = (payload.payload as { scene?: string })?.scene;
-        if (scene === "VETO" || scene === "LIVE" || scene === "AWAITING_RESULT") {
+        if (scene === "VETO" || scene === "LIVE" || scene === "AWAITING_RESULT" || scene === "COMPLETED") {
           if (isMounted) setBroadcastScene(scene);
         }
       })
