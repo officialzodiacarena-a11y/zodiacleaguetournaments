@@ -1,10 +1,14 @@
 "use client";
 
-import React, { useEffect, useState, use } from "react";
+import React, { useEffect, useRef, useState, use } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { VetoScene } from "@/components/overlay/VetoScene";
 import { IntermissionScene } from "@/components/overlay/IntermissionScene";
-import type { OverlayGameStats, OverlayParticipantStat } from "@/components/overlay/series";
+import { BuyPhaseHud, type BuyPhasePlayer } from "@/components/overlay/BuyPhaseHud";
+import { LiveRosterSidebar } from "@/components/overlay/LiveRosterSidebar";
+import { LiveScoreboard } from "@/components/overlay/LiveScoreboard";
+import { SponsorBadge } from "@/components/overlay/SponsorBadge";
+import { buildSeriesGames, countSeriesWins, isGameDone, type OverlayGameStats, type OverlayParticipantStat } from "@/components/overlay/series";
 
 export type MatchStatus =
   | "SCHEDULED"
@@ -45,6 +49,7 @@ export interface MatchData {
   team_b_ready_at: string | null;
   lobby_code: string | null;
   round_label?: string | null;
+  format_config?: Record<string, unknown> | null;
   winner_team_id?: string | null;
   team_a?: TeamMetadata;
   team_b?: TeamMetadata;
@@ -87,136 +92,10 @@ export interface MVPlayerStats {
   agent_played: string;
 }
 
-export interface BuyPhasePlayer {
-  id: string;
-  name: string;
-  agent: string;
-  kills: number;
-  deaths: number;
-  assists: number;
-  ultPoints: number;
-  ultMax: number;
-  armor: "HEAVY" | "LIGHT" | "NONE";
-  weapon: string;
-  credits: number;
-  minNext: number;
-}
-
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon";
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// --- WEAPON & SHIELD ICONS ---
-function WeaponIcon({ name }: { name: string }) {
-  const upper = name.toUpperCase();
-  if (upper.includes("OPERATOR") || upper.includes("OP")) {
-    return (
-      <svg className="w-16 h-5 text-white/90" viewBox="0 0 100 24" fill="currentColor">
-        <path d="M2 14h18l4-3h20v2h12l6-4h26l8 3v4l-4 2H60l-4-2H24l-6 3H2v-5z" opacity="0.9" />
-        <rect x="42" y="5" width="22" height="3" rx="1" />
-        <circle cx="53" cy="6.5" r="2.5" fill="#00D4FF" />
-      </svg>
-    );
-  }
-  if (upper.includes("PHANTOM")) {
-    return (
-      <svg className="w-14 h-5 text-white/90" viewBox="0 0 80 24" fill="currentColor">
-        <path d="M4 14h14l4-3h24l4 3h26v4l-6 2H42l-4-2H20l-4 2H4v-6z" opacity="0.9" />
-        <rect x="64" y="10" width="14" height="4" rx="1" fill="#00D4FF" />
-      </svg>
-    );
-  }
-  if (upper.includes("SHERIFF") || upper.includes("GHOST") || upper.includes("CLASSIC") || upper.includes("PISTOL")) {
-    return (
-      <svg className="w-8 h-5 text-white/90" viewBox="0 0 40 24" fill="currentColor">
-        <path d="M6 10h22l4 3v4l-4 2H18l-3 4H9l3-4H6v-5z" opacity="0.9" />
-      </svg>
-    );
-  }
-  if (upper.includes("SPECTRE") || upper.includes("STINGER")) {
-    return (
-      <svg className="w-12 h-5 text-white/90" viewBox="0 0 60 24" fill="currentColor">
-        <path d="M4 12h12l3-3h18l3 3h16v4l-4 2H32l-3-2H16l-3 2H4v-6z" opacity="0.9" />
-        <rect x="22" y="16" width="6" height="7" rx="1" fill="#C9A84C" />
-      </svg>
-    );
-  }
-  // Default: Vandal / Assault Rifle
-  return (
-    <svg className="w-14 h-5 text-white/90" viewBox="0 0 80 24" fill="currentColor">
-      <path d="M2 13h16l5-4h28l4 3h20v4l-5 2H46l-4-2H22l-5 3H2v-6z" opacity="0.95" />
-      <path d="M34 15l-3 8h6l2-8h-5z" fill="#C9A84C" opacity="0.8" />
-    </svg>
-  );
-}
-
-function ShieldIcon({ type }: { type: "HEAVY" | "LIGHT" | "NONE" }) {
-  if (type === "HEAVY") {
-    return (
-      <div className="flex items-center gap-0.5 text-white/90 font-mono text-[10px] font-bold">
-        <svg className="w-4 h-4 text-[#00D4FF]" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm0 2.18l6 2.25v4.66c0 3.99-2.55 7.7-6 8.78-3.45-1.08-6-4.79-6-8.78V6.43l6-2.25z" />
-          <path d="M12 6.5l-4 1.5v3.1c0 2.7 1.7 5.2 4 5.9 2.3-.7 4-3.2 4-5.9v-3.1l-4-1.5z" />
-        </svg>
-        <span className="text-[9px] text-[#00D4FF]">50</span>
-      </div>
-    );
-  }
-  if (type === "LIGHT") {
-    return (
-      <div className="flex items-center gap-0.5 text-white/80 font-mono text-[10px] font-bold">
-        <svg className="w-4 h-4 text-cyan-300/80" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm0 2.18l6 2.25v4.66c0 3.99-2.55 7.7-6 8.78-3.45-1.08-6-4.79-6-8.78V6.43l6-2.25z" />
-        </svg>
-        <span className="text-[9px] text-cyan-300">25</span>
-      </div>
-    );
-  }
-  return <div className="w-4 h-4 opacity-10" />;
-}
-
-function UltDots({ current, max }: { current: number; max: number }) {
-  const isReady = current >= max;
-  return (
-    <div className="flex items-center gap-1">
-      {isReady ? (
-        <span className="px-1.5 py-0.2 bg-[#00D4FF]/20 border border-[#00D4FF]/80 text-[#00D4FF] rounded text-[9px] font-mono font-black animate-pulse">
-          READY
-        </span>
-      ) : (
-        <div className="flex items-center gap-0.5">
-          {Array.from({ length: max }).map((_, i) => (
-            <div
-              key={i}
-              className={`w-1.5 h-1.5 rounded-full ${
-                i < current
-                  ? "bg-[#00D4FF] shadow-[0_0_4px_#00D4FF]"
-                  : "bg-white/20"
-              }`}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Fallback rosters when match participants are initializing
-const DEFAULT_ROSTER_A: BuyPhasePlayer[] = [
-  { id: "a1", name: "Voodoo One", agent: "Reyna", kills: 0, deaths: 0, assists: 0, ultPoints: 5, ultMax: 7, armor: "HEAVY", weapon: "Operator", credits: 2900, minNext: 2100 },
-  { id: "a2", name: "Twoperator", agent: "Clove", kills: 0, deaths: 0, assists: 0, ultPoints: 4, ultMax: 8, armor: "HEAVY", weapon: "Vandal", credits: 2900, minNext: 2100 },
-  { id: "a3", name: "ThreeOfLife", agent: "Fade", kills: 0, deaths: 0, assists: 0, ultPoints: 6, ultMax: 7, armor: "HEAVY", weapon: "Vandal", credits: 2900, minNext: 2100 },
-  { id: "a4", name: "Fourcefield", agent: "Killjoy", kills: 0, deaths: 0, assists: 0, ultPoints: 7, ultMax: 7, armor: "HEAVY", weapon: "Vandal", credits: 2900, minNext: 2100 },
-  { id: "a5", name: "FIVEbyFIVE", agent: "Jett", kills: 0, deaths: 0, assists: 0, ultPoints: 3, ultMax: 8, armor: "HEAVY", weapon: "Vandal", credits: 2900, minNext: 2100 },
-];
-
-const DEFAULT_ROSTER_B: BuyPhasePlayer[] = [
-  { id: "b1", name: "AlpacaHoarder", agent: "KAY/O", kills: 0, deaths: 0, assists: 0, ultPoints: 4, ultMax: 7, armor: "HEAVY", weapon: "Vandal", credits: 2900, minNext: 2100 },
-  { id: "b2", name: "BeeSting", agent: "Waylay", kills: 0, deaths: 0, assists: 0, ultPoints: 6, ultMax: 7, armor: "HEAVY", weapon: "Vandal", credits: 2900, minNext: 2100 },
-  { id: "b3", name: "CowTipper", agent: "Neon", kills: 0, deaths: 0, assists: 0, ultPoints: 3, ultMax: 8, armor: "HEAVY", weapon: "Vandal", credits: 2900, minNext: 2100 },
-  { id: "b4", name: "DodoDaniel", agent: "Fade", kills: 0, deaths: 0, assists: 0, ultPoints: 7, ultMax: 7, armor: "HEAVY", weapon: "Vandal", credits: 2900, minNext: 2100 },
-  { id: "b5", name: "Eellminator", agent: "Breach", kills: 0, deaths: 0, assists: 0, ultPoints: 5, ultMax: 7, armor: "HEAVY", weapon: "Vandal", credits: 2900, minNext: 2100 },
-];
 
 export default function MatchBroadcastOverlay({
   params,
@@ -235,11 +114,12 @@ export default function MatchBroadcastOverlay({
   const [broadcastScene, setBroadcastScene] = useState<"VETO" | "LIVE" | "AWAITING_RESULT" | null>(null);
   const [hudBanner, setHudBanner] = useState<{ type: string; message: string } | null>(null);
   const [showBuyPhase, setShowBuyPhase] = useState<boolean>(false);
-  const [rosterA, setRosterA] = useState<BuyPhasePlayer[]>(DEFAULT_ROSTER_A);
-  const [rosterB, setRosterB] = useState<BuyPhasePlayer[]>(DEFAULT_ROSTER_B);
+  const [rosterA, setRosterA] = useState<BuyPhasePlayer[]>([]);
+  const [rosterB, setRosterB] = useState<BuyPhasePlayer[]>([]);
   const [tournamentName, setTournamentName] = useState<string | null>(null);
   const [stageName, setStageName] = useState<string | null>(null);
   const [seriesStats, setSeriesStats] = useState<OverlayGameStats[]>([]);
+  const statusRef = useRef<MatchStatus | null>(null);
 
   // บังคับพื้นหลังโปร่งใสให้ OBS Browser Source ดึงไปใช้ได้จริง
   useEffect(() => {
@@ -301,6 +181,7 @@ export default function MatchBroadcastOverlay({
         };
 
         setMatch(refinedMatch);
+        statusRef.current = refinedMatch.status;
 
         // ชื่อทัวร์นาเมนต์ / Stage สำหรับแถบรายละเอียดแมตช์ (ดึงแยก: ถ้าพลาดจะแสดง "—" และไม่กระทบ Overlay)
         try {
@@ -323,17 +204,24 @@ export default function MatchBroadcastOverlay({
         const { data: teamMembers } = await supabase
           .from('team_members')
           .select('id, team_id, players!team_members_player_id_fkey(display_name)')
+          .eq('status', 'ACTIVE')
           .in('team_id', [teamAData.id, teamBData.id]);
 
         if (teamMembers) {
-          const agentsA = ['Jett', 'Reyna', 'Omen', 'Killjoy', 'Sova'];
-          const agentsB = ['Raze', 'Phoenix', 'Brimstone', 'Cypher', 'Breach'];
-          const newRosterA = teamMembers.filter(m => m.team_id === teamAData.id).map((m, idx) => ({
-            id: m.id, name: (Array.isArray(m.players) ? m.players[0]?.display_name : (m.players as { display_name?: string } | null)?.display_name) || "Unknown", agent: agentsA[idx % 5], kills: 0, deaths: 0, assists: 0, ultPoints: 0, ultMax: 7, armor: "HEAVY" as const, weapon: 'Vandal', credits: 8000, minNext: 2000
-          }));
-          const newRosterB = teamMembers.filter(m => m.team_id === teamBData.id).map((m, idx) => ({
-            id: m.id, name: (Array.isArray(m.players) ? m.players[0]?.display_name : (m.players as { display_name?: string } | null)?.display_name) || "Unknown", agent: agentsB[idx % 5], kills: 0, deaths: 0, assists: 0, ultPoints: 0, ultMax: 7, armor: "HEAVY" as const, weapon: 'Phantom', credits: 8000, minNext: 2000
-          }));
+          const toRoster = (teamId: string) =>
+            teamMembers
+              .filter((m) => m.team_id === teamId)
+              .map((m) => ({
+                id: m.id,
+                name:
+                  (Array.isArray(m.players) ? m.players[0]?.display_name : (m.players as { display_name?: string } | null)?.display_name) ||
+                  "Unknown",
+                kills: 0,
+                deaths: 0,
+                assists: 0,
+              }));
+          const newRosterA = toRoster(teamAData.id);
+          const newRosterB = toRoster(teamBData.id);
           if (newRosterA.length) setRosterA(newRosterA);
           if (newRosterB.length) setRosterB(newRosterB);
         }
@@ -379,43 +267,19 @@ export default function MatchBroadcastOverlay({
               const teamAParts = parts.filter((p: { team_id: string }) => p.team_id === teamAData.id);
               const teamBParts = parts.filter((p: { team_id: string }) => p.team_id === teamBData.id);
 
-              if (teamAParts.length > 0) {
-                setRosterA(
-                  teamAParts.map((p: { player_id: string; display_name: string; agent_played: string; kills: number; deaths: number; assists: number }, idx: number) => ({
-                    id: p.player_id || `a-${idx}`,
-                    name: p.display_name || DEFAULT_ROSTER_A[idx]?.name || `Player ${idx + 1}`,
-                    agent: p.agent_played || DEFAULT_ROSTER_A[idx]?.agent || "Agent",
-                    kills: p.kills ?? 0,
-                    deaths: p.deaths ?? 0,
-                    assists: p.assists ?? 0,
-                    ultPoints: DEFAULT_ROSTER_A[idx]?.ultPoints ?? 4,
-                    ultMax: DEFAULT_ROSTER_A[idx]?.ultMax ?? 7,
-                    armor: (DEFAULT_ROSTER_A[idx]?.armor as "HEAVY" | "LIGHT" | "NONE") ?? "HEAVY",
-                    weapon: DEFAULT_ROSTER_A[idx]?.weapon ?? "Vandal",
-                    credits: 2900,
-                    minNext: 2100,
-                  }))
-                );
-              }
+              type PartRow = { player_id: string; display_name: string | null; agent_played: string | null; kills: number; deaths: number; assists: number };
+              const toPartRoster = (rows: PartRow[], prefix: string): BuyPhasePlayer[] =>
+                rows.map((p, idx) => ({
+                  id: p.player_id || `${prefix}-${idx}`,
+                  name: p.display_name || `Player ${idx + 1}`,
+                  agent: p.agent_played || undefined,
+                  kills: p.kills ?? 0,
+                  deaths: p.deaths ?? 0,
+                  assists: p.assists ?? 0,
+                }));
 
-              if (teamBParts.length > 0) {
-                setRosterB(
-                  teamBParts.map((p: { player_id: string; display_name: string; agent_played: string; kills: number; deaths: number; assists: number }, idx: number) => ({
-                    id: p.player_id || `b-${idx}`,
-                    name: p.display_name || DEFAULT_ROSTER_B[idx]?.name || `Player ${idx + 1}`,
-                    agent: p.agent_played || DEFAULT_ROSTER_B[idx]?.agent || "Agent",
-                    kills: p.kills ?? 0,
-                    deaths: p.deaths ?? 0,
-                    assists: p.assists ?? 0,
-                    ultPoints: DEFAULT_ROSTER_B[idx]?.ultPoints ?? 4,
-                    ultMax: DEFAULT_ROSTER_B[idx]?.ultMax ?? 7,
-                    armor: (DEFAULT_ROSTER_B[idx]?.armor as "HEAVY" | "LIGHT" | "NONE") ?? "HEAVY",
-                    weapon: DEFAULT_ROSTER_B[idx]?.weapon ?? "Vandal",
-                    credits: 2900,
-                    minNext: 2100,
-                  }))
-                );
-              }
+              if (teamAParts.length > 0) setRosterA(toPartRoster(teamAParts, "a"));
+              if (teamBParts.length > 0) setRosterB(toPartRoster(teamBParts, "b"));
             }
           }
         } catch (partErr) {
@@ -453,8 +317,12 @@ export default function MatchBroadcastOverlay({
         (payload) => {
           const updatedMatch = payload.new as MatchData;
           setMatch((prev) => (prev ? { ...prev, ...updatedMatch } : updatedMatch));
-          setBroadcastScene(null);
-          fetchInitialData();
+          // สกอร์รอบ/ผู้ชนะเปลี่ยน (สถานะเดิม): อัปเดตทันทีจาก payload โดยไม่รีเซ็ตฉากที่แอดมินสลับไว้ และไม่ดึงข้อมูลใหม่ทั้งหมด
+          if (updatedMatch.status && updatedMatch.status !== statusRef.current) {
+            statusRef.current = updatedMatch.status;
+            setBroadcastScene(null);
+            fetchInitialData();
+          }
         }
       )
       .on(
@@ -528,18 +396,30 @@ export default function MatchBroadcastOverlay({
   }
 
   const { team_a, team_b, status, score_a, score_b, rounds_won_a, rounds_won_b } = match;
-  const displayStatus = broadcastScene ?? status;
+  // ฉากที่ผู้คุมเลือกไว้ (บันทึกใน DB): ระหว่างซีรีส์ BO3/BO5 สถานะแมตช์ยังเป็น LIVE (DB ไม่ให้ AWAITING_RESULT กลับเป็น LIVE)
+  // ฉาก Intermission ระหว่างเกม และฉาก LIVE ของเกมถัดไปจึงต้องจำไว้ เพื่อให้ OBS ที่รีเฟรชกลางเกมขึ้นฉากถูก
+  // ใช้เฉพาะเมื่อจำนวนเกมที่จบแล้วตรงกับตอนที่เลือกฉาก (กันค่าค้างจากรอบเทสก่อน)
+  const completedGames = games.filter((g) => isGameDone(g)).length;
+  const savedScene = typeof match.format_config?.overlay_scene === "string" ? match.format_config.overlay_scene : null;
+  const savedSceneGames = typeof match.format_config?.overlay_scene_games === "number" ? match.format_config.overlay_scene_games : null;
+  const savedGameScene =
+    (status === "LIVE" || status === "AWAITING_RESULT") &&
+    (savedScene === "LIVE" || savedScene === "AWAITING_RESULT") &&
+    savedSceneGames === completedGames
+      ? savedScene
+      : null;
+  const displayStatus = broadcastScene ?? savedGameScene ?? status;
   const showScoreboard = displayStatus === "LIVE" || status === "PAUSED";
-  const activeGame = games.find((g) => g.status === "LIVE") || games[games.length - 1];
-  const mapName = activeGame?.map_name || "DECIDING_MAP";
+  // แมพที่กำลังแข่ง: match_games ถูกสร้างเมื่อเกมจบเท่านั้น จึงหาจากลำดับ Veto (PICK/DECIDER) — เกมที่ LIVE ก่อน ถ้าไม่มีใช้เกมถัดไปที่ยังไม่จบ
+  const { totalGames, seriesGames, nextGameNumber } = buildSeriesGames(match.best_of ?? 3, vetoes, games);
+  const liveGame = seriesGames.find((g) => g.gameStatus === "LIVE") ?? seriesGames.find((g) => g.gameNumber === nextGameNumber);
+  const mapLabel = liveGame ? `MAP ${liveGame.gameNumber}` : "MAP";
+  const mapName = liveGame?.mapName ? liveGame.mapName.toUpperCase() : null;
+  // สกอร์ซีรีส์นับจากเกมที่จบแล้ว (matches.score_a/score_b ถูกเขียนตอนแมตช์จบเท่านั้น)
+  const seriesWins = team_a && team_b ? countSeriesWins(team_a, team_b, games) : { winsA: 0, winsB: 0 };
+  const winsNeeded = Math.floor(totalGames / 2) + 1;
   const isMatchPoint = rounds_won_a === 12 || rounds_won_b === 12;
   const isOvertime = rounds_won_a >= 12 && rounds_won_b >= 12;
-
-  // Calculators for Team Bank totals
-  const totalBankA = rosterA.reduce((sum, p) => sum + p.credits, 0) || 14500;
-  const totalMinNextA = rosterA.reduce((sum, p) => sum + p.minNext, 0) || 10500;
-  const totalBankB = rosterB.reduce((sum, p) => sum + p.credits, 0) || 14500;
-  const totalMinNextB = rosterB.reduce((sum, p) => sum + p.minNext, 0) || 10500;
 
   return (
     <main className="relative w-[1920px] h-[1080px] bg-transparent text-white overflow-hidden font-sans select-none">
@@ -561,42 +441,18 @@ export default function MatchBroadcastOverlay({
       )}
 
       {/* 1. TOP COMPACT SCOREBOARD CENTER */}
-      {showScoreboard && (
-        <section className="absolute top-0 left-1/2 -translate-x-1/2 flex items-stretch h-[56px] w-[580px] bg-[#0A0A0F]/90 backdrop-blur-md border-b-2 border-[#C9A84C]/80 rounded-b-xl z-50 overflow-hidden shadow-[0_4px_25px_rgba(0,0,0,0.5)]">
-          {/* TEAM A */}
-          <div className="flex-1 flex items-center justify-end px-4 gap-3 bg-gradient-to-r from-transparent to-[#FF4655]/5">
-            <span className="font-mono text-lg font-black tracking-widest text-white uppercase">{team_a?.tag}</span>
-            <div className="h-8 w-8 flex items-center justify-center bg-gray-900 border border-white/10 rounded-md">
-              <span className="font-mono text-xs text-gray-400">🛡️</span>
-            </div>
-            <div className="flex gap-1">
-              <div className={`h-2 w-2 rounded-full ${score_a >= 1 ? "bg-[#C9A84C] shadow-[0_0_8px_#C9A84C]" : "bg-neutral-800"}`} />
-              <div className={`h-2 w-2 rounded-full ${score_a >= 2 ? "bg-[#C9A84C] shadow-[0_0_8px_#C9A84C]" : "bg-neutral-800"}`} />
-            </div>
-          </div>
-
-          {/* ROUNDS SCORE */}
-          <div className="w-[140px] flex items-center justify-center border-x border-white/10 relative">
-            <div className="flex items-center gap-4">
-              <span className="font-mono text-3xl font-black text-[#FF4655] tracking-tighter leading-none w-10 text-right">{rounds_won_a}</span>
-              <span className="font-mono text-xs font-bold text-gray-500 tracking-widest">VS</span>
-              <span className="font-mono text-3xl font-black text-[#00D4FF] tracking-tighter leading-none w-10 text-left">{rounds_won_b}</span>
-            </div>
-            <span className="absolute bottom-1 font-mono text-[8px] font-black text-[#00D4FF] uppercase tracking-[2px]">{mapName}</span>
-          </div>
-
-          {/* TEAM B */}
-          <div className="flex-1 flex items-center justify-start px-4 gap-3 bg-gradient-to-l from-transparent to-[#00D4FF]/5">
-            <div className="flex gap-1">
-              <div className={`h-2 w-2 rounded-full ${score_b >= 1 ? "bg-[#C9A84C] shadow-[0_0_8px_#C9A84C]" : "bg-neutral-800"}`} />
-              <div className={`h-2 w-2 rounded-full ${score_b >= 2 ? "bg-[#C9A84C] shadow-[0_0_8px_#C9A84C]" : "bg-neutral-800"}`} />
-            </div>
-            <div className="h-8 w-8 flex items-center justify-center bg-gray-900 border border-white/10 rounded-md">
-              <span className="font-mono text-xs text-gray-400">⚔️</span>
-            </div>
-            <span className="font-mono text-lg font-black tracking-widest text-white uppercase">{team_b?.tag}</span>
-          </div>
-        </section>
+      {showScoreboard && team_a && team_b && (
+        <LiveScoreboard
+          teamA={team_a}
+          teamB={team_b}
+          winsNeeded={winsNeeded}
+          winsA={seriesWins.winsA}
+          winsB={seriesWins.winsB}
+          roundsA={rounds_won_a}
+          roundsB={rounds_won_b}
+          mapLabel={mapLabel}
+          mapName={mapName}
+        />
       )}
 
       {/* 2. DYNAMIC BROADCAST EVENT BADGES */}
@@ -621,51 +477,16 @@ export default function MatchBroadcastOverlay({
       )}
 
       
-      {/* SPONSOR LOGO */}
+      {/* SPONSOR BADGE (Title Sponsor จริงจาก banners API แทน placeholder เดิม) */}
       {showScoreboard && (
         <section className="absolute bottom-8 left-8 z-40">
-          <div className="bg-white/10 backdrop-blur-md px-6 py-4 rounded-xl border border-white/20">
-            <div className="text-xs font-mono text-gray-400 mb-2 uppercase tracking-widest">Official Sponsor</div>
-            <div className="text-xl font-black text-white italic">ZODIAC LOGO</div>
-          </div>
+          <SponsorBadge />
         </section>
       )}
 
-      {/* LEFT SIDEBAR (TEAM A) */}
-      {showScoreboard && (
-        <section className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-40 w-[300px]">
-          {rosterA.map((player) => (
-            <div key={player.id} className="flex items-center gap-3 bg-[#0A0A0F]/80 backdrop-blur-md border border-[#00D4FF]/50 rounded-r-xl p-2 shadow-lg">
-              <div className="w-12 h-12 bg-gray-800 rounded-md border border-white/20 flex items-center justify-center text-xs font-black text-[#00D4FF]">{player.agent.slice(0,2).toUpperCase()}</div>
-              <div className="flex-1">
-                <div className="text-xs font-bold text-white truncate">{player.name}</div>
-                <div className="w-full h-1.5 bg-gray-700 mt-1 rounded-full overflow-hidden">
-                  <div className="h-full bg-[#00D4FF] w-[100%]" />
-                </div>
-              </div>
-              <div className="text-xs font-mono font-bold text-gray-300 w-12 text-right">100 HP</div>
-            </div>
-          ))}
-        </section>
-      )}
-
-      {/* RIGHT SIDEBAR (TEAM B) */}
-      {showScoreboard && (
-        <section className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-40 w-[300px]">
-          {rosterB.map((player) => (
-            <div key={player.id} className="flex items-center gap-3 bg-[#0A0A0F]/80 backdrop-blur-md border border-[#FF4655]/50 rounded-l-xl p-2 shadow-lg flex-row-reverse">
-              <div className="w-12 h-12 bg-gray-800 rounded-md border border-white/20 flex items-center justify-center text-xs font-black text-[#FF4655]">{player.agent.slice(0,2).toUpperCase()}</div>
-              <div className="flex-1 text-right">
-                <div className="text-xs font-bold text-white truncate">{player.name}</div>
-                <div className="w-full h-1.5 bg-gray-700 mt-1 rounded-full overflow-hidden flex justify-end">
-                  <div className="h-full bg-[#FF4655] w-[100%]" />
-                </div>
-              </div>
-              <div className="text-xs font-mono font-bold text-gray-300 w-12 text-left">100 HP</div>
-            </div>
-          ))}
-        </section>
-      )}
+      {/* PLAYER SIDEBARS: ชื่อผู้เล่นจริงจาก team_members / participants (ไม่มีข้อมูล HP จริง จึงไม่แสดง) */}
+      {showScoreboard && <LiveRosterSidebar roster={rosterA} side="left" team="A" />}
+      {showScoreboard && <LiveRosterSidebar roster={rosterB} side="right" team="B" />}
 
       {/* 3. MAP VETO OVERLAY (Sponsor Towers + Match Details + Series Map Order) */}
       {displayStatus === "VETO" && team_a && team_b && (
@@ -705,200 +526,8 @@ export default function MatchBroadcastOverlay({
         />
       )}
 
-      {/* 5. BUY PHASE HUD OVERLAY (TOGGLED VIA ALT+C OR REALTIME BROADCAST) */}
-      <section
-        className={`absolute bottom-6 left-1/2 -translate-x-1/2 w-[1760px] z-50 transition-all duration-300 transform pointer-events-none ${
-          showBuyPhase ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-8 scale-95"
-        }`}
-      >
-        <div className="grid grid-cols-2 gap-8">
-          {/* TEAM A BUY PHASE CARD (LEFT) */}
-          <div className="relative bg-[#0b0f19]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] overflow-hidden">
-            {/* TIMEOUTS BADGE */}
-            <div className="absolute -top-1 left-6 -translate-y-1/2 bg-[#0A0D14] border border-cyan-500/40 px-3 py-1 rounded-full flex items-center gap-2 shadow-lg">
-              <span className="font-mono text-[9px] font-bold text-gray-400 uppercase tracking-widest">TIMEOUTS</span>
-              <div className="flex gap-1 text-[#00D4FF] text-[10px]">
-                <span>◆</span>
-                <span>◆</span>
-              </div>
-            </div>
-
-            {/* TEAM A HEADER */}
-            <div className="flex justify-between items-center border-b border-white/10 pb-3 mb-3 mt-1">
-              <div>
-                <h2 className="text-2xl font-black text-white tracking-wide uppercase font-sans">
-                  {team_a?.name || "Team A"}
-                </h2>
-                <span className="font-mono text-[10px] text-cyan-400 font-bold uppercase tracking-widest">
-                  [{team_a?.tag || "TMA"}]
-                </span>
-              </div>
-              <div className="text-right font-mono">
-                <div className="text-emerald-400 font-black text-sm flex items-center justify-end gap-1">
-                  <span className="text-[10px] opacity-70">BANK</span>
-                  <span className="text-base tracking-tight">¤ {totalBankA.toLocaleString()}</span>
-                </div>
-                <div className="text-gray-400 font-bold text-[10px] flex items-center justify-end gap-1">
-                  <span className="opacity-70">MIN NEXT:</span>
-                  <span>¤ {totalMinNextA.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* TEAM A PLAYER ROWS */}
-            <div className="space-y-2">
-              {rosterA.map((player) => (
-                <div
-                  key={player.id}
-                  className="flex items-center justify-between bg-white/[0.03] hover:bg-white/[0.06] px-3 py-2 rounded-xl border border-white/5 transition"
-                >
-                  {/* Avatar & Player Name */}
-                  <div className="flex items-center gap-3 w-[200px]">
-                    <div className="relative h-9 w-9 rounded-lg overflow-hidden bg-gradient-to-br from-[#1c2237] to-[#121624] border border-white/20 flex items-center justify-center font-mono text-xs font-black text-[#00D4FF]">
-                      {player.agent.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <span className="font-mono text-[9px] text-[#00D4FF] block font-bold uppercase tracking-wider">
-                        {player.agent}
-                      </span>
-                      <span className="font-bold text-xs text-white truncate block max-w-[140px]">
-                        {player.name}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* KDA */}
-                  <div className="w-[85px] text-center font-mono text-xs text-gray-300 font-bold">
-                    <span>{player.kills}</span>
-                    <span className="text-gray-600 px-1">/</span>
-                    <span>{player.deaths}</span>
-                    <span className="text-gray-600 px-1">/</span>
-                    <span>{player.assists}</span>
-                  </div>
-
-                  {/* Ultimate Points */}
-                  <div className="w-[85px] flex justify-center">
-                    <UltDots current={player.ultPoints} max={player.ultMax} />
-                  </div>
-
-                  {/* Armor */}
-                  <div className="w-[50px] flex justify-center">
-                    <ShieldIcon type={player.armor} />
-                  </div>
-
-                  {/* Weapon */}
-                  <div className="w-[120px] flex justify-center">
-                    <WeaponIcon name={player.weapon} />
-                  </div>
-
-                  {/* Credits & Min Next */}
-                  <div className="w-[100px] text-right font-mono">
-                    <span className="text-emerald-400 font-bold text-xs block">
-                      ¤ {player.credits.toLocaleString()}
-                    </span>
-                    <span className="text-gray-500 text-[9px] block">
-                      ¤ {player.minNext.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* TEAM B BUY PHASE CARD (RIGHT) */}
-          <div className="relative bg-[#0b0f19]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] overflow-hidden">
-            {/* TIMEOUTS BADGE */}
-            <div className="absolute -top-1 right-6 -translate-y-1/2 bg-[#0A0D14] border border-rose-500/40 px-3 py-1 rounded-full flex items-center gap-2 shadow-lg">
-              <span className="font-mono text-[9px] font-bold text-gray-400 uppercase tracking-widest">TIMEOUTS</span>
-              <div className="flex gap-1 text-[#FF4655] text-[10px]">
-                <span>◆</span>
-                <span>◆</span>
-              </div>
-            </div>
-
-            {/* TEAM B HEADER */}
-            <div className="flex justify-between items-center border-b border-white/10 pb-3 mb-3 mt-1">
-              <div className="text-left font-mono">
-                <div className="text-emerald-400 font-black text-sm flex items-center justify-start gap-1">
-                  <span className="text-[10px] opacity-70">BANK</span>
-                  <span className="text-base tracking-tight">¤ {totalBankB.toLocaleString()}</span>
-                </div>
-                <div className="text-gray-400 font-bold text-[10px] flex items-center justify-start gap-1">
-                  <span className="opacity-70">MIN NEXT:</span>
-                  <span>¤ {totalMinNextB.toLocaleString()}</span>
-                </div>
-              </div>
-              <div className="text-right">
-                <h2 className="text-2xl font-black text-white tracking-wide uppercase font-sans">
-                  {team_b?.name || "Team B"}
-                </h2>
-                <span className="font-mono text-[10px] text-rose-400 font-bold uppercase tracking-widest">
-                  [{team_b?.tag || "TMB"}]
-                </span>
-              </div>
-            </div>
-
-            {/* TEAM B PLAYER ROWS (MIRRORED LAYOUT) */}
-            <div className="space-y-2">
-              {rosterB.map((player) => (
-                <div
-                  key={player.id}
-                  className="flex items-center justify-between bg-white/[0.03] hover:bg-white/[0.06] px-3 py-2 rounded-xl border border-white/5 transition"
-                >
-                  {/* Credits & Min Next */}
-                  <div className="w-[100px] text-left font-mono">
-                    <span className="text-emerald-400 font-bold text-xs block">
-                      ¤ {player.credits.toLocaleString()}
-                    </span>
-                    <span className="text-gray-500 text-[9px] block">
-                      ¤ {player.minNext.toLocaleString()}
-                    </span>
-                  </div>
-
-                  {/* Weapon */}
-                  <div className="w-[120px] flex justify-center">
-                    <WeaponIcon name={player.weapon} />
-                  </div>
-
-                  {/* Armor */}
-                  <div className="w-[50px] flex justify-center">
-                    <ShieldIcon type={player.armor} />
-                  </div>
-
-                  {/* Ultimate Points */}
-                  <div className="w-[85px] flex justify-center">
-                    <UltDots current={player.ultPoints} max={player.ultMax} />
-                  </div>
-
-                  {/* KDA */}
-                  <div className="w-[85px] text-center font-mono text-xs text-gray-300 font-bold">
-                    <span>{player.kills}</span>
-                    <span className="text-gray-600 px-1">/</span>
-                    <span>{player.deaths}</span>
-                    <span className="text-gray-600 px-1">/</span>
-                    <span>{player.assists}</span>
-                  </div>
-
-                  {/* Avatar & Player Name */}
-                  <div className="flex items-center justify-end gap-3 w-[200px] text-right">
-                    <div>
-                      <span className="font-mono text-[9px] text-rose-400 block font-bold uppercase tracking-wider">
-                        {player.agent}
-                      </span>
-                      <span className="font-bold text-xs text-white truncate block max-w-[140px]">
-                        {player.name}
-                      </span>
-                    </div>
-                    <div className="relative h-9 w-9 rounded-lg overflow-hidden bg-gradient-to-br from-[#371c24] to-[#241217] border border-white/20 flex items-center justify-center font-mono text-xs font-black text-rose-400">
-                      {player.agent.slice(0, 2).toUpperCase()}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* 5. BUY PHASE HUD (TOGGLED VIA ALT+C OR REALTIME BROADCAST) — แสดงเฉพาะข้อมูลที่มีจริง */}
+      <BuyPhaseHud visible={showBuyPhase} teamA={team_a} teamB={team_b} rosterA={rosterA} rosterB={rosterB} />
     </main>
   );
 }
