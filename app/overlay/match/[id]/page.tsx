@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, use } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { VetoScene } from "@/components/overlay/VetoScene";
+import { PreMatchScene } from "@/components/overlay/PreMatchScene";
 import { IntermissionScene } from "@/components/overlay/IntermissionScene";
 import { BuyPhaseHud, type BuyPhasePlayer } from "@/components/overlay/BuyPhaseHud";
 import { LiveRosterSidebar } from "@/components/overlay/LiveRosterSidebar";
@@ -50,6 +51,7 @@ export interface MatchData {
   team_b_id: string | null;
   team_a_ready_at: string | null;
   team_b_ready_at: string | null;
+  scheduled_at?: string | null;
   lobby_code: string | null;
   round_label?: string | null;
   format_config?: Record<string, unknown> | null;
@@ -520,6 +522,23 @@ export default function MatchBroadcastOverlay({
       {/* PLAYER SIDEBARS: ชื่อผู้เล่นจริงจาก team_members / participants (ไม่มีข้อมูล HP จริง จึงไม่แสดง) */}
       {showScoreboard && <LiveRosterSidebar roster={rosterA} side="left" team="A" />}
       {showScoreboard && <LiveRosterSidebar roster={rosterB} side="right" team="B" />}
+
+      {/* 2.5 PRE-MATCH (SCHEDULED นับถอยหลัง / READY_CHECK สถานะ Ready แต่ละทีม) — เดิมไม่มีฉากเลย */}
+      {(displayStatus === "SCHEDULED" || displayStatus === "READY_CHECK") && team_a && team_b && (
+        <PreMatchScene
+          mode={displayStatus === "SCHEDULED" ? "COUNTDOWN" : "READY_CHECK"}
+          teamA={team_a}
+          teamB={team_b}
+          bestOf={match.best_of ?? 3}
+          matchCode={match.id.slice(0, 8).toUpperCase()}
+          tournamentName={tournamentName}
+          stageName={stageName}
+          roundLabel={match.round_label ?? null}
+          scheduledAt={match.scheduled_at ?? null}
+          teamAReadyAt={match.team_a_ready_at}
+          teamBReadyAt={match.team_b_ready_at}
+        />
+      )}
 
       {/* 3. MAP VETO OVERLAY (Sponsor Towers + Match Details + Series Map Order) */}
       {displayStatus === "VETO" && team_a && team_b && (
