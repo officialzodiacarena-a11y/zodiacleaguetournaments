@@ -7,6 +7,7 @@
 
 import React from "react";
 import { TEAM_A_HEX, TEAM_B_HEX } from "@/components/overlay/series";
+import { AgentPortrait } from "@/components/overlay/AgentPortrait";
 
 export interface BuyPhasePlayer {
   id: string;
@@ -181,12 +182,7 @@ function TeamCard({ team, roster, hex, mirrored }: { team: HudTeam; roster: BuyP
             className={`flex items-center justify-between gap-4 bg-white/[0.03] px-3 py-2 rounded-xl border border-white/5 ${mirrored ? "flex-row-reverse" : ""}`}
           >
             <div className={`flex items-center gap-3 flex-1 min-w-0 ${mirrored ? "flex-row-reverse text-right" : ""}`}>
-              <div
-                className="relative h-9 w-9 shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-[#1c2237] to-[#121624] border border-white/20 flex items-center justify-center font-mono text-xs font-black"
-                style={{ color: hex }}
-              >
-                {initials(player)}
-              </div>
+              <AgentPortrait agent={player.agent} fallbackText={initials(player)} hex={hex} />
               <div className="min-w-0">
                 {player.agent && (
                   <span className="font-mono text-[9px] block font-bold uppercase tracking-wider" style={{ color: hex }}>

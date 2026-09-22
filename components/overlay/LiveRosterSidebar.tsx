@@ -5,6 +5,7 @@
 
 import React from "react";
 import { TEAM_A_HEX, TEAM_B_HEX } from "@/components/overlay/series";
+import { AgentPortrait } from "@/components/overlay/AgentPortrait";
 import type { BuyPhasePlayer } from "@/components/overlay/BuyPhaseHud";
 
 export function LiveRosterSidebar({ roster, side, team }: { roster: BuyPhasePlayer[]; side: "left" | "right"; team: "A" | "B" }) {
@@ -19,12 +20,12 @@ export function LiveRosterSidebar({ roster, side, team }: { roster: BuyPhasePlay
           className={`flex items-center gap-3 bg-[#0A0A0F]/80 backdrop-blur-md border p-2 shadow-lg ${isLeft ? "rounded-r-xl" : "rounded-l-xl flex-row-reverse"}`}
           style={{ borderColor: `${hex}80` }}
         >
-          <div
-            className="w-12 h-12 shrink-0 bg-gray-800 rounded-md border border-white/20 flex items-center justify-center text-xs font-black"
-            style={{ color: hex }}
-          >
-            {(player.agent || player.name).slice(0, 2).toUpperCase()}
-          </div>
+          <AgentPortrait
+            agent={player.agent}
+            fallbackText={(player.agent || player.name).slice(0, 2).toUpperCase()}
+            hex={hex}
+            size="sm"
+          />
           <div className={`flex-1 min-w-0 ${isLeft ? "" : "text-right"}`}>
             <div className="text-xs font-bold text-white truncate">{player.name}</div>
             {player.agent && <div className="text-[9px] font-mono uppercase tracking-wider truncate" style={{ color: hex }}>{player.agent}</div>}
