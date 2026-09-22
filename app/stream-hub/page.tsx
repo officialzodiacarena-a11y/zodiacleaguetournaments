@@ -1,12 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, use, useRef } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect, useCallback, use } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import {
-  Shield,
   Clock,
-  Swords,
   Layers,
   Sparkles,
   Maximize2,
@@ -17,13 +14,11 @@ import {
   ChevronDown,
   CheckCircle2,
   XCircle,
-  Video,
   Sliders,
   Users,
   Trophy,
   RefreshCw,
   Target,
-  Activity,
   Armchair
 } from 'lucide-react';
 
@@ -31,7 +26,7 @@ import {
 import { LiveScoreboard } from '@/components/overlay/LiveScoreboard';
 import { LiveRosterSidebar } from '@/components/overlay/LiveRosterSidebar';
 import { BuyPhaseHud, type BuyPhasePlayer } from '@/components/overlay/BuyPhaseHud';
-import { TEAM_A_TEXT, TEAM_B_TEXT, DetailCell, type OverlayTeam, type OverlayVeto, type OverlayGame } from '@/components/overlay/series';
+import { TEAM_A_TEXT, TEAM_B_TEXT, DetailCell, type OverlayTeam, type OverlayVeto } from '@/components/overlay/series';
 
 // Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yjygevsdfebdyzywbpdr.supabase.co';
@@ -77,7 +72,6 @@ export default function StreamHubMainPage({
   const [bgMode, setBgMode] = useState<'transparent' | 'amber' | 'arena' | 'chroma'>('transparent');
   const [showControls, setShowControls] = useState<boolean>(true);
   const [showBuyPhase, setShowBuyPhase] = useState<boolean>(false);
-  const [showOverwolfRounds, setShowOverwolfRounds] = useState<boolean>(false);
 
   // Active Match ID & Lists
   const [currentMatchId, setCurrentMatchId] = useState<string>(initialMatchId);
@@ -233,6 +227,8 @@ export default function StreamHubMainPage({
         if (matchData.team_b) setTeamB({ id: matchData.team_b.id, name: matchData.team_b.name, tag: matchData.team_b.tag });
         setScoreA(matchData.rounds_won_a ?? 0);
         setScoreB(matchData.rounds_won_b ?? 0);
+        setWinsA(0);
+        setWinsB(0);
         setBestOf(matchData.best_of ?? 1);
         if (tour?.name) setTournamentName(tour.name);
         setSubStage(matchData.status === 'LIVE' ? 'LIVE MATCH' : matchData.status === 'READY_CHECK' ? 'READY CHECK (นั่งที่)' : matchData.status);
@@ -263,15 +259,25 @@ export default function StreamHubMainPage({
 
   // Initial load & periodic poll
   useEffect(() => {
-    fetchAllMatchesFromSql();
-    loadMatchDetails(currentMatchId);
+    let active = true;
+    const loadInitial = async () => {
+      if (!active) return;
+      await fetchAllMatchesFromSql();
+      await loadMatchDetails(currentMatchId);
+    };
+    void loadInitial();
 
     // 3s interval to check if players pressed "Ready" (นั่งที่)
     const interval = setInterval(() => {
-      loadMatchDetails(currentMatchId);
+      if (active) {
+        void loadMatchDetails(currentMatchId);
+      }
     }, 3000);
 
-    return () => clearInterval(interval);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, [currentMatchId, fetchAllMatchesFromSql, loadMatchDetails]);
 
   // Timer Tick
@@ -296,16 +302,6 @@ export default function StreamHubMainPage({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  const formatTime = (secs: number) => {
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    if (secs >= 3600) {
-      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    }
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
 
   const handleSelectMatch = (matchId: string) => {
     setCurrentMatchId(matchId);
