@@ -233,7 +233,7 @@ export default function MatchBroadcastOverlay({
           const toRoster = (teamId: string) =>
             teamMembers
               .filter((m) => m.team_id === teamId)
-              .map((m) => ({
+              .map((m, idx) => ({
                 id: m.id,
                 name:
                   (Array.isArray(m.players) ? m.players[0]?.display_name : (m.players as { display_name?: string } | null)?.display_name) ||
@@ -241,6 +241,13 @@ export default function MatchBroadcastOverlay({
                 kills: 0,
                 deaths: 0,
                 assists: 0,
+                hp: 100,
+                hpMax: 100,
+                credits: 2900,
+                armor: "HEAVY" as const,
+                weapon: idx === 3 ? "Operator" : "Vandal",
+                ultPoints: 3,
+                ultMax: 8,
               }));
           const newRosterA = toRoster(teamAData.id);
           const newRosterB = toRoster(teamBData.id);

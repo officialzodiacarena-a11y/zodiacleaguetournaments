@@ -571,6 +571,36 @@ export default function StreamHubMainPage({
                 >
                   Buy Phase [Alt+C]: {showBuyPhase ? 'ON' : 'OFF'}
                 </button>
+
+                {/* HP Quick Controls */}
+                <div className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded border border-white/10 text-[10px] font-mono">
+                  <span className="text-emerald-400 font-bold">HP:</span>
+                  <button
+                    onClick={() => {
+                      setRosterA(prev => prev.map(p => ({ ...p, hp: 100, hpMax: 100 })));
+                      setRosterB(prev => prev.map(p => ({ ...p, hp: 100, hpMax: 100 })));
+                    }}
+                    className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                  >
+                    100 All
+                  </button>
+                  <button
+                    onClick={() => {
+                      setRosterA(prev => prev.map(p => ({ ...p, hp: Math.max(0, (p.hp ?? 100) - 25) })));
+                    }}
+                    className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30"
+                  >
+                    -25 MWL
+                  </button>
+                  <button
+                    onClick={() => {
+                      setRosterB(prev => prev.map(p => ({ ...p, hp: Math.max(0, (p.hp ?? 100) - 25) })));
+                    }}
+                    className="px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 hover:bg-rose-500/30"
+                  >
+                    -25 DEF
+                  </button>
+                </div>
               </div>
 
               {/* Timer Controls */}
