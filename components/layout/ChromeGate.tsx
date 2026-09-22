@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
 import ZodiacOracle from '@/components/ZodiacOracle';
 
-// เส้นทางที่ต้องเป็น Clean View ล้วน ๆ (เช่น OBS Browser Source overlay)
+// เส้นทางที่ต้องเป็น Clean View ล้วน ๆ (เช่น OBS Browser Source overlay, Stream Hub)
 // ห้ามมี Navbar / floating widget ใด ๆ ปนมาบนภาพสตรีมเด็ดขาด
-const CHROME_FREE_PREFIXES = ['/overlay'];
+const CHROME_FREE_PREFIXES = ['/overlay', '/stream-hub'];
 
 export default function ChromeGate() {
   const pathname = usePathname();
