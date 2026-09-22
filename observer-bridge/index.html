@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Zodiac Arena — Observer Bridge</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, "Segoe UI", sans-serif;
+      background: #0b0f19;
+      color: #e5e7eb;
+      padding: 16px;
+    }
+    h1 {
+      font-size: 15px;
+      margin: 0 0 4px;
+      color: #fff;
+    }
+    .subtitle {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+    .warn {
+      background: rgba(244, 63, 94, 0.12);
+      border: 1px solid rgba(244, 63, 94, 0.4);
+      color: #fda4af;
+      font-size: 11px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+    label {
+      display: block;
+      font-size: 11px;
+      color: #9ca3af;
+      margin: 10px 0 4px;
+    }
+    input {
+      width: 100%;
+      background: #131826;
+      border: 1px solid #262c3d;
+      border-radius: 6px;
+      color: #f3f4f6;
+      padding: 7px 9px;
+      font-size: 12px;
+      font-family: monospace;
+    }
+    .row { display: flex; gap: 8px; margin-top: 14px; }
+    button {
+      flex: 1;
+      border: none;
+      border-radius: 6px;
+      padding: 9px 0;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #startBtn { background: #10b981; color: #04150e; }
+    #stopBtn { background: #262c3d; color: #e5e7eb; }
+    .status {
+      margin-top: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: monospace;
+    }
+    .status.running { color: #34d399; }
+    .status.stopped { color: #9ca3af; }
+    #log {
+      margin-top: 10px;
+      height: 300px;
+      overflow-y: auto;
+      background: #05070c;
+      border: 1px solid #1c2233;
+      border-radius: 6px;
+      padding: 8px;
+      font-family: monospace;
+      font-size: 10px;
+      color: #a5b4c3;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>Observer Bridge</h1>
+  <div class="subtitle">ยิง telemetry จาก Overwolf GEP เข้า Buy Phase HUD ของ Zodiac Arena</div>
+  <div class="warn">
+    ⚠️ ติดตั้ง/รันแอปนี้เฉพาะเครื่อง Observer เท่านั้น (ADR-004) ห้ามผู้เล่นทั้ง 10 คนติดตั้งเด็ดขาด —
+    ทดสอบกับบัญชี/เครื่องสำรองก่อนใช้งานแมตช์จริงทุกครั้ง
+  </div>
+
+  <label for="baseUrl">Base URL</label>
+  <input id="baseUrl" placeholder="http://localhost:3000" />
+
+  <label for="matchId">Match ID</label>
+  <input id="matchId" placeholder="เช่น a7606ae5-d83a-46f5-b422-652d5017b644" />
+
+  <label for="token">Observer Token</label>
+  <input id="token" type="password" placeholder="ออกจากหน้า Spectator Control (referee/admin)" />
+
+  <div class="row">
+    <button id="startBtn">Start</button>
+    <button id="stopBtn">Stop</button>
+  </div>
+
+  <div id="status" class="status stopped">หยุดอยู่ ○</div>
+  <div id="log"></div>
+
+  <script src="index.js"></script>
+</body>
+</html>
