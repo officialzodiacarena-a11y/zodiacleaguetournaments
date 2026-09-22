@@ -1,5 +1,6 @@
 // components/overlay/LiveRosterSidebar.tsx
-// OBS broadcast overlay: แถบรายชื่อผู้เล่นซ้าย/ขวาของฉาก LIVE — ใช้ชื่อจริง (และตัวละครถ้าทราบ) ไม่แสดง HP ปลอม
+// OBS broadcast overlay: แถบรายชื่อผู้เล่นซ้าย/ขวาของฉาก LIVE — ใช้ชื่อจริง (และตัวละครถ้าทราบ)
+// HP มาจาก Observer Bridge (stream_telemetry_relay) เมื่อมีค่าจริงเท่านั้น ไม่แสดงเลขปลอม
 "use client";
 
 import React from "react";
@@ -27,6 +28,14 @@ export function LiveRosterSidebar({ roster, side, team }: { roster: BuyPhasePlay
           <div className={`flex-1 min-w-0 ${isLeft ? "" : "text-right"}`}>
             <div className="text-xs font-bold text-white truncate">{player.name}</div>
             {player.agent && <div className="text-[9px] font-mono uppercase tracking-wider truncate" style={{ color: hex }}>{player.agent}</div>}
+            {typeof player.hp === "number" && typeof player.hpMax === "number" && (
+              <div className="mt-1 h-1 w-full rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${player.hp <= 0 ? "bg-neutral-700" : player.hp / player.hpMax <= 0.3 ? "bg-rose-500" : player.hp / player.hpMax <= 0.6 ? "bg-amber-400" : "bg-emerald-400"}`}
+                  style={{ width: `${Math.max(0, Math.min(100, (player.hp / player.hpMax) * 100))}%` }}
+                />
+              </div>
+            )}
           </div>
         </div>
       ))}

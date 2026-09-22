@@ -1,7 +1,8 @@
 // components/overlay/BuyPhaseHud.tsx
 // OBS broadcast overlay: Buy Phase HUD (เปิด/ปิดด้วย Alt+C หรือปุ่มใน Spectator Control)
 // แสดงเฉพาะข้อมูลที่มีจริง: ชื่อผู้เล่น, ตัวละคร (ถ้าทราบ), K/D/A จาก match_participants
-// ข้อมูลรายรอบ (เงิน, อาวุธ, เกราะ, Ult) ยังไม่มีแหล่งข้อมูลจริง — ถ้าไม่มีค่าจะซ่อนคอลัมน์นั้น ไม่แสดงตัวเลขปลอม
+// ข้อมูลรายรอบ (เงิน, อาวุธ, เกราะ, Ult, HP) มาจาก Observer Bridge ผ่าน stream_telemetry_relay broadcast
+// (ดู app/api/v1/matches/[id]/telemetry/route.ts) — ถ้ายังไม่มีค่าจะซ่อนคอลัมน์นั้น ไม่แสดงตัวเลขปลอม
 "use client";
 
 import React from "react";
@@ -21,6 +22,24 @@ export interface BuyPhasePlayer {
   weapon?: string;
   credits?: number;
   minNext?: number;
+  hp?: number;
+  hpMax?: number;
+}
+
+function HpBar({ hp, hpMax }: { hp: number; hpMax: number }) {
+  const pct = Math.max(0, Math.min(100, (hp / hpMax) * 100));
+  const isDead = hp <= 0;
+  const color = isDead ? "bg-neutral-700" : pct <= 30 ? "bg-rose-500" : pct <= 60 ? "bg-amber-400" : "bg-emerald-400";
+  return (
+    <div className="w-[60px] flex flex-col items-center gap-0.5">
+      <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className={`font-mono text-[9px] font-bold ${isDead ? "text-neutral-600" : "text-white/70"}`}>
+        {isDead ? "DEAD" : hp}
+      </span>
+    </div>
+  );
 }
 
 // --- WEAPON & SHIELD ICONS ---
@@ -186,6 +205,9 @@ function TeamCard({ team, roster, hex, mirrored }: { team: HudTeam; roster: BuyP
               <span>{player.assists}</span>
             </div>
 
+            {typeof player.hp === "number" && typeof player.hpMax === "number" && (
+              <HpBar hp={player.hp} hpMax={player.hpMax} />
+            )}
             {typeof player.ultMax === "number" && (
               <div className="w-[85px] flex justify-center">
                 <UltDots current={player.ultPoints ?? 0} max={player.ultMax} />

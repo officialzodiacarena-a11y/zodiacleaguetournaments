@@ -151,6 +151,8 @@ export default function SpectatorHUDControlPanel({
   const [loading, setLoading] = useState<boolean>(true);
   const [authorized, setAuthorized] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ type: "info" | "error"; msg: string } | null>(null);
+  const [observerToken, setObserverToken] = useState<string | null>(null);
+  const [observerTokenLoading, setObserverTokenLoading] = useState<boolean>(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -568,6 +570,27 @@ export default function SpectatorHUDControlPanel({
     }
   };
 
+  // ออก/หมุน Observer Bridge Token — เครื่องคนจับกล้องเอาไปตั้งค่าเพื่อยิง telemetry เข้า /api/v1/matches/[id]/telemetry
+  // token ดิบแสดงให้เห็นแค่ครั้งเดียวตอนกดปุ่มนี้ (เหมือน API key ทั่วไป) — ระบบเก็บแค่ hash ไว้
+  const mintObserverToken = async () => {
+    setObserverTokenLoading(true);
+    try {
+      const res = await fetch(`/api/v1/matches/${matchId}/observer-token`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        setFeedback({ type: "error", msg: `ออก Observer Token ล้มเหลว: ${json?.error?.message || res.statusText}` });
+        return;
+      }
+      setObserverToken(json.token as string);
+      setFeedback({ type: "info", msg: "ออก Observer Token ใหม่แล้ว — คัดลอกไปตั้งค่าที่เครื่องคนจับกล้องทันที (token เก่าใช้ไม่ได้อีกต่อไป)" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "การเชื่อมต่อเครือข่ายล้มเหลว";
+      setFeedback({ type: "error", msg });
+    } finally {
+      setObserverTokenLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-[#0A0A0F] font-mono text-xs font-bold text-[#00D4FF]">
@@ -752,6 +775,42 @@ export default function SpectatorHUDControlPanel({
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* OBSERVER BRIDGE (คนจับกล้อง) — ยิง telemetry รายรอบ (เงิน/อาวุธ/เกราะ/Ult/HP) เข้า Buy Phase HUD */}
+          <div className="bg-[#12121A] border border-white/5 rounded-xl p-5">
+            <h2 className="font-mono text-sm font-black text-[#00D4FF] uppercase tracking-wider mb-4 border-b border-white/5 pb-2">
+              🎥 Observer Bridge
+            </h2>
+            <p className="font-mono text-[10px] text-gray-500 mb-4 leading-relaxed uppercase">
+              * เครื่องคนจับกล้อง (Spectator ในเกม) เท่านั้นที่ต้องตั้งค่านี้ — ใช้ token ยิง telemetry เข้า Buy Phase HUD ทุกวินาที
+            </p>
+            <button
+              onClick={mintObserverToken}
+              disabled={observerTokenLoading}
+              className="w-full px-3 py-2 bg-[#00D4FF]/10 border border-[#00D4FF]/30 text-[#00D4FF] hover:bg-[#00D4FF]/20 rounded font-mono text-xs font-bold transition disabled:opacity-40"
+            >
+              {observerTokenLoading ? "GENERATING..." : observerToken ? "ROTATE TOKEN (INVALIDATES OLD ONE)" : "GENERATE OBSERVER TOKEN"}
+            </button>
+            {observerToken && (
+              <div className="mt-3 space-y-2">
+                <div>
+                  <label className="block font-mono text-[10px] text-gray-500 uppercase mb-1">Endpoint (POST)</label>
+                  <pre className="bg-black/60 border border-white/10 rounded px-3 py-2 font-mono text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap break-all select-all">
+{`${typeof window !== "undefined" ? window.location.origin : ""}/api/v1/matches/${matchId}/telemetry`}
+                  </pre>
+                </div>
+                <div>
+                  <label className="block font-mono text-[10px] text-gray-500 uppercase mb-1">Token (แสดงครั้งเดียว — คัดลอกเดี๋ยวนี้)</label>
+                  <pre className="bg-black/60 border border-[#00D4FF]/40 rounded px-3 py-2 font-mono text-[10px] text-[#00D4FF] overflow-x-auto whitespace-pre-wrap break-all select-all">
+{observerToken}
+                  </pre>
+                </div>
+                <p className="font-mono text-[9px] text-gray-600 leading-relaxed">
+                  ใส่ header <code className="text-gray-400">Authorization: Bearer &lt;token&gt;</code> ในทุก request จาก Observer Bridge
+                </p>
+              </div>
+            )}
           </div>
         </section>
 
