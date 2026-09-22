@@ -85,8 +85,8 @@ export default function StreamHubMainPage({
 
   // Active Match Real Database States
   const [activeMatchData, setActiveMatchData] = useState<SqlMatchOption | null>(null);
-  const [teamA, setTeamA] = useState<OverlayTeam>({ id: 'team-a', name: 'TEAM ALPHA', tag: 'ALP' });
-  const [teamB, setTeamB] = useState<OverlayTeam>({ id: 'team-b', name: 'TEAM OMEGA', tag: 'OMG' });
+  const [teamA, setTeamA] = useState<OverlayTeam>({ id: 'team-a', name: 'MWL ESPORTS', tag: 'MWL' });
+  const [teamB, setTeamB] = useState<OverlayTeam>({ id: 'team-b', name: 'DEFENDERS', tag: 'DEF' });
   const [scoreA, setScoreA] = useState<number>(0);
   const [scoreB, setScoreB] = useState<number>(0);
   const [winsA, setWinsA] = useState<number>(0);
@@ -98,19 +98,19 @@ export default function StreamHubMainPage({
 
   // Real Rosters from database
   const [rosterA, setRosterA] = useState<BuyPhasePlayer[]>([
-    { id: 'p1', name: 'นายหนิว eSport (illiYhad)', agent: 'Jett', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 3900, armor: 'HEAVY', weapon: 'Vandal', ultPoints: 4, ultMax: 8 },
-    { id: 'p2', name: 'Thanakorn Thapthim', agent: 'Sova', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 2400, armor: 'HEAVY', weapon: 'Phantom', ultPoints: 2, ultMax: 8 },
-    { id: 'p3', name: 'มาร์ค เพิ่มพูน', agent: 'Omen', kills: 0, deaths: 0, assists: 0, hp: 85, hpMax: 100, credits: 1900, armor: 'LIGHT', weapon: 'Vandal', ultPoints: 5, ultMax: 7 },
-    { id: 'p4', name: 'JukJik', agent: 'Cypher', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 4500, armor: 'HEAVY', weapon: 'Operator', ultPoints: 3, ultMax: 6 },
-    { id: 'p5', name: 'Obik Chanel', agent: 'Raze', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 2100, armor: 'LIGHT', weapon: 'Spectre', ultPoints: 1, ultMax: 8 },
+    { id: 'p1', name: 'MWL | Ming', agent: 'Jett', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 3900, armor: 'HEAVY', weapon: 'Vandal', ultPoints: 4, ultMax: 8 },
+    { id: 'p2', name: 'scp20baht', agent: 'Sova', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 2400, armor: 'HEAVY', weapon: 'Phantom', ultPoints: 2, ultMax: 8 },
+    { id: 'p3', name: 'MWL | 946a', agent: 'Omen', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 1900, armor: 'LIGHT', weapon: 'Vandal', ultPoints: 5, ultMax: 7 },
+    { id: 'p4', name: 'MWL | Black Knight', agent: 'Cypher', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 4500, armor: 'HEAVY', weapon: 'Operator', ultPoints: 3, ultMax: 6 },
+    { id: 'p5', name: 'MWL | BabyBaret', agent: 'Raze', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 2100, armor: 'LIGHT', weapon: 'Spectre', ultPoints: 1, ultMax: 8 },
   ]);
 
   const [rosterB, setRosterB] = useState<BuyPhasePlayer[]>([
-    { id: 'p6', name: 'Awake', agent: 'Neon', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 3200, armor: 'HEAVY', weapon: 'Vandal', ultPoints: 6, ultMax: 7 },
-    { id: 'p7', name: 'Kanin Panmanee', agent: 'Vyse', kills: 0, deaths: 0, assists: 0, hp: 60, hpMax: 100, credits: 1500, armor: 'HEAVY', weapon: 'Phantom', ultPoints: 2, ultMax: 8 },
-    { id: 'p8', name: 'โ-ล-ว์ちょっと見ているだけです。', agent: 'Viper', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 4100, armor: 'NONE', weapon: 'Ghost', ultPoints: 5, ultMax: 8 },
-    { id: 'p9', name: 'Clarity', agent: 'Fade', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 2800, armor: 'HEAVY', weapon: 'Vandal', ultPoints: 3, ultMax: 8 },
-    { id: 'p10', name: 'admin-smoke7-1789013927092-nrpha5', agent: 'Skye', kills: 0, deaths: 0, assists: 0, hp: 45, hpMax: 100, credits: 1200, armor: 'LIGHT', weapon: 'Sheriff', ultPoints: 2, ultMax: 7 },
+    { id: 'p6', name: 'iykyk', agent: 'Reyna', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 3200, armor: 'HEAVY', weapon: 'Vandal', ultPoints: 6, ultMax: 7 },
+    { id: 'p7', name: 'Roxy', agent: 'Killjoy', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 1500, armor: 'HEAVY', weapon: 'Phantom', ultPoints: 2, ultMax: 8 },
+    { id: 'p8', name: 'MooDeng', agent: 'Viper', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 4100, armor: 'HEAVY', weapon: 'Ghost', ultPoints: 5, ultMax: 8 },
+    { id: 'p9', name: 'MWL | Sariel', agent: 'Fade', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 2800, armor: 'HEAVY', weapon: 'Vandal', ultPoints: 3, ultMax: 8 },
+    { id: 'p10', name: 'imyourmeowmeow', agent: 'Skye', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 1200, armor: 'LIGHT', weapon: 'Sheriff', ultPoints: 2, ultMax: 7 },
   ]);
 
   // Real Map Vetoes from database
