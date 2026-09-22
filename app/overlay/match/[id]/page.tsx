@@ -11,6 +11,7 @@ import { resolveDisplayScene } from "@/lib/overlay/series-flow";
 import { currentDeadlineMs, parseVetoFormat, vetoStartMsFromMatch, type VetoConfig } from "@/lib/veto/engine";
 import { SponsorBadge } from "@/components/overlay/SponsorBadge";
 import { buildSeriesGames, countSeriesWins, isGameDone, type OverlayGameStats, type OverlayParticipantStat } from "@/components/overlay/series";
+import type { TelemetryPlayerFrame } from "@/lib/overlay/telemetry-schema";
 
 export type MatchStatus =
   | "SCHEDULED"
@@ -359,7 +360,29 @@ export default function MatchBroadcastOverlay({
         }
       )
       .on("broadcast", { event: "stream_telemetry_relay" }, (payload) => {
-        console.log("Realtime stream health telemetries received:", payload);
+        // จาก Observer Bridge (เครื่องคนจับกล้อง) ผ่าน POST /api/v1/matches/[id]/telemetry
+        // จับคู่ผู้เล่นด้วยชื่อ (Bridge ไม่รู้จัก player_id ภายในระบบเรา) — จับคู่แบบไม่สนตัวพิมพ์เล็ก/ใหญ่และช่องว่างหัวท้าย
+        const frames = (payload.payload as { players?: TelemetryPlayerFrame[] } | null)?.players;
+        if (!isMounted || !Array.isArray(frames) || frames.length === 0) return;
+
+        const applyTelemetry = (roster: BuyPhasePlayer[]): BuyPhasePlayer[] =>
+          roster.map((player) => {
+            const frame = frames.find((f) => f.name.trim().toLowerCase() === player.name.trim().toLowerCase());
+            if (!frame) return player;
+            return {
+              ...player,
+              credits: frame.credits ?? player.credits,
+              weapon: frame.weapon ?? player.weapon,
+              armor: frame.armor ?? player.armor,
+              ultPoints: frame.ultPoints ?? player.ultPoints,
+              ultMax: frame.ultMax ?? player.ultMax,
+              hp: frame.hp ?? player.hp,
+              hpMax: frame.hpMax ?? player.hpMax,
+            };
+          });
+
+        setRosterA((prev) => applyTelemetry(prev));
+        setRosterB((prev) => applyTelemetry(prev));
       })
       .on("broadcast", { event: "scene_change" }, (payload) => {
         const scene = (payload.payload as { scene?: string })?.scene;
