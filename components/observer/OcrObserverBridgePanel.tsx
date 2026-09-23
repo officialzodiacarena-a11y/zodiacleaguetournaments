@@ -11,7 +11,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { matchOcrPlayerName, type LockedRosterCandidate, type OcrMatchResult } from '@/lib/ocr/fuzzy-matcher';
-import { PLAYER_NAME_ROI, ROUND_BANNER_ROI, cropRoi, parseRoundBannerText } from '@/lib/ocr/roi-regions';
+import { PLAYER_HP_BAR_ROI, PLAYER_NAME_ROI, ROUND_BANNER_ROI, cropRoi, parseRoundBannerText } from '@/lib/ocr/roi-regions';
+import { readHpFromCanvas } from '@/lib/ocr/hp-bar';
 import { recognizeText, terminateOcrWorkerPool } from '@/lib/ocr/ocr-worker-pool';
 import type { WinCondition } from '@/lib/overlay/telemetry-schema';
 
@@ -36,6 +37,7 @@ interface Props {
 }
 
 const CAPTURE_INTERVAL_MS = 1000; // 1 FPS ตามสเป็ค
+const HP_SEND_THRESHOLD = 2; // ส่ง HP ใหม่เมื่อเปลี่ยนตั้งแต่กี่หน่วย กันหลอดบน Overlay กระพริบจากสัญญาณรบกวนเล็กๆ
 
 export default function OcrObserverBridgePanel({ matchId, gameNumber, teamAId, teamBId, teamATag, teamBTag, observerToken }: Props) {
   const supabase = createClient();
@@ -56,6 +58,16 @@ export default function OcrObserverBridgePanel({ matchId, gameNumber, teamAId, t
   const streamRef = useRef<MediaStream | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
+
+  // --- HP จากหลอดเลือดบน HUD -> ส่งเข้า /telemetry (Observer Token) -> Buy Phase HUD บน Overlay ---
+  // ใช้ ref เพราะ runCaptureCycle ถูกผูกกับ setInterval ตอนกด START (closure เดิม) — token/ค่าที่ส่งล่าสุดต้องอ่านค่าปัจจุบันเสมอ
+  const [hpBySlot, setHpBySlot] = useState<Record<string, number>>({});
+  const [hpError, setHpError] = useState<string | null>(null);
+  const observerTokenRef = useRef(observerToken);
+  const lastSentHpRef = useRef<Record<string, number>>({});
+  useEffect(() => {
+    observerTokenRef.current = observerToken;
+  }, [observerToken]);
 
   // --- Round-End Confirmation ---
   const [pendingRound, setPendingRound] = useState<{
@@ -190,6 +202,52 @@ export default function OcrObserverBridgePanel({ matchId, gameNumber, teamAId, t
       );
       setMatchResults(Object.fromEntries(nameResults));
 
+      // HP ของ 10 คน — หลอดเลือดแถวเดียวกับชื่อ (team_a_hp_i คู่กับ team_a_i) อ่านจากสัดส่วนพิกเซลที่สว่าง
+      const hpEntries = PLAYER_HP_BAR_ROI.map((roi) => {
+        const slotId = roi.id.replace('_hp_', '_');
+        return [slotId, readHpFromCanvas(cropRoi(video, w, h, roi))] as const;
+      });
+      setHpBySlot(Object.fromEntries(hpEntries));
+
+      // ส่งเฉพาะคนที่จับคู่ชื่อได้ (ใช้ชื่อในระบบ = display_name ที่ Overlay ใช้จับคู่) และ HP เปลี่ยนเกินเกณฑ์
+      const nameBySlot = new Map(nameResults);
+      const changed = hpEntries.flatMap(([slotId, hp]) => {
+        const match = nameBySlot.get(slotId);
+        const locked = match?.matched_player_id ? lockedRoster.find((c) => c.id === match.matched_player_id) : undefined;
+        if (!match || !locked) return [];
+        const last = lastSentHpRef.current[locked.id];
+        if (last !== undefined && Math.abs(last - hp) < HP_SEND_THRESHOLD) return [];
+        return [{
+          name: locked.ign,
+          hp,
+          hpMax: 100,
+          raw_ocr_name: match.rawText.slice(0, 64) || undefined,
+          matched_player_id: locked.id,
+          match_confidence: match.confidence,
+        }];
+      });
+
+      const token = observerTokenRef.current;
+      if (changed.length > 0) {
+        if (!token) {
+          setHpError('ยังไม่มี Observer Token ในหน้านี้ — กด GENERATE / ROTATE TOKEN ด้านบนก่อน HP ถึงจะขึ้น Overlay');
+        } else {
+          const res = await fetch(`/api/v1/matches/${matchId}/telemetry`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ timestamp: Date.now(), players: changed }),
+          });
+          if (res.ok) {
+            changed.forEach((c) => {
+              lastSentHpRef.current[c.matched_player_id] = c.hp;
+            });
+            setHpError(null);
+          } else {
+            setHpError(`ส่ง HP ไม่สำเร็จ (HTTP ${res.status}) — ถ้าเป็น 401 ให้กด ROTATE TOKEN ใหม่`);
+          }
+        }
+      }
+
       // ป้ายจบรอบ
       const bannerCanvas = cropRoi(video, w, h, ROUND_BANNER_ROI);
       const bannerText = await recognizeText(bannerCanvas);
@@ -203,7 +261,7 @@ export default function OcrObserverBridgePanel({ matchId, gameNumber, teamAId, t
     } catch (err) {
       setOcrError(err instanceof Error ? err.message : 'OCR ประมวลผลล้มเหลว');
     }
-  }, [lockedRoster, teamAId, teamBId, pendingRound, lastRoundNumber]);
+  }, [lockedRoster, teamAId, teamBId, pendingRound, lastRoundNumber, matchId]);
 
   const startCapture = async () => {
     if (!lockedRoster) {
@@ -371,6 +429,7 @@ export default function OcrObserverBridgePanel({ matchId, gameNumber, teamAId, t
           <video ref={videoRef} muted playsInline className="hidden" />
 
           {ocrError && <p className="font-mono text-[10px] text-rose-400">{ocrError}</p>}
+          {hpError && <p className="font-mono text-[10px] text-amber-400">{hpError}</p>}
 
           {/* OCR NAME-MATCHING TABLE */}
           {capturing && (
@@ -385,6 +444,7 @@ export default function OcrObserverBridgePanel({ matchId, gameNumber, teamAId, t
                     <span>
                       {dot} {locked?.ign ?? '[UNMATCHED]'}
                       {result?.status === 'FUZZY' && ` (${result.confidence}%)`}
+                      {hpBySlot[roi.id] !== undefined && <span className="text-emerald-400"> · HP {hpBySlot[roi.id]}</span>}
                     </span>
                   </div>
                 );
