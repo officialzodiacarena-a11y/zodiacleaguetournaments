@@ -19,6 +19,53 @@ interface ParticipantItem {
   rounds_played?: number;
 }
 
+// อ่านรายชื่อ 10 คนที่ล็อกไว้แล้วของแม็พนี้ (ถ้ามี) — ใช้เป็น Candidate Array ให้ OCR Fuzzy Matcher
+// (SPEC-OCR-TELEMETRY-ROUNDS-V8.01-001 Section 1.3) สาธารณะอ่านได้ (เหมือน Overlay/Spectator อ่านข้อมูลแมตช์อื่นๆ)
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string; game_number: string }> | { id: string; game_number: string } }
+) {
+  const resolvedParams = await params;
+  const matchId = resolvedParams.id;
+  const gameNumber = parseInt(resolvedParams.game_number);
+  const supabase = await createClient();
+
+  const { data: game, error: gameErr } = await supabase
+    .from('match_games')
+    .select('id')
+    .eq('match_id', matchId)
+    .eq('game_number', gameNumber)
+    .maybeSingle();
+
+  if (gameErr) {
+    return NextResponse.json({ error: gameErr.message }, { status: 500 });
+  }
+  if (!game) {
+    return NextResponse.json({ locked: false, participants: [] });
+  }
+
+  const { data, error } = await supabase
+    .from('match_participants')
+    .select('player_id, team_id, is_substitute, players:player_id ( display_name )')
+    .eq('match_game_id', game.id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const participants = (data ?? []).map((row) => {
+    const playerObj = Array.isArray(row.players) ? row.players[0] : row.players;
+    return {
+      player_id: row.player_id,
+      team_id: row.team_id,
+      is_substitute: row.is_substitute,
+      display_name: playerObj?.display_name ?? null,
+    };
+  });
+
+  return NextResponse.json({ locked: participants.length === 10, participants });
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string; game_number: string }> | { id: string; game_number: string } }

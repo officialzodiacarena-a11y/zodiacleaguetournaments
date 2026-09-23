@@ -71,7 +71,52 @@ export async function POST(
       payload: parsed.data,
     });
 
-    return NextResponse.json({ received: true, count: parsed.data.players.length });
+    // Round-End Event -> เขียนลง match_rounds ผ่าน RPC (SECURITY DEFINER, เรียกได้แค่ service_role)
+    // ตาม SPEC-OCR-TELEMETRY-ROUNDS-V8.01-001 Part 2.3 — เขียนครั้งเดียวต่อรอบเท่านั้น (Zero-Write Fast Path
+    // สำหรับ credits/weapon/hp รายวินาที ไม่แตะ DB เลย, มีแค่ ROUND_ENDED ที่ผ่านมาถึงจุดนี้)
+    const roundEvent = parsed.data.round_event;
+    let roundRecordResult: { success: boolean; message?: string; error?: string; round_id?: string; is_duplicate?: boolean } | null = null;
+
+    if (roundEvent && roundEvent.stage === 'ROUND_ENDED') {
+      const idempotencyKey =
+        roundEvent.idempotency_key || `round-${matchId}-${roundEvent.game_number}-${roundEvent.round_number}`;
+
+      // Cast: types/database.types.ts ยังไม่ถูก re-gen หลัง migration 20260923000000_match_rounds.sql
+      // (โคลท์ไม่มีสิทธิ์รัน `supabase gen types` เอง — ต้องรอพี่หยัด/แดท re-gen แล้วลบ cast นี้ทิ้ง)
+      const { data: rpcData, error: rpcError } = await (
+        admin.rpc as unknown as (
+          fn: 'record_match_round_event',
+          args: {
+            p_match_id: string;
+            p_game_number: number;
+            p_round_number: number;
+            p_winner_team_id: string | null;
+            p_win_condition: string;
+            p_idempotency_key: string;
+          }
+        ) => Promise<{ data: unknown; error: { message: string } | null }>
+      )('record_match_round_event', {
+        p_match_id: matchId,
+        p_game_number: roundEvent.game_number,
+        p_round_number: roundEvent.round_number,
+        p_winner_team_id: roundEvent.winner_team_id ?? null,
+        p_win_condition: roundEvent.win_condition ?? 'elimination',
+        p_idempotency_key: idempotencyKey,
+      });
+
+      if (rpcError) {
+        console.error(`[telemetry] record_match_round_event RPC failed: ${rpcError.message}`);
+        roundRecordResult = { success: false, error: rpcError.message };
+      } else {
+        roundRecordResult = rpcData as typeof roundRecordResult;
+      }
+    }
+
+    return NextResponse.json({
+      received: true,
+      count: parsed.data.players.length,
+      round_recorded: roundRecordResult,
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     console.error(`[telemetry] ${message}`);
