@@ -4,7 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireBroadcastRole } from '@/lib/auth/require-broadcast-role';
 import { loadSeriesState } from '@/lib/overlay/match-series';
 import { planFinishMap } from '@/lib/overlay/series-flow';
-import { asInsert, asUpdate } from '@/types/supabase-helpers';
+import { saveFinishedGame } from '@/lib/overlay/match-game-rows';
+import { asUpdate } from '@/types/supabase-helpers';
 
 // จบแมพปัจจุบัน: บันทึกผลเกมจากสกอร์รอบที่กรอกไว้ ลงตาราง match_games แล้วรีเซ็ตสกอร์รอบเป็น 0–0
 // - แมพ/เลขเกม มาจากลำดับ Veto และจำนวนเกมที่จบแล้ว (กติกาเดียวกับฉาก Overlay)
@@ -34,9 +35,8 @@ export async function POST(
       return NextResponse.json({ error: { code: plan.code, message: plan.message } }, { status: plan.httpStatus });
     }
 
-    const { error: insertErr } = await admin
-      .from('match_games')
-      .insert(asInsert<'match_games'>({ match_id: matchId, ...plan.game }));
+    // ถ้าล็อกรายชื่อไว้ก่อนเริ่มแมพ จะมีแถว LIVE ของเกมนี้อยู่แล้ว — อัปเดตแถวเดิมแทนการ insert ซ้ำ
+    const { error: insertErr } = await saveFinishedGame(admin, matchId, plan.game);
 
     if (insertErr) {
       if (insertErr.code === '23505') {

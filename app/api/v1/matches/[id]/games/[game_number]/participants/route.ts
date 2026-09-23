@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { requireBroadcastRole } from '@/lib/auth/require-broadcast-role';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asInsert } from '@/types/supabase-helpers';
+import { loadSeriesState } from '@/lib/overlay/match-series';
+import { ensureLiveGameRow } from '@/lib/overlay/match-game-rows';
 
 interface ParticipantItem {
   player_id: string;
@@ -79,15 +81,20 @@ export async function POST(
   const auth = await requireBroadcastRole(supabase);
   if (!auth.ok) return auth.response;
 
-  const { data: game, error: gameErr } = await supabase
-    .from('match_games')
-    .select('id')
-    .eq('match_id', matchId)
-    .eq('game_number', gameNumber)
-    .single();
-
-  if (gameErr || !game) {
-    return NextResponse.json({ error: 'Game not found' }, { status: 404 });
+  // ล็อกรายชื่อทำก่อนเริ่มแมพ (Pre-Map Roster Lock) ตอนนั้นยังไม่มีแถว match_games — แถวถูกสร้างตอน END MAP
+  // จึงสร้างแถวสถานะ LIVE ของเกมนี้ไว้ก่อน แล้ว END MAP จะอัปเดตแถวเดิม (lib/overlay/match-game-rows.ts)
+  const adminSupabase = await createAdminClient();
+  const series = await loadSeriesState(adminSupabase, matchId);
+  if (!series) {
+    return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+  }
+  if (!Number.isInteger(gameNumber) || gameNumber < 1 || gameNumber > series.totalGames) {
+    return NextResponse.json({ error: `game_number ต้องอยู่ระหว่าง 1–${series.totalGames}` }, { status: 422 });
+  }
+  const mapName = series.currentGameNumber === gameNumber ? series.currentMapName : null;
+  const game = await ensureLiveGameRow(adminSupabase, matchId, gameNumber, mapName);
+  if ('error' in game) {
+    return NextResponse.json({ error: game.error.message }, { status: 500 });
   }
 
   const body = await request.json();
@@ -114,7 +121,6 @@ export async function POST(
     rounds_played: p.rounds_played ?? 0,
   }));
 
-  const adminSupabase = await createAdminClient();
   const { data, error } = await adminSupabase
     .from('match_participants')
     .upsert(asInsert<'match_participants'>(payload), { onConflict: 'match_game_id,player_id' })
