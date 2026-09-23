@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requireBroadcastRole } from '@/lib/auth/require-broadcast-role';
 import { loadSeriesState } from '@/lib/overlay/match-series';
 import { planAfterGameRecorded } from '@/lib/overlay/series-flow';
+import { saveFinishedGame } from '@/lib/overlay/match-game-rows';
 import { asUpdate } from '@/types/supabase-helpers';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -83,26 +84,22 @@ export async function POST(
   const adminSupabase = await createAdminClient();
 
   // 2. บันทึก Game ผลรายแมป
-  const { data: newGame, error: insertErr } = await adminSupabase
-    .from('match_games')
-    .insert({
-      match_id: matchId,
-      game_number,
-      map_name,
-      team_a_side_start,
-      team_b_side_start,
-      score_a: score_a ?? 0,
-      score_b: score_b ?? 0,
-      winner_team_id: winner_team_id ?? null,
-      went_overtime: Boolean(went_overtime),
-      started_at: started_at ?? null,
-      ended_at: ended_at ?? null,
-      duration_seconds: duration_seconds ?? null,
-      external_game_id: external_game_id ?? null,
-      status: 'COMPLETED',
-    })
-    .select()
-    .single();
+  // ถ้าล็อกรายชื่อไว้ก่อนเริ่มแมพ จะมีแถว LIVE ของเกมนี้อยู่แล้ว — อัปเดตแถวเดิมแทนการ insert ซ้ำ
+  const { data: newGame, error: insertErr } = await saveFinishedGame(adminSupabase, matchId, {
+    game_number,
+    map_name,
+    team_a_side_start,
+    team_b_side_start,
+    score_a: score_a ?? 0,
+    score_b: score_b ?? 0,
+    winner_team_id: winner_team_id ?? null,
+    went_overtime: Boolean(went_overtime),
+    started_at: started_at ?? null,
+    ended_at: ended_at ?? null,
+    duration_seconds: duration_seconds ?? null,
+    external_game_id: external_game_id ?? null,
+    status: 'COMPLETED',
+  });
 
   if (insertErr) {
     if (insertErr.code === '23505') {
