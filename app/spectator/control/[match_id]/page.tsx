@@ -1,6 +1,7 @@
 "use client";
 
 import { TEAM_A_HEX, TEAM_B_HEX } from "@/components/overlay/series";
+import OcrObserverBridgePanel from "@/components/observer/OcrObserverBridgePanel";
 
 import React, { useEffect, useState, useCallback, use } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -812,6 +813,19 @@ export default function SpectatorHUDControlPanel({
               </div>
             )}
           </div>
+
+          {/* OCR ROUND & ROSTER ENGINE — SPEC-OCR-TELEMETRY-ROUNDS-V8.01-001 Part 1+3 */}
+          {match?.team_a_id && match?.team_b_id && (
+            <OcrObserverBridgePanel
+              matchId={matchId}
+              gameNumber={seriesState?.current_game_number ?? 1}
+              teamAId={match.team_a_id}
+              teamBId={match.team_b_id}
+              teamATag={match.team_a?.tag || "TEAM A"}
+              teamBTag={match.team_b?.tag || "TEAM B"}
+              observerToken={observerToken}
+            />
+          )}
         </section>
 
         {/* PANEL B: OBS OVERLAY SCENE CONTROLLER */}
