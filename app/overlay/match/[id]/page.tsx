@@ -8,6 +8,7 @@ import { IntermissionScene } from "@/components/overlay/IntermissionScene";
 import { BuyPhaseHud, type BuyPhasePlayer } from "@/components/overlay/BuyPhaseHud";
 import { LiveRosterSidebar } from "@/components/overlay/LiveRosterSidebar";
 import { LiveScoreboard } from "@/components/overlay/LiveScoreboard";
+import { LastManStandingScene } from "@/components/overlay/LastManStandingScene";
 import { resolveDisplayScene } from "@/lib/overlay/series-flow";
 import { currentDeadlineMs, parseVetoFormat, vetoStartMsFromMatch, type VetoConfig } from "@/lib/veto/engine";
 import { SponsorBadge } from "@/components/overlay/SponsorBadge";
@@ -120,6 +121,10 @@ export default function MatchBroadcastOverlay({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [broadcastScene, setBroadcastScene] = useState<"VETO" | "LIVE" | "AWAITING_RESULT" | "COMPLETED" | null>(null);
   const [hudBanner, setHudBanner] = useState<{ type: string; message: string } | null>(null);
+  const [roundWinBanner, setRoundWinBanner] = useState<"A" | "B" | null>(null);
+  const [gameWinBanner, setGameWinBanner] = useState<{ side: "A" | "B"; mapName: string | null } | null>(null);
+  const [clutchScene, setClutchScene] = useState<{ side: "A" | "B"; player: BuyPhasePlayer; opponentAlive: number } | null>(null);
+  const clutchShownForRef = useRef<string | null>(null); // กันยิงป้ายซ้ำในรอบเดียวกัน (เก็บ key เป็น "side-เลขรอบ")
   const [showBuyPhase, setShowBuyPhase] = useState<boolean>(false);
   const [rosterA, setRosterA] = useState<BuyPhasePlayer[]>([]);
   const [rosterB, setRosterB] = useState<BuyPhasePlayer[]>([]);
@@ -128,6 +133,10 @@ export default function MatchBroadcastOverlay({
   const [vetoConfig, setVetoConfig] = useState<VetoConfig>(() => parseVetoFormat(null));
   const [seriesStats, setSeriesStats] = useState<OverlayGameStats[]>([]);
   const statusRef = useRef<MatchStatus | null>(null);
+  const matchRef = useRef<MatchData | null>(null);
+  useEffect(() => {
+    matchRef.current = match;
+  }, [match]);
 
   // บังคับพื้นหลังโปร่งใสให้ OBS Browser Source ดึงไปใช้ได้จริง
   useEffect(() => {
@@ -165,6 +174,27 @@ export default function MatchBroadcastOverlay({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // ตรวจจับโมเมนต์ Clutch (ทีมใดเหลือผู้เล่นรอด 1 คน ขณะฝั่งตรงข้ามยังเหลือมากกว่า 1) จาก HP ที่ Observer Bridge ส่งมา
+  // ยิงป้ายแค่ครั้งเดียวต่อรอบ (กันยิงซ้ำทุกครั้งที่ telemetry อัปเดต HP) โดยจำ key "ฝั่ง-รอบที่" ไว้ใน ref
+  useEffect(() => {
+    const aliveA = rosterA.filter((p) => (typeof p.hp === "number" ? p.hp : 100) > 0);
+    const aliveB = rosterB.filter((p) => (typeof p.hp === "number" ? p.hp : 100) > 0);
+    const roundKey = `${(match?.rounds_won_a ?? 0) + (match?.rounds_won_b ?? 0)}`;
+
+    let next: { side: "A" | "B"; player: BuyPhasePlayer; opponentAlive: number } | null = null;
+    if (aliveA.length === 1 && aliveB.length > 1) next = { side: "A", player: aliveA[0], opponentAlive: aliveB.length };
+    else if (aliveB.length === 1 && aliveA.length > 1) next = { side: "B", player: aliveB[0], opponentAlive: aliveA.length };
+
+    if (next) {
+      const key = `${next.side}-${roundKey}`;
+      if (clutchShownForRef.current !== key) {
+        clutchShownForRef.current = key;
+        setClutchScene(next);
+        setTimeout(() => setClutchScene(null), 5000);
+      }
+    }
+  }, [rosterA, rosterB, match?.rounds_won_a, match?.rounds_won_b]);
 
   useEffect(() => {
     let isMounted = true;
@@ -345,6 +375,23 @@ export default function MatchBroadcastOverlay({
         { event: "*", schema: "public", table: "matches", filter: `id=eq.${matchId}` },
         (payload) => {
           const updatedMatch = payload.new as MatchData;
+          const oldMatch = payload.old as Partial<MatchData>;
+          
+          if (oldMatch && Object.keys(oldMatch).length > 0) {
+            const newScoreA = updatedMatch.rounds_won_a ?? 0;
+            const newScoreB = updatedMatch.rounds_won_b ?? 0;
+            const oldScoreA = oldMatch.rounds_won_a ?? newScoreA;
+            const oldScoreB = oldMatch.rounds_won_b ?? newScoreB;
+            
+            if (newScoreA > oldScoreA) {
+              setRoundWinBanner("A");
+              setTimeout(() => setRoundWinBanner(null), 5000);
+            } else if (newScoreB > oldScoreB) {
+              setRoundWinBanner("B");
+              setTimeout(() => setRoundWinBanner(null), 5000);
+            }
+          }
+
           setMatch((prev) => (prev ? { ...prev, ...updatedMatch } : updatedMatch));
           // สกอร์รอบ/ผู้ชนะเปลี่ยน (สถานะเดิม): อัปเดตทันทีจาก payload โดยไม่รีเซ็ตฉากที่แอดมินสลับไว้ และไม่ดึงข้อมูลใหม่ทั้งหมด
           if (updatedMatch.status && updatedMatch.status !== statusRef.current) {
@@ -357,7 +404,23 @@ export default function MatchBroadcastOverlay({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "match_games", filter: `match_id=eq.${matchId}` },
-        () => {
+        (payload) => {
+          // ตรวจว่าเกม/แม็พนี้เพิ่งจบ (สถานะเปลี่ยนจากยังไม่จบ -> จบ) เพื่อยิงป้าย "GAME WIN"
+          const newGame = payload.new as MatchGame;
+          const oldGame = payload.old as Partial<MatchGame>;
+          const justFinished = isGameDone(newGame) && !isGameDone(oldGame as MatchGame);
+          const m = matchRef.current;
+          if (justFinished && m?.team_a && m?.team_b) {
+            let side: "A" | "B" | null = null;
+            if (newGame.winner_team_id === m.team_a.id) side = "A";
+            else if (newGame.winner_team_id === m.team_b.id) side = "B";
+            else if (newGame.score_a > newGame.score_b) side = "A";
+            else if (newGame.score_b > newGame.score_a) side = "B";
+            if (side) {
+              setGameWinBanner({ side, mapName: newGame.map_name });
+              setTimeout(() => setGameWinBanner(null), 6000);
+            }
+          }
           fetchInitialData();
         }
       )
@@ -465,7 +528,46 @@ export default function MatchBroadcastOverlay({
 
   return (
     <main className="relative w-[1920px] h-[1080px] bg-transparent text-white overflow-hidden font-sans select-none">
-      {/* 0. HUD NOTIFICATION BANNER */}
+      {/* 0. ROUND WIN BANNER */}
+      {roundWinBanner && team_a && team_b && (
+        <section className="absolute top-[200px] left-1/2 -translate-x-1/2 z-[70] animate-in fade-in zoom-in duration-500">
+          <div className={`px-12 py-4 rounded-xl border-2 backdrop-blur-xl shadow-2xl flex flex-col items-center justify-center ${
+            roundWinBanner === "A" 
+              ? "bg-[#00D4FF]/20 border-[#00D4FF]/80 shadow-[0_0_40px_rgba(0,212,255,0.4)]" 
+              : "bg-rose-500/20 border-rose-500/80 shadow-[0_0_40px_rgba(244,63,94,0.4)]"
+          }`}>
+            <span className="font-mono text-sm font-black uppercase tracking-[5px] text-white/80 mb-1">ROUND WIN</span>
+            <span className={`text-4xl font-black uppercase tracking-wider ${
+              roundWinBanner === "A" ? "text-[#00D4FF]" : "text-rose-400"
+            }`}>
+              {roundWinBanner === "A" ? team_a.name : team_b.name}
+            </span>
+          </div>
+        </section>
+      )}
+
+      {/* 0.2 GAME WIN BANNER (แม็พจบ — คนละอันกับ ROUND WIN ที่จบแค่รอบเดียว) */}
+      {gameWinBanner && team_a && team_b && (
+        <section className="absolute top-[200px] left-1/2 -translate-x-1/2 z-[70] animate-in fade-in zoom-in duration-500">
+          <div className={`px-14 py-5 rounded-xl border-2 backdrop-blur-xl shadow-2xl flex flex-col items-center justify-center ${
+            gameWinBanner.side === "A"
+              ? "bg-[#00D4FF]/20 border-[#00D4FF]/80 shadow-[0_0_50px_rgba(0,212,255,0.5)]"
+              : "bg-rose-500/20 border-rose-500/80 shadow-[0_0_50px_rgba(244,63,94,0.5)]"
+          }`}>
+            <span className="font-mono text-sm font-black uppercase tracking-[5px] text-white/80 mb-1">GAME WIN</span>
+            <span className={`text-5xl font-black uppercase tracking-wider ${
+              gameWinBanner.side === "A" ? "text-[#00D4FF]" : "text-rose-400"
+            }`}>
+              {gameWinBanner.side === "A" ? team_a.name : team_b.name}
+            </span>
+            {gameWinBanner.mapName && (
+              <span className="mt-1 font-mono text-xs text-white/60 uppercase tracking-[3px]">{gameWinBanner.mapName}</span>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* 0.5. HUD NOTIFICATION BANNER */}
       {hudBanner && (
         <section className="absolute top-[120px] left-1/2 -translate-x-1/2 z-[60]">
           <div
@@ -494,6 +596,9 @@ export default function MatchBroadcastOverlay({
           roundsB={rounds_won_b}
           mapLabel={mapLabel}
           mapName={mapName}
+          seriesGames={seriesGames.map((g) => ({ gameNumber: g.gameNumber, mapName: g.mapName ? g.mapName.toUpperCase() : null }))}
+          currentGameNumber={liveGame?.gameNumber}
+          matchLabel={[tournamentName, match.round_label].filter(Boolean).join(" — ") || null}
         />
       )}
 
@@ -588,7 +693,19 @@ export default function MatchBroadcastOverlay({
       )}
 
       {/* 5. BUY PHASE HUD (TOGGLED VIA ALT+C OR REALTIME BROADCAST) — แสดงเฉพาะข้อมูลที่มีจริง */}
-      <BuyPhaseHud visible={showBuyPhase} teamA={team_a} teamB={team_b} rosterA={rosterA} rosterB={rosterB} />
+      <BuyPhaseHud visible={showBuyPhase} teamA={team_a} teamB={team_b} rosterA={rosterA} rosterB={rosterB} roundNumber={rounds_won_a + rounds_won_b + 1} />
+
+      {/* 6. CLUTCH / LAST MAN STANDING (เต็มจอชั่วคราวเมื่อทีมใดเหลือผู้เล่นรอดคนเดียว) */}
+      {clutchScene && team_a && team_b && (
+        <LastManStandingScene
+          visible={Boolean(clutchScene)}
+          clutchSide={clutchScene.side}
+          clutchPlayer={{ name: clutchScene.player.name, agent: clutchScene.player.agent }}
+          opponentAliveCount={clutchScene.opponentAlive}
+          teamAName={team_a.name}
+          teamBName={team_b.name}
+        />
+      )}
     </main>
   );
 }

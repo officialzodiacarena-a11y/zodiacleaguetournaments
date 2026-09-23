@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, use } from 'react';
+import React, { useState, useEffect, useCallback, useRef, use } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import type { TelemetryPlayerFrame } from '@/lib/overlay/telemetry-schema';
 import {
   Clock,
   Layers,
@@ -22,10 +23,8 @@ import {
   Armchair
 } from 'lucide-react';
 
-// Production overlay components
-import { LiveScoreboard } from '@/components/overlay/LiveScoreboard';
-import { LiveRosterSidebar } from '@/components/overlay/LiveRosterSidebar';
-import { BuyPhaseHud, type BuyPhasePlayer } from '@/components/overlay/BuyPhaseHud';
+// Production overlay type (หน้าตาจริงตอนนี้แสดงผ่าน iframe ไปที่ /overlay/match/[id] แทนการประกอบเอง — ดูฉาก 5 และ 6)
+import type { BuyPhasePlayer } from '@/components/overlay/BuyPhaseHud';
 import { TEAM_A_TEXT, TEAM_B_TEXT, DetailCell, type OverlayTeam, type OverlayVeto } from '@/components/overlay/series';
 
 // Supabase client
@@ -47,8 +46,21 @@ export interface SqlMatchOption {
   rounds_won_b: number;
   team_a_ready_at: string | null;
   team_b_ready_at: string | null;
+  created_at?: string | null;
   team_a?: { id: string; name: string; tag: string } | null;
   team_b?: { id: string; name: string; tag: string } | null;
+}
+
+// ป้ายบอกเวลาแบบคร่าวๆ (เช่น "5 นาทีที่แล้ว") ไว้ให้แยกแมตช์ในลิสต์ได้ง่ายเวลามีหลายห้องพร้อมกัน
+function relativeTimeLabel(iso?: string | null): string {
+  if (!iso) return '';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'เมื่อสักครู่';
+  if (mins < 60) return `${mins} นาทีที่แล้ว`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} ชม.ที่แล้ว`;
+  return `${Math.floor(hours / 24)} วันที่แล้ว`;
 }
 
 export default function StreamHubMainPage({
@@ -71,7 +83,16 @@ export default function StreamHubMainPage({
   // Theme & Viewport
   const [bgMode, setBgMode] = useState<'transparent' | 'amber' | 'arena' | 'chroma'>('transparent');
   const [showControls, setShowControls] = useState<boolean>(true);
+  const [showSystemLabel, setShowSystemLabel] = useState<boolean>(true);
   const [showBuyPhase, setShowBuyPhase] = useState<boolean>(false);
+
+  // ซ่อนแผงคุม (ปุ่ม "Show Controls" มุมขวาบน): โชว์ป้าย "Zodiac Live / SYSTEM" สีทองเล็กๆ 10 วิ แล้วยุบเหลือแค่โลโก้หมุน
+  // ตั้ง timeout ตอนกดปุ่มโดยตรง (ไม่ใช้ useEffect) เพื่อเลี่ยง setState ซ้อนในเอฟเฟกต์
+  const hideControls = () => {
+    setShowControls(false);
+    setShowSystemLabel(true);
+    setTimeout(() => setShowSystemLabel(false), 10000);
+  };
 
   // Active Match ID & Lists
   const [currentMatchId, setCurrentMatchId] = useState<string>(initialMatchId);
@@ -96,22 +117,39 @@ export default function StreamHubMainPage({
   const [tournamentName, setTournamentName] = useState<string>('ZODIAC ARENA');
   const [subStage, setSubStage] = useState<string>('LIVE MATCH');
 
-  // Real Rosters from database
-  const [rosterA, setRosterA] = useState<BuyPhasePlayer[]>([
-    { id: 'p1', name: 'MWL | Ming', agent: 'Jett', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 3900, armor: 'HEAVY', weapon: 'Vandal', ultPoints: 4, ultMax: 8 },
-    { id: 'p2', name: 'scp20baht', agent: 'Sova', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 2400, armor: 'HEAVY', weapon: 'Phantom', ultPoints: 2, ultMax: 8 },
-    { id: 'p3', name: 'MWL | 946a', agent: 'Omen', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 1900, armor: 'LIGHT', weapon: 'Vandal', ultPoints: 5, ultMax: 7 },
-    { id: 'p4', name: 'MWL | Black Knight', agent: 'Cypher', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 4500, armor: 'HEAVY', weapon: 'Operator', ultPoints: 3, ultMax: 6 },
-    { id: 'p5', name: 'MWL | BabyBaret', agent: 'Raze', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 2100, armor: 'LIGHT', weapon: 'Spectre', ultPoints: 1, ultMax: 8 },
-  ]);
+  // Roster ผู้เล่นจริงของแมตช์ที่เลือก — ดึงจาก team_members ทุกครั้งที่สลับแมตช์ (เรียงตาม jersey_number
+  // เป็นตัวแทน "ลำดับที่นั่งจริง" เพราะตาราง team_members ไม่มีคอลัมน์ลำดับที่นั่งโดยตรง)
+  const [rosterA, setRosterA] = useState<BuyPhasePlayer[]>([]);
+  const [rosterB, setRosterB] = useState<BuyPhasePlayer[]>([]);
 
-  const [rosterB, setRosterB] = useState<BuyPhasePlayer[]>([
-    { id: 'p6', name: 'iykyk', agent: 'Reyna', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 3200, armor: 'HEAVY', weapon: 'Vandal', ultPoints: 6, ultMax: 7 },
-    { id: 'p7', name: 'Roxy', agent: 'Killjoy', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 1500, armor: 'HEAVY', weapon: 'Phantom', ultPoints: 2, ultMax: 8 },
-    { id: 'p8', name: 'MooDeng', agent: 'Viper', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 4100, armor: 'HEAVY', weapon: 'Ghost', ultPoints: 5, ultMax: 8 },
-    { id: 'p9', name: 'MWL | Sariel', agent: 'Fade', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 2800, armor: 'HEAVY', weapon: 'Vandal', ultPoints: 3, ultMax: 8 },
-    { id: 'p10', name: 'imyourmeowmeow', agent: 'Skye', kills: 0, deaths: 0, assists: 0, hp: 100, hpMax: 100, credits: 1200, armor: 'LIGHT', weapon: 'Sheriff', ultPoints: 2, ultMax: 7 },
-  ]);
+  // ช่องส่งสัญญาณจริงไปหา Overlay ตัวที่ OBS ใช้ (channel ชื่อเดียวกับที่ app/overlay/match/[id]/page.tsx ฟังอยู่)
+  // ปุ่ม/สไลเดอร์ในห้องคุมจะยิงผ่านช่องนี้ ไม่ใช่แค่แก้ state ในเครื่องเฉยๆ เหมือนก่อนหน้านี้
+  const broadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  useEffect(() => {
+    const channel = supabase.channel(`match-realtime-${currentMatchId}`);
+    channel.subscribe();
+    broadcastChannelRef.current = channel;
+    return () => {
+      supabase.removeChannel(channel);
+      broadcastChannelRef.current = null;
+    };
+  }, [currentMatchId]);
+
+  const sendTelemetry = useCallback((frame: TelemetryPlayerFrame[]) => {
+    broadcastChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'stream_telemetry_relay',
+      payload: { players: frame },
+    });
+  }, []);
+
+  const sendToggleBuyPhase = useCallback((enabled: boolean) => {
+    broadcastChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'toggle_buy_phase',
+      payload: { enabled },
+    });
+  }, []);
 
   // Real Map Vetoes from database
   const [realVetoes, setRealVetoes] = useState<OverlayVeto[]>([]);
@@ -173,6 +211,7 @@ export default function StreamHubMainPage({
             rounds_won_b: m.rounds_won_b ?? 0,
             team_a_ready_at: m.team_a_ready_at,
             team_b_ready_at: m.team_b_ready_at,
+            created_at: m.created_at,
             team_a: teamAObj,
             team_b: teamBObj,
           };
@@ -232,6 +271,38 @@ export default function StreamHubMainPage({
         setBestOf(matchData.best_of ?? 1);
         if (tour?.name) setTournamentName(tour.name);
         setSubStage(matchData.status === 'LIVE' ? 'LIVE MATCH' : matchData.status === 'READY_CHECK' ? 'READY CHECK (นั่งที่)' : matchData.status);
+
+        // ผู้เล่นจริงของแมตช์นี้ — เรียงตาม jersey_number (ตัวแทนลำดับที่นั่ง เพราะยังไม่มีคอลัมน์ลำดับที่นั่งจริงในฐานข้อมูล)
+        if (matchData.team_a_id && matchData.team_b_id) {
+          const { data: members } = await supabase
+            .from('team_members')
+            .select('id, team_id, jersey_number, players!team_members_player_id_fkey(display_name)')
+            .eq('status', 'ACTIVE')
+            .in('team_id', [matchData.team_a_id, matchData.team_b_id])
+            .order('jersey_number', { ascending: true, nullsFirst: false });
+
+          const toRoster = (teamId: string): BuyPhasePlayer[] =>
+            (members || [])
+              .filter((m) => m.team_id === teamId)
+              .map((m) => ({
+                id: m.id,
+                name:
+                  (Array.isArray(m.players) ? m.players[0]?.display_name : (m.players as { display_name?: string } | null)?.display_name) ||
+                  'Unknown',
+                kills: 0,
+                deaths: 0,
+                assists: 0,
+                hp: 100,
+                hpMax: 100,
+                credits: 0,
+                armor: 'NONE' as const,
+                ultPoints: 0,
+                ultMax: 8,
+              }));
+
+          setRosterA(toRoster(matchData.team_a_id));
+          setRosterB(toRoster(matchData.team_b_id));
+        }
       }
 
       // Fetch Vetoes
@@ -296,12 +367,16 @@ export default function StreamHubMainPage({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && (e.key === 'c' || e.key === 'C' || e.code === 'KeyC')) {
         e.preventDefault();
-        setShowBuyPhase((prev) => !prev);
+        setShowBuyPhase((prev) => {
+          const next = !prev;
+          sendToggleBuyPhase(next);
+          return next;
+        });
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [sendToggleBuyPhase]);
 
   const handleSelectMatch = (matchId: string) => {
     setCurrentMatchId(matchId);
@@ -312,14 +387,14 @@ export default function StreamHubMainPage({
 
   return (
     <div className={`min-h-screen font-sans ${bgMode === 'chroma' ? 'bg-[#00FF00]' : bgMode === 'transparent' ? 'bg-transparent' : 'bg-[#060810] text-white'}`}>
-      
+
       {/* ========================================================================= */}
       {/* TOP HEADER CONTROLS */}
       {/* ========================================================================= */}
       {showControls && (
         <header className="sticky top-0 z-50 bg-[#0B0E1E]/95 backdrop-blur-md border-b border-white/10 px-4 py-3 shadow-xl">
           <div className="max-w-7xl mx-auto flex flex-col gap-3">
-            
+
             {/* Row 1: Title, Match ID Badge & OBS Options */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -350,7 +425,7 @@ export default function StreamHubMainPage({
                   <button onClick={() => setBgMode('chroma')} className={`px-2 py-1 rounded text-[11px] font-mono ${bgMode === 'chroma' ? 'bg-green-500/30 text-green-300 font-bold' : 'text-neutral-400'}`}>Chroma</button>
                 </div>
 
-                <button onClick={() => setShowControls(false)} className="px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-mono flex items-center gap-1">
+                <button onClick={hideControls} className="px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-mono flex items-center gap-1">
                   <Maximize2 className="w-3.5 h-3.5" />
                   OBS Mode
                 </button>
@@ -359,11 +434,11 @@ export default function StreamHubMainPage({
 
             {/* Row 2: Real SQL Match Selectors (Blue: Tournament / Cyan: Lobby) */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-white/5">
-              
+
               {/* TWO SELECTION BUTTONS: TOURNAMENT (BLUE) & LOBBY (CYAN) */}
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-neutral-400 font-mono text-xs font-bold">เลือกห้องแมตช์:</span>
-                
+
                 {/* 🔵 BLUE BUTTON: TOURNAMENT MATCHES */}
                 <div className="relative" onClick={(e) => e.stopPropagation()}>
                   <button
@@ -404,8 +479,17 @@ export default function StreamHubMainPage({
                                 {m.status}
                               </span>
                             </div>
-                            <div className="text-[10px] text-neutral-400 truncate">{m.tournament_name || 'Tournament Room'}</div>
-                            
+                            <div className="flex items-center justify-between text-[10px] text-neutral-400">
+                              <span className="truncate">{m.tournament_name || 'Tournament Room'}</span>
+                              <span className="flex items-center gap-1.5 shrink-0 pl-2">
+                                <span className="font-bold text-purple-300">BO{m.best_of}</span>
+                                {m.status === 'LIVE' && (
+                                  <span className="font-bold text-white">{m.rounds_won_a}-{m.rounds_won_b}</span>
+                                )}
+                                <span>{relativeTimeLabel(m.created_at)}</span>
+                              </span>
+                            </div>
+
                             {/* Player Ready / Seat Status */}
                             <div className="flex items-center gap-3 text-[9px] pt-1 text-neutral-300 border-t border-white/5">
                               <span className="flex items-center gap-1">
@@ -462,8 +546,17 @@ export default function StreamHubMainPage({
                                 {m.lobby_code ? `LOBBY: ${m.lobby_code}` : m.status}
                               </span>
                             </div>
-                            <div className="text-[10px] text-neutral-400 truncate">Match ID: {m.id}</div>
-                            
+                            <div className="flex items-center justify-between text-[10px] text-neutral-400">
+                              <span className="truncate">Match ID: {m.id.slice(0, 8)}...</span>
+                              <span className="flex items-center gap-1.5 shrink-0 pl-2">
+                                <span className="font-bold text-purple-300">BO{m.best_of}</span>
+                                {m.status === 'LIVE' && (
+                                  <span className="font-bold text-white">{m.rounds_won_a}-{m.rounds_won_b}</span>
+                                )}
+                                <span>{relativeTimeLabel(m.created_at)}</span>
+                              </span>
+                            </div>
+
                             {/* Player Ready / Seat Status */}
                             <div className="flex items-center gap-3 text-[9px] pt-1 text-neutral-300 border-t border-white/5">
                               <span className="flex items-center gap-1">
@@ -534,16 +627,31 @@ export default function StreamHubMainPage({
                 <button onClick={() => setActiveScene(10)} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 10 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
                   <Target className="w-3.5 h-3.5" /> 10. Captain Veto Room
                 </button>
+                <button
+                  onClick={() => {
+                    // ทดสอบฉาก Clutch / Last Man Standing บน Overlay จริง — ยิง HP ปลอมผ่าน telemetry จริง (path เดียวกับ Observer Bridge)
+                    // ทำให้ MWL เหลือรอด 1 คน (คนแรกของ roster) ส่วน DEF รอดครบ เพื่อดูว่า Overlay ขึ้นป้าย 1vX ถูกไหม
+                    if (rosterA.length < 2 || rosterB.length < 2) return;
+                    sendTelemetry([
+                      ...rosterA.map((p, i) => ({ name: p.name, hp: i === 0 ? 100 : 0 })),
+                      ...rosterB.map((p) => ({ name: p.name, hp: 100 })),
+                    ]);
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 text-rose-300 hover:bg-rose-500/10 border border-rose-500/30"
+                  title="ยิง HP ปลอมผ่าน telemetry จริงเพื่อทดสอบฉาก Clutch บน Overlay (ไม่ได้เปลี่ยน Scene ของห้องคุม)"
+                >
+                  <Sliders className="w-3.5 h-3.5" /> 11. Test: Clutch 1vX
+                </button>
               </div>
             </div>
 
             {/* Row 4: Round Scores & Timer */}
             <div className="flex flex-wrap items-center justify-between text-xs text-neutral-300 gap-3 pt-1 border-t border-white/5">
-              
+
               {/* Independent Round Scores */}
               <div className="flex items-center gap-2 bg-black/60 px-3 py-1 rounded-xl border border-white/15 font-mono">
                 <span className="text-neutral-400 font-bold text-[11px]">Round Scores:</span>
-                
+
                 {/* Team A */}
                 <div className="flex items-center gap-1 bg-[#00D4FF]/10 px-2 py-0.5 rounded border border-[#00D4FF]/30">
                   <span className="text-[#00D4FF] font-black text-xs">{teamA.tag}</span>
@@ -562,9 +670,13 @@ export default function StreamHubMainPage({
                   <span className="text-rose-400 font-black text-xs">{teamB.tag}</span>
                 </div>
 
-                {/* Buy Phase Alt+C */}
+                {/* Buy Phase Alt+C — ยิงสัญญาณจริงไปเปิด/ปิด Buy Phase HUD บน Overlay ที่ OBS ใช้ */}
                 <button
-                  onClick={() => setShowBuyPhase(!showBuyPhase)}
+                  onClick={() => {
+                    const next = !showBuyPhase;
+                    setShowBuyPhase(next);
+                    sendToggleBuyPhase(next);
+                  }}
                   className={`ml-1 px-2 py-0.5 rounded font-mono text-[11px] font-bold border transition-all ${
                     showBuyPhase ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.3)]' : 'bg-white/5 text-neutral-400 border-white/10'
                   }`}
@@ -609,7 +721,7 @@ export default function StreamHubMainPage({
                   <Clock className="w-3.5 h-3.5 text-amber-400" />
                   Timer:
                 </span>
-                
+
                 <div className="flex items-center bg-white/10 rounded border border-white/20 px-1.5 py-0.5">
                   {timerSeconds >= 3600 && (
                     <>
@@ -649,7 +761,7 @@ export default function StreamHubMainPage({
                     className="w-7 text-center bg-transparent text-white font-mono font-bold text-xs outline-none focus:text-amber-300"
                   />
                   <span className="text-amber-400 font-bold">:</span>
-                  
+
                   <input
                     type="number"
                     min={0}
@@ -686,14 +798,29 @@ export default function StreamHubMainPage({
         </header>
       )}
 
-      {/* Restore Controls */}
+      {/* Restore Controls — โชว์ "Zodiac Live / SYSTEM" สีทองเล็กๆ 10 วิ แล้วยุบเหลือแค่โลโก้หมุน (เล็ก ไม่บังจอ) */}
       {!showControls && (
         <button
           onClick={() => setShowControls(true)}
-          className="fixed top-4 right-4 z-50 px-3 py-1.5 rounded-full bg-black/80 hover:bg-black border border-white/20 text-white font-mono text-xs flex items-center gap-2 shadow-2xl backdrop-blur-md"
+          className={`fixed top-3 right-3 z-50 rounded-full bg-black/80 hover:bg-black border border-white/20 shadow-2xl backdrop-blur-md transition-all duration-300 flex items-center justify-center ${
+            showSystemLabel ? 'px-3 py-1.5 gap-2' : 'w-8 h-8'
+          }`}
+          title="Show Controls"
         >
-          <Tv className="w-3.5 h-3.5 text-amber-400" />
-          Show Controls
+          {showSystemLabel ? (
+            <div className="flex flex-col items-start leading-none">
+              <span className="text-[8px] font-bold text-white/60 tracking-wide">Zodiac Live</span>
+              <span className="text-[10px] font-black text-[#E8B429] tracking-[2.5px]">SYSTEM</span>
+            </div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src="/images/logo/logo2.svg"
+              alt="Zodiac"
+              className="w-4 h-4 animate-spin"
+              style={{ animationDuration: '3s' }}
+            />
+          )}
         </button>
       )}
 
@@ -722,63 +849,35 @@ export default function StreamHubMainPage({
           {bgMode === 'chroma' && <div className="absolute inset-0 bg-[#00FF00]" />}
 
           {/* ========================================================================= */}
-          {/* SCENE 5: REAL PRODUCTION LIVE INGAME HUD (Clean without Sponsor Towers) */}
+          {/* SCENE 5 & 6: ของจริงหน้าเดียว — แปะ /overlay/match/[id] ตัวที่ OBS ใช้จริงผ่าน iframe */}
+          {/* เดิมสองฉากนี้เขียนหน้าตา HUD ซ้ำเองจากข้อมูลปลอม ทำให้พรีวิวกับของจริงไม่ตรงกัน */}
+          {/* ตอนนี้พรีวิวคือของจริง 100% — แก้ดีไซน์ที่ components/overlay/* จุดเดียว เห็นผลทั้งสองที่ */}
           {/* ========================================================================= */}
-          {activeScene === 5 && (
-            <div className="relative w-full h-full">
-              <LiveScoreboard
-                teamA={{ tag: teamA.tag, logo_url: null }}
-                teamB={{ tag: teamB.tag, logo_url: null }}
-                winsNeeded={1}
-                winsA={winsA}
-                winsB={winsB}
-                roundsA={scoreA}
-                roundsB={scoreB}
-                mapLabel="MAP 1"
-                mapName={currentMap}
+          {(activeScene === 5 || activeScene === 6) && (
+            <div className="relative w-full h-full bg-black/60">
+              <iframe
+                key={currentMatchId}
+                src={`/overlay/match/${currentMatchId}`}
+                title="Zodiac Live Overlay (Production)"
+                className="absolute inset-0 w-full h-full border-0"
+                style={{ colorScheme: 'normal' }}
               />
-
-              {/* Conditionally render: Show Buy Phase HUD OR Sidebars (Never both at once) */}
-              {showBuyPhase ? (
-                <BuyPhaseHud
-                  visible={showBuyPhase}
-                  teamA={{ name: teamA.name, tag: teamA.tag }}
-                  teamB={{ name: teamB.name, tag: teamB.tag }}
-                  rosterA={rosterA}
-                  rosterB={rosterB}
-                />
-              ) : (
-                <>
-                  <LiveRosterSidebar roster={rosterA} side="left" team="A" />
-                  <LiveRosterSidebar roster={rosterB} side="right" team="B" />
-                </>
+              {activeScene === 6 && !showBuyPhase && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                  <div className="text-center space-y-2">
+                    <p className="font-mono text-xs text-amber-300 uppercase tracking-widest">Buy Phase ยังไม่เปิด</p>
+                    <button
+                      onClick={() => {
+                        setShowBuyPhase(true);
+                        sendToggleBuyPhase(true);
+                      }}
+                      className="px-4 py-2 rounded-lg bg-amber-500 text-black font-mono text-xs font-black"
+                    >
+                      กดเปิด Buy Phase HUD (Alt+C)
+                    </button>
+                  </div>
+                </div>
               )}
-            </div>
-          )}
-
-          {/* ========================================================================= */}
-          {/* SCENE 6: REAL BUYPHASE HUD DEDICATED VIEW */}
-          {/* ========================================================================= */}
-          {activeScene === 6 && (
-            <div className="relative w-full h-full flex items-center justify-center bg-black/60 backdrop-blur-sm">
-              <LiveScoreboard
-                teamA={{ tag: teamA.tag, logo_url: null }}
-                teamB={{ tag: teamB.tag, logo_url: null }}
-                winsNeeded={1}
-                winsA={winsA}
-                winsB={winsB}
-                roundsA={scoreA}
-                roundsB={scoreB}
-                mapLabel="MAP 1"
-                mapName={currentMap}
-              />
-              <BuyPhaseHud
-                visible={true}
-                teamA={{ name: teamA.name, tag: teamA.tag }}
-                teamB={{ name: teamB.name, tag: teamB.tag }}
-                rosterA={rosterA}
-                rosterB={rosterB}
-              />
             </div>
           )}
 
@@ -852,7 +951,7 @@ export default function StreamHubMainPage({
           {activeScene === 8 && (
             <section className="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-md z-30 p-12">
               <div className="w-[1200px] bg-[#12121A]/90 border border-gray-800 rounded-2xl p-8 relative shadow-2xl">
-                
+
                 <div className="flex justify-between items-center border-b border-white/5 pb-4 mb-6">
                   <div>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300 uppercase font-bold">
@@ -926,7 +1025,7 @@ export default function StreamHubMainPage({
           {activeScene === 9 && (
             <div className="relative w-full h-full p-6 bg-[#080a14] overflow-y-auto text-white">
               <div className="max-w-6xl mx-auto space-y-6">
-                
+
                 <div className="flex items-center justify-between border-b border-white/10 pb-4">
                   <div>
                     <div className="flex items-center gap-2">
@@ -960,7 +1059,7 @@ export default function StreamHubMainPage({
                         <div key={p.id} className="flex items-center justify-between text-xs font-mono bg-black/40 p-2 rounded-lg border border-white/5">
                           <div className="truncate max-w-[180px]">
                             <span className="font-bold text-white block truncate">{p.name}</span>
-                            <span className="text-cyan-400 text-[10px]">{p.agent} • {p.weapon}</span>
+                            <span className="text-cyan-400 text-[10px]">{p.agent || 'ยังไม่เลือกฮีโร่'}{p.weapon ? ` • ${p.weapon}` : ''}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-neutral-400">HP: {p.hp}</span>
@@ -972,6 +1071,7 @@ export default function StreamHubMainPage({
                               onChange={(e) => {
                                 const newHp = parseInt(e.target.value);
                                 setRosterA(prev => prev.map((pl, i) => i === idx ? { ...pl, hp: newHp } : pl));
+                                sendTelemetry([{ name: p.name, hp: newHp }]);
                               }}
                               className="w-20 accent-cyan-400"
                             />
@@ -993,7 +1093,7 @@ export default function StreamHubMainPage({
                         <div key={p.id} className="flex items-center justify-between text-xs font-mono bg-black/40 p-2 rounded-lg border border-white/5">
                           <div className="truncate max-w-[180px]">
                             <span className="font-bold text-white block truncate">{p.name}</span>
-                            <span className="text-rose-400 text-[10px]">{p.agent} • {p.weapon}</span>
+                            <span className="text-rose-400 text-[10px]">{p.agent || 'ยังไม่เลือกฮีโร่'}{p.weapon ? ` • ${p.weapon}` : ''}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-neutral-400">HP: {p.hp}</span>
@@ -1005,6 +1105,7 @@ export default function StreamHubMainPage({
                               onChange={(e) => {
                                 const newHp = parseInt(e.target.value);
                                 setRosterB(prev => prev.map((pl, i) => i === idx ? { ...pl, hp: newHp } : pl));
+                                sendTelemetry([{ name: p.name, hp: newHp }]);
                               }}
                               className="w-20 accent-rose-400"
                             />
