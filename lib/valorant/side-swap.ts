@@ -1,36 +1,64 @@
 // lib/valorant/side-swap.ts
-// คำนวณว่ารอบที่เพิ่งจบไปเป็น "จุดสลับฝั่ง" (Attacker/Defender) ของ VALORANT หรือไม่ — ใช้กฎมาตรฐาน
-// ของเกม ไม่ต้องอ่าน/เดาจากภาพเลย เพราะระบบเรารู้เลขรอบที่เล่นไปแล้วของแมพนั้นอยู่แล้ว (rounds_won_a +
-// rounds_won_b) เอาไว้เป็นจุดกระตุ้น "รีเช็คตำแหน่ง" ให้ระบบใดก็ตามที่ต้องรู้ว่าใครอยู่ฝั่งไหน (เช่น ถ้า
-// กลับมาทำระบบอ่านตำแหน่งบนจอในอนาคต) แทนที่จะรีเช็คทุกรอบหรือเดาว่าสลับหรือยัง
+// คำนวณจุดสลับฝั่ง (Side Swap) และจุดเปลี่ยนชุดการแข่ง (OT Set Boundary) ของ VALORANT
 //
-// กฎ (regulation): 12 รอบต่อฝั่ง ครบ 12 รอบสลับฝั่งครั้งที่ 1 (Halftime)
-// กฎ (overtime): ถ้าเสมอ 12-12 (ครบ 24 รอบ) เข้า OT เล่นเป็นชุดละ 2 รอบ สลับฝั่งทุกครั้งที่ครบชุด
-// (รอบ 24 เริ่ม OT + เลือกฝั่งใหม่, 26, 28, 30, ... ) — Sudden Death (ถ้า OT ยืดถึง 3 เซ็ตไม่จบ) ยังไม่รองรับ
-// ในฟังก์ชันนี้ เพราะกฎการเลือกฝั่งตอนนั้นไม่ตรงกับ pattern ทุก-2-รอบปกติ (กลับไปใช้ฝั่งเริ่ม OT แทน) —
-// ถือเป็น edge case หายากที่ยังไม่ได้ยืนยันจากเอกสารทางการของ Riot ตรง ๆ (อ้างอิงจากผลค้นหาเว็บเท่านั้น)
-export const REGULATION_ROUNDS_PER_HALF = 12;
-export const OVERTIME_ROUND_SET_SIZE = 2;
+// อ้างอิงกฎทางการของ Riot Games (VCT / Tournament Mode "Overtime: Win by Two"):
+// 1. Regulation (รอบ 1–24):
+//    - Halftime สลับฝั่งเมื่อจบ 12 รอบแรก (completedRounds = 12) เพื่อเริ่มรอบ 13
+// 2. Overtime (รอบ 25 เป็นต้นไป):
+//    - แข่งเป็นชุดละ 2 รอบ (2-Round Sets)
+//    - completedRounds = 24 (เสมอ 12–12) -> เริ่ม OT (เลือกฝั่งเริ่มต้น OT)
+//    - completedRounds = 25 (จบ OT 1.1) -> สลับฝั่งสำหรับรอบ 26 (OT 1.2)
+//    - completedRounds = 26 (จบ OT 1.2) -> จบชุด OT 1 เริ่มชุด OT 2 (เลือกฝั่งใหม่)
+//    - completedRounds = 27 (จบ OT 2.1) -> สลับฝั่งสำหรับรอบ 28 (OT 2.2)
+//    - รูปแบบนี้ดำเนินต่อเนื่องแบบ Win by Two โดยไม่มี Sudden Death
 
-/**
- * รอบที่ "เพิ่งจบไป" (completedRounds = rounds_won_a + rounds_won_b หลังจบรอบนั้น) เป็นจุดสลับฝั่งไหม
- * true = ก่อนเริ่มรอบถัดไป ทีม/ตำแหน่งจะสลับฝั่ง ระบบที่พึ่งพาตำแหน่งควรรีเช็ค ณ จุดนี้
- */
-export function isSideSwapBoundary(completedRounds: number): boolean {
-  if (completedRounds === REGULATION_ROUNDS_PER_HALF) return true; // Halftime
-  const regulationTotal = REGULATION_ROUNDS_PER_HALF * 2; // 24
-  if (completedRounds < regulationTotal) return false; // ยังอยู่ใน regulation ไม่มีจุดสลับเพิ่ม
-  const otRoundsCompleted = completedRounds - regulationTotal;
-  return otRoundsCompleted % OVERTIME_ROUND_SET_SIZE === 0; // รวมรอบ 24 (เริ่ม OT) ด้วย
+export const REGULATION_ROUNDS_PER_HALF = 12;
+export const REGULATION_TOTAL_ROUNDS = 24;
+export const OVERTIME_SET_SIZE = 2;
+
+export type SideSwapType = 'HALFTIME' | 'OT_MID_SET_SWAP' | 'OT_NEW_SET_CHOICE' | 'NONE';
+
+export function getSideSwapType(completedRounds: number): SideSwapType {
+  if (completedRounds === REGULATION_ROUNDS_PER_HALF) {
+    return 'HALFTIME';
+  }
+
+  if (completedRounds < REGULATION_TOTAL_ROUNDS) {
+    return 'NONE';
+  }
+
+  const otCompleted = completedRounds - REGULATION_TOTAL_ROUNDS;
+
+  if (otCompleted === 0) {
+    return 'OT_NEW_SET_CHOICE';
+  }
+
+  if (otCompleted % OVERTIME_SET_SIZE === 1) {
+    return 'OT_MID_SET_SWAP';
+  } else {
+    return 'OT_NEW_SET_CHOICE';
+  }
 }
 
-/** เลขรอบถัดไปที่จะเป็นจุดสลับฝั่ง นับจากรอบที่เล่นไปแล้วตอนนี้ — เอาไว้โชว์ "อีกกี่รอบต้องรีเช็ค" ในหน้า UI */
+export function isSideSwapBoundary(completedRounds: number): boolean {
+  const type = getSideSwapType(completedRounds);
+  return type === 'HALFTIME' || type === 'OT_MID_SET_SWAP';
+}
+
 export function nextSideSwapRound(completedRounds: number): number {
-  if (completedRounds < REGULATION_ROUNDS_PER_HALF) return REGULATION_ROUNDS_PER_HALF;
-  const regulationTotal = REGULATION_ROUNDS_PER_HALF * 2;
-  if (completedRounds < regulationTotal) return regulationTotal;
-  const otRoundsCompleted = completedRounds - regulationTotal;
-  const roundsIntoCurrentSet = otRoundsCompleted % OVERTIME_ROUND_SET_SIZE;
-  const roundsUntilNext = roundsIntoCurrentSet === 0 ? OVERTIME_ROUND_SET_SIZE : OVERTIME_ROUND_SET_SIZE - roundsIntoCurrentSet;
-  return completedRounds + roundsUntilNext;
+  if (completedRounds < REGULATION_ROUNDS_PER_HALF) {
+    return REGULATION_ROUNDS_PER_HALF;
+  }
+
+  if (completedRounds < REGULATION_TOTAL_ROUNDS) {
+    return REGULATION_TOTAL_ROUNDS + 1;
+  }
+
+  const otCompleted = completedRounds - REGULATION_TOTAL_ROUNDS;
+
+  if (otCompleted % OVERTIME_SET_SIZE === 0) {
+    return completedRounds + 1;
+  } else {
+    return completedRounds + 2;
+  }
 }
