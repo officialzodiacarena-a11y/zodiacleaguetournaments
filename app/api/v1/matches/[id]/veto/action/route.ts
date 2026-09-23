@@ -71,6 +71,25 @@ export async function POST(
     return NextResponse.json({ error: 'FORBIDDEN: Must be Captain, Manager, or Coach of exactly one team in this match' }, { status: 403 });
   }
 
+  // 2.1) ถ้าทีมนี้มีโค้ช (ACTIVE) อยู่แล้ว ให้ "เฉพาะโค้ช" เท่านั้นที่ Veto แทนทีมได้ (กัปตัน/ผู้จัดการ Veto แทนไม่ได้อีกต่อไป)
+  // ถ้าทีมไม่มีโค้ช ใช้สิทธิ์เดิม (กัปตัน/ผู้จัดการ Veto ได้ตามปกติ)
+  const actingTeamId = teamIdForSide(side, ctx.match.team_a_id, ctx.match.team_b_id);
+  const { data: coachRow } = await admin
+    .from('team_members')
+    .select('id')
+    .eq('team_id', actingTeamId as string)
+    .eq('status', 'ACTIVE')
+    .eq('role', 'COACH')
+    .maybeSingle();
+  const teamHasCoach = Boolean(coachRow);
+  const actingRole = memberships.find((m) => m.team_id === actingTeamId)?.role;
+  if (teamHasCoach && actingRole !== 'COACH') {
+    return NextResponse.json(
+      { error: 'FORBIDDEN: ทีมนี้มีโค้ชแล้ว ต้องให้โค้ชเป็นคน Ban/Pick แมพแทนทีม' },
+      { status: 403 }
+    );
+  }
+
   // 3) ตรวจตามลำดับใน veto_format (ตาของทีม, ชนิด action, แมพใน Pool, แมพซ้ำ)
   const check = validateAction(ctx.config, ctx.pool, ctx.rows, { side, action, mapName }, ctx.vetoStartMs);
   if (!check.ok) {
