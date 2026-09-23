@@ -69,6 +69,39 @@ export const PLAYER_HP_BAR_ROI: RoiRegion[] = [
   })),
 ];
 
+// Tab Scoreboard (กด Tab ค้างในเกม) — จุดเดียวที่มีชื่อเต็มให้อ่านตอน Combat Phase (แถบชื่อบน HUD
+// ปกติโชว์แค่รูป avatar ไม่มีชื่อ) ปรับเทียบจากภาพจริงที่พี่หยัดส่งมา 2026-09-24 (VALORANT client
+// มาตรฐาน 1920x1080) แถวบน (สีเขียว) = ทีมฝั่งซ้ายของแถบ HP บนสุดของจอ (team_a ตามธรรมเนียมเดิม)
+// แถวล่าง (สีแดง) = team_b — ใช้ตอน Observer กด Tab ค้างแล้วกดปุ่ม SYNC ในหน้า Observer Control
+// เพื่อจับคู่ "ตำแหน่งหลอด HP บนจอ = คนไหน" ไว้ครั้งเดียว แล้วอ่านต่อด้วยตำแหน่งเดิมตลอด Combat Phase
+// ⚠️ สมมติฐานที่ยังไม่ยืนยันกับฟีดจริง: ลำดับแถวในตารางนี้ (บนลงล่างของแต่ละทีม) ตรงกับลำดับ avatar
+// ซ้าย->ขวาบนแถบ HP บนสุดของจอ — ต้องเทียบกับของจริงก่อนใช้ ถ้าลำดับไม่ตรงต้องแก้ mapping ไม่ใช่ ROI นี้
+const TAB_ROW_HEIGHT = 0.0315;
+const TAB_NAME_HEIGHT = 0.026;
+const TAB_TEAM_A_TOP = 0.314;
+const TAB_TEAM_B_TOP = 0.527;
+const TAB_NAME_X = 0.336;
+const TAB_NAME_WIDTH = 0.09;
+
+export const TAB_SCOREBOARD_NAME_ROI: RoiRegion[] = [
+  ...Array.from({ length: 5 }, (_, i) => ({
+    id: `team_a_tab_${i}`,
+    label: `Team A Tab Row ${i + 1}`,
+    x: TAB_NAME_X,
+    y: TAB_TEAM_A_TOP + i * TAB_ROW_HEIGHT,
+    width: TAB_NAME_WIDTH,
+    height: TAB_NAME_HEIGHT,
+  })),
+  ...Array.from({ length: 5 }, (_, i) => ({
+    id: `team_b_tab_${i}`,
+    label: `Team B Tab Row ${i + 1}`,
+    x: TAB_NAME_X,
+    y: TAB_TEAM_B_TOP + i * TAB_ROW_HEIGHT,
+    width: TAB_NAME_WIDTH,
+    height: TAB_NAME_HEIGHT,
+  })),
+];
+
 // ป้ายจบรอบตรงกลางจอ (เช่น "TEAM A ELIMINATED" / "SPIKE HAS BEEN DEFUSED")
 // ⚠️ ภาพอ้างอิงที่มี (EWC 26) เป็นภาพระหว่างรอบกำลังเล่นอยู่ ไม่ใช่ตอนรอบเพิ่งจบ จึงยังไม่เห็นป้ายนี้
 // จริง ค่าด้านล่างยังเป็นค่าประมาณเดิม (กลางจอ ใต้แถบคะแนนบนสุด) ต้องยืนยันกับภาพตอนรอบจบจริงอีกที

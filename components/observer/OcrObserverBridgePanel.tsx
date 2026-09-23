@@ -11,8 +11,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { matchOcrPlayerName, type LockedRosterCandidate, type OcrMatchResult } from '@/lib/ocr/fuzzy-matcher';
-import { PLAYER_HP_BAR_ROI, PLAYER_NAME_ROI, ROUND_BANNER_ROI, cropRoi, parseRoundBannerText } from '@/lib/ocr/roi-regions';
+import {
+  PLAYER_HP_BAR_ROI,
+  PLAYER_NAME_ROI,
+  ROUND_BANNER_ROI,
+  TAB_SCOREBOARD_NAME_ROI,
+  cropRoi,
+  parseRoundBannerText,
+} from '@/lib/ocr/roi-regions';
 import { readHpFromCanvas } from '@/lib/ocr/hp-bar';
+import { buildPositionMapFromTabNames, defaultPositionMap, type PositionMapSlot } from '@/lib/ocr/position-map';
 import { recognizeText, terminateOcrWorkerPool } from '@/lib/ocr/ocr-worker-pool';
 import type { WinCondition } from '@/lib/overlay/telemetry-schema';
 
@@ -68,6 +76,56 @@ export default function OcrObserverBridgePanel({ matchId, gameNumber, teamAId, t
   useEffect(() => {
     observerTokenRef.current = observerToken;
   }, [observerToken]);
+
+  // --- Position Map: "หลอด HP ตำแหน่งนี้ = ใคร" — HUD ปกติไม่มีชื่อกำกับ ต้องกด Tab ค้างแล้วกด SYNC
+  // เพื่ออ่านชื่อจาก Tab Scoreboard ครั้งเดียว แล้วจำตำแหน่งไว้ใช้ตลอด Combat Phase (lib/ocr/position-map.ts)
+  const [hpPositionMap, setHpPositionMap] = useState<Record<string, PositionMapSlot>>({});
+  const [tabSyncBusy, setTabSyncBusy] = useState(false);
+  const [tabSyncCount, setTabSyncCount] = useState(0);
+  const hpPositionMapRef = useRef(hpPositionMap);
+  useEffect(() => {
+    hpPositionMapRef.current = hpPositionMap;
+  }, [hpPositionMap]);
+  // ค่าเริ่มต้นก่อนกด Tab ครั้งแรก: เดาตามลำดับที่ติ๊กล็อกไว้ (ดีกว่าไม่มี mapping เลย แต่ต้อง sync จริงก่อนเชื่อ)
+  useEffect(() => {
+    if (!lockedRoster) return;
+    // setTimeout(fn, 0) กัน lint react-hooks/set-state-in-effect (เหตุผลเดียวกับ countdown effect ด้านล่าง)
+    const t = setTimeout(() => setHpPositionMap(defaultPositionMap(lockedRoster, teamAId, teamBId)), 0);
+    return () => clearTimeout(t);
+  }, [lockedRoster, teamAId, teamBId]);
+
+  const syncPositionsFromTab = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video || !lockedRoster || video.readyState < 2) {
+      setHpError('ต้องเริ่ม START OCR CAPTURE ก่อน แล้วกด Tab ค้างไว้ตอนกดปุ่มนี้');
+      return;
+    }
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (!w || !h) return;
+    setTabSyncBusy(true);
+    try {
+      const results = await Promise.all(
+        TAB_SCOREBOARD_NAME_ROI.map(async (roi) => {
+          const cropped = cropRoi(video, w, h, roi);
+          const text = await recognizeText(cropped);
+          const teamId = roi.id.startsWith('team_a') ? teamAId : teamBId;
+          const candidates = lockedRoster.filter((c) => c.team_id === teamId);
+          return [roi.id, matchOcrPlayerName(text, candidates)] as const;
+        })
+      );
+      const updates = buildPositionMapFromTabNames(Object.fromEntries(results), lockedRoster);
+      if (Object.keys(updates).length === 0) {
+        setHpError('อ่าน Tab Scoreboard ไม่ได้เลย — เช็คว่ากด Tab ค้างอยู่จริงตอนกด SYNC และ Scoreboard เต็มจอไม่มีอะไรบัง');
+      } else {
+        setHpError(null);
+      }
+      setHpPositionMap((prev) => ({ ...prev, ...updates }));
+      setTabSyncCount((c) => c + 1);
+    } finally {
+      setTabSyncBusy(false);
+    }
+  }, [lockedRoster, teamAId, teamBId]);
 
   // --- Round-End Confirmation ---
   const [pendingRound, setPendingRound] = useState<{
@@ -203,28 +261,22 @@ export default function OcrObserverBridgePanel({ matchId, gameNumber, teamAId, t
       setMatchResults(Object.fromEntries(nameResults));
 
       // HP ของ 10 คน — หลอดเลือดแถวเดียวกับชื่อ (team_a_hp_i คู่กับ team_a_i) อ่านจากสัดส่วนพิกเซลที่สว่าง
-      const hpEntries = PLAYER_HP_BAR_ROI.map((roi) => {
-        const slotId = roi.id.replace('_hp_', '_');
-        return [slotId, readHpFromCanvas(cropRoi(video, w, h, roi))] as const;
-      });
-      setHpBySlot(Object.fromEntries(hpEntries));
+      // HUD ปกติไม่มีชื่อกำกับตอน Combat Phase จึงจับคู่คนด้วย hpPositionMap (จำไว้จาก SYNC ตอนกด Tab)
+      // ไม่ใช่จากชื่อในเฟรมนี้ — ดู lib/ocr/position-map.ts
+      const hpEntries = PLAYER_HP_BAR_ROI.map((roi) => ({
+        hpRoiId: roi.id,
+        slotId: roi.id.replace('_hp_', '_'), // สำหรับโชว์คู่กับแถวชื่อในตาราง
+        hp: readHpFromCanvas(cropRoi(video, w, h, roi)),
+      }));
+      setHpBySlot(Object.fromEntries(hpEntries.map((e) => [e.slotId, e.hp])));
 
-      // ส่งเฉพาะคนที่จับคู่ชื่อได้ (ใช้ชื่อในระบบ = display_name ที่ Overlay ใช้จับคู่) และ HP เปลี่ยนเกินเกณฑ์
-      const nameBySlot = new Map(nameResults);
-      const changed = hpEntries.flatMap(([slotId, hp]) => {
-        const match = nameBySlot.get(slotId);
-        const locked = match?.matched_player_id ? lockedRoster.find((c) => c.id === match.matched_player_id) : undefined;
-        if (!match || !locked) return [];
+      const positionMap = hpPositionMapRef.current;
+      const changed = hpEntries.flatMap(({ hpRoiId, hp }) => {
+        const locked = positionMap[hpRoiId];
+        if (!locked) return [];
         const last = lastSentHpRef.current[locked.id];
         if (last !== undefined && Math.abs(last - hp) < HP_SEND_THRESHOLD) return [];
-        return [{
-          name: locked.ign,
-          hp,
-          hpMax: 100,
-          raw_ocr_name: match.rawText.slice(0, 64) || undefined,
-          matched_player_id: locked.id,
-          match_confidence: match.confidence,
-        }];
+        return [{ name: locked.ign, hp, hpMax: 100, matched_player_id: locked.id }];
       });
 
       const token = observerTokenRef.current;
@@ -428,8 +480,38 @@ export default function OcrObserverBridgePanel({ matchId, gameNumber, teamAId, t
           {/* hidden video สำหรับ capture — ไม่โชว์ภาพให้ผู้ใช้ ใช้แค่เป็นแหล่งเฟรมให้ canvas crop */}
           <video ref={videoRef} muted playsInline className="hidden" />
 
+          {capturing && (
+            <div className="flex items-center gap-3 border border-amber-500/30 bg-amber-500/5 rounded-lg p-3">
+              <button
+                onClick={syncPositionsFromTab}
+                disabled={tabSyncBusy}
+                className="px-3 py-1.5 bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25 rounded font-mono text-[10px] font-bold transition disabled:opacity-30 whitespace-nowrap"
+              >
+                {tabSyncBusy ? 'SYNCING...' : '📋 SYNC POSITIONS (กด Tab ค้างไว้ก่อนกด)'}
+              </button>
+              <p className="font-mono text-[10px] text-gray-400">
+                HUD ปกติไม่มีชื่อกำกับ ต้องกด Tab ค้างให้ Scoreboard เต็มจอ แล้วกดปุ่มนี้ครั้งเดียวต่อรอบ/ตอนเริ่มแม็พ
+                เพื่อจำตำแหน่งหลอด HP ไว้ {tabSyncCount > 0 && <span className="text-emerald-400">— sync แล้ว {tabSyncCount} ครั้ง</span>}
+              </p>
+            </div>
+          )}
+
           {ocrError && <p className="font-mono text-[10px] text-rose-400">{ocrError}</p>}
           {hpError && <p className="font-mono text-[10px] text-amber-400">{hpError}</p>}
+
+          {/* ตำแหน่งที่จำไว้ตอนนี้ — ให้ Observer เทียบสายตากับที่รู้อยู่แล้วว่าใครอยู่ตำแหน่งไหนก่อนเชื่อ HP อัตโนมัติ */}
+          {capturing && (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[10px] text-gray-400">
+              {PLAYER_HP_BAR_ROI.map((roi) => (
+                <div key={roi.id} className="flex justify-between border-b border-white/5 py-0.5">
+                  <span>{roi.label}</span>
+                  <span className={hpPositionMap[roi.id] ? 'text-cyan-300' : 'text-rose-400'}>
+                    {hpPositionMap[roi.id]?.ign ?? '[ยังไม่ sync]'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* OCR NAME-MATCHING TABLE */}
           {capturing && (
