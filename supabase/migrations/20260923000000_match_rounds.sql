@@ -44,22 +44,31 @@ CREATE POLICY "Allow public read access to match_rounds"
 ON public.match_rounds FOR SELECT
 USING (true);
 
--- Policy: Write Access restricted to Service Role & Authenticated Admins/Referees
+-- Policy: Write Access restricted to Service Role & Authenticated Admins/Referees/Casters
+-- Fixed 2026-09-23 (พี่หยัด รัน SQL เจอ ERROR 42703 column p.role does not exist):
+-- role ไม่ได้อยู่ใน public.players โดยตรง -- เก็บแยกในตาราง public.user_roles
+-- (player_id, role, revoked_at) ตาม pattern เดียวกับ lib/auth/require-broadcast-role.ts
+-- และ enum user_role_type ไม่มีค่า PRODUCER/BROADCAST จริง (มีแค่ ATHLETE, TEAM_MANAGER,
+-- ORG_OWNER, CASTER, REFEREE, ADMIN, SUPER_ADMIN, MARKETPLACE_ADMIN) ใช้ CASTER แทนสองค่านั้น
 CREATE POLICY "Allow authenticated staff to insert/update match_rounds"
 ON public.match_rounds FOR ALL
 TO authenticated
 USING (
     EXISTS (
         SELECT 1 FROM public.players p
+        JOIN public.user_roles ur ON ur.player_id = p.id
         WHERE p.user_id = auth.uid()
-        AND p.role IN ('SUPER_ADMIN', 'ADMIN', 'REFEREE', 'PRODUCER', 'BROADCAST')
+        AND ur.revoked_at IS NULL
+        AND ur.role IN ('SUPER_ADMIN', 'ADMIN', 'REFEREE', 'CASTER')
     )
 )
 WITH CHECK (
     EXISTS (
         SELECT 1 FROM public.players p
+        JOIN public.user_roles ur ON ur.player_id = p.id
         WHERE p.user_id = auth.uid()
-        AND p.role IN ('SUPER_ADMIN', 'ADMIN', 'REFEREE', 'PRODUCER', 'BROADCAST')
+        AND ur.revoked_at IS NULL
+        AND ur.role IN ('SUPER_ADMIN', 'ADMIN', 'REFEREE', 'CASTER')
     )
 );
 
