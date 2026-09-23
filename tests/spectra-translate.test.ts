@@ -2,7 +2,7 @@
 // แปลง scoreboard จาก Spectra-Server เป็น TelemetryPlayerFrame (lib/spectra/translate.ts)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTelemetryPlayers, normalizeInternalName, riotIdKey, translateArmor, type RiotIdRosterEntry, type SpectraScoreboardEntry } from '@/lib/spectra/translate';
+import { buildTelemetryPlayers, detectRoundWinner, normalizeInternalName, riotIdKey, translateArmor, type RiotIdRosterEntry, type SpectraScoreboardEntry } from '@/lib/spectra/translate';
 
 test('riotIdKey ไม่สนตัวพิมพ์เล็ก/ใหญ่ ช่องว่าง และ # นำหน้า tagline', () => {
   assert.equal(riotIdKey('Ming', '1234'), 'MING#1234');
@@ -59,4 +59,56 @@ test('buildTelemetryPlayers กันค่าเกินขอบเขตข�
   assert.equal(frame.credits, 0);
   assert.equal(frame.ultPoints, 20);
   assert.equal(frame.ultMax, 1);
+});
+
+// --- detectRoundWinner tests ---
+
+const TEAM_A = 'aaaa-aaaa';
+const TEAM_B = 'bbbb-bbbb';
+
+function rosterWithTeams(): Map<string, RiotIdRosterEntry> {
+  return new Map([
+    ['MING#1234', { displayName: 'Ming', teamId: TEAM_A }],
+    ['KONG#5678', { displayName: 'Kong', teamId: TEAM_A }],
+    ['ZAP#0001', { displayName: 'Zap', teamId: TEAM_B }],
+    ['RAY#0002', { displayName: 'Ray', teamId: TEAM_B }],
+  ]);
+}
+
+test('detectRoundWinner: ทีม B ตายหมด → ทีม A ชนะ', () => {
+  const scoreboard = [
+    entry({ name: 'Ming', tagline: '1234', isAlive: true }),
+    entry({ name: 'Kong', tagline: '5678', isAlive: true }),
+    entry({ name: 'Zap', tagline: '0001', isAlive: false }),
+    entry({ name: 'Ray', tagline: '0002', isAlive: false }),
+  ];
+  assert.equal(detectRoundWinner(scoreboard, rosterWithTeams()), TEAM_A);
+});
+
+test('detectRoundWinner: ทีม A ตายหมด → ทีม B ชนะ', () => {
+  const scoreboard = [
+    entry({ name: 'Ming', tagline: '1234', isAlive: false }),
+    entry({ name: 'Kong', tagline: '5678', isAlive: false }),
+    entry({ name: 'Zap', tagline: '0001', isAlive: true }),
+    entry({ name: 'Ray', tagline: '0002', isAlive: false }),
+  ];
+  assert.equal(detectRoundWinner(scoreboard, rosterWithTeams()), TEAM_B);
+});
+
+test('detectRoundWinner: ทั้งสองทีมยังมีคนรอด → null (ยังไม่จบรอบ)', () => {
+  const scoreboard = [
+    entry({ name: 'Ming', tagline: '1234', isAlive: true }),
+    entry({ name: 'Kong', tagline: '5678', isAlive: false }),
+    entry({ name: 'Zap', tagline: '0001', isAlive: true }),
+    entry({ name: 'Ray', tagline: '0002', isAlive: false }),
+  ];
+  assert.equal(detectRoundWinner(scoreboard, rosterWithTeams()), null);
+});
+
+test('detectRoundWinner: ไม่มี teamId ใน roster → null', () => {
+  const noTeamRoster = new Map<string, RiotIdRosterEntry>([
+    ['MING#1234', { displayName: 'Ming' }],
+  ]);
+  const scoreboard = [entry({ name: 'Ming', tagline: '1234', isAlive: false })];
+  assert.equal(detectRoundWinner(scoreboard, noTeamRoster), null);
 });

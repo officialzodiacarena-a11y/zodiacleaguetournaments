@@ -26,6 +26,7 @@ export interface SpectraScoreboardEntry {
 /** riot_id ("Name#Tag") -> ผู้เล่นในระบบเรา ใช้จับคู่ scoreboard entry กับ display_name ที่ Overlay ใช้อยู่ */
 export interface RiotIdRosterEntry {
   displayName: string;
+  teamId?: string;
 }
 
 /** ทำ key มาตรฐานจาก game_name + tag_line (ไม่สนตัวพิมพ์เล็ก/ใหญ่ ตัดช่องว่างหัวท้าย ตัด # นำหน้า tagline ถ้ามี) */
@@ -53,6 +54,36 @@ export function normalizeInternalName(internal: string): string {
  * เฉพาะคนที่จับคู่ Riot ID กับ roster ของเราได้เท่านั้นจะอยู่ในผลลัพธ์ (คนที่จับคู่ไม่ได้ถูกข้าม ไม่ใช่ error)
  * ไม่ใส่ hp/hpMax เพราะ Spectra ไม่มีข้อมูล HP ของศัตรู — ให้ OCR (lib/ocr/hp-bar.ts) ดูแลส่วนนั้นต่อไป
  */
+/**
+ * ตรวจจับว่ารอบจบหรือยัง + ทีมไหนชนะ จาก isAlive ของ Spectra scoreboard
+ * คืน teamId ของทีมที่ยังมีคนรอดอยู่ (อีกฝั่ง isAlive = false ทั้งหมด)
+ * คืน null ถ้ายังไม่จบ (ทั้งสองฝั่งยังมีคนเหลือ) หรือข้อมูลไม่พอตัดสิน
+ */
+export function detectRoundWinner(
+  scoreboard: SpectraScoreboardEntry[],
+  rosterByRiotId: Map<string, RiotIdRosterEntry>
+): string | null {
+  const teamAlive = new Map<string, { alive: number; total: number }>();
+
+  for (const entry of scoreboard) {
+    const roster = rosterByRiotId.get(riotIdKey(entry.name, entry.tagline));
+    if (!roster?.teamId) continue;
+
+    const stats = teamAlive.get(roster.teamId) ?? { alive: 0, total: 0 };
+    stats.total += 1;
+    if (entry.isAlive) stats.alive += 1;
+    teamAlive.set(roster.teamId, stats);
+  }
+
+  const teams = [...teamAlive.entries()];
+  if (teams.length !== 2) return null;
+
+  const [teamA, teamB] = teams;
+  if (teamA[1].alive === 0 && teamB[1].alive > 0) return teamB[0];
+  if (teamB[1].alive === 0 && teamA[1].alive > 0) return teamA[0];
+  return null;
+}
+
 export function buildTelemetryPlayers(
   scoreboard: SpectraScoreboardEntry[],
   rosterByRiotId: Map<string, RiotIdRosterEntry>

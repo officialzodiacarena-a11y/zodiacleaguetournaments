@@ -20,7 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { io } from 'socket.io-client';
-import { buildTelemetryPlayers, riotIdKey, type RiotIdRosterEntry, type SpectraScoreboardEntry } from '@/lib/spectra/translate';
+import { buildTelemetryPlayers, detectRoundWinner, riotIdKey, type RiotIdRosterEntry, type SpectraScoreboardEntry } from '@/lib/spectra/translate';
 
 function readEnv(): Record<string, string> {
   const env: Record<string, string> = {};
@@ -75,7 +75,7 @@ async function main() {
 
   const { data: participants, error: partErr } = await supabase
     .from('match_participants')
-    .select('player_id, players:player_id(display_name)')
+    .select('player_id, team_id, players:player_id(display_name)')
     .eq('match_game_id', game.id);
   if (partErr) fail(`โหลดรายชื่อผู้เล่นไม่สำเร็จ: ${partErr.message}`);
 
@@ -92,7 +92,7 @@ async function main() {
     const playerObj = Array.isArray(p.players) ? p.players[0] : p.players;
     const displayName = (playerObj as { display_name?: string } | null)?.display_name;
     if (!account || !displayName) continue;
-    rosterByRiotId.set(riotIdKey(account.game_name, account.tag_line), { displayName });
+    rosterByRiotId.set(riotIdKey(account.game_name, account.tag_line), { displayName, teamId: p.team_id ?? undefined });
   }
 
   if (rosterByRiotId.size === 0) {
@@ -102,6 +102,8 @@ async function main() {
 
   const telemetryUrl = `${baseUrl.replace(/\/$/, '')}/api/v1/matches/${matchId}/telemetry`;
   let sentFrames = 0;
+  let currentRound = 0;
+  let roundEndSent = false;
 
   console.log(`🔌 เชื่อมต่อ Spectra-Server ที่ ${spectraUrl} (group code: ${groupCode})...`);
   const socket = io(spectraUrl, { reconnection: true });
@@ -115,24 +117,47 @@ async function main() {
     console.error(`⚠️ เชื่อมต่อ Spectra-Server ไม่ได้: ${err.message} — จะลองใหม่อัตโนมัติ`);
   });
 
-  socket.on('match_data', async (payload: { scoreboard?: SpectraScoreboardEntry[] }) => {
+  socket.on('match_data', async (payload: { scoreboard?: SpectraScoreboardEntry[]; roundNumber?: number }) => {
     const scoreboard = payload?.scoreboard;
     if (!Array.isArray(scoreboard) || scoreboard.length === 0) return;
 
+    // ตรวจจับรอบใหม่: ถ้า roundNumber เปลี่ยนแปลว่ารอบก่อนหน้าจบไปแล้ว reset flag
+    if (typeof payload.roundNumber === 'number' && payload.roundNumber > currentRound) {
+      currentRound = payload.roundNumber;
+      roundEndSent = false;
+    }
+
     const players = buildTelemetryPlayers(scoreboard, rosterByRiotId);
-    if (players.length === 0) return;
+
+    // ตรวจจับจบรอบจาก isAlive: ถ้าฝั่งใดฝั่งหนึ่งตายหมด = รอบจบ
+    const winnerTeamId = detectRoundWinner(scoreboard, rosterByRiotId);
+    const roundEvent = winnerTeamId && !roundEndSent
+      ? {
+          stage: 'ROUND_ENDED' as const,
+          game_number: gameNumber,
+          round_number: currentRound || 1,
+          winner_team_id: winnerTeamId,
+          win_condition: 'elimination' as const,
+        }
+      : undefined;
+
+    if (roundEvent) {
+      roundEndSent = true;
+      console.log(`🏁 รอบ ${roundEvent.round_number} จบ — ทีมชนะ: ${winnerTeamId} (elimination จาก isAlive)`);
+    }
+
+    if (players.length === 0 && !roundEvent) return;
 
     try {
       const res = await fetch(telemetryUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${observerToken}` },
-        body: JSON.stringify({ timestamp: Date.now(), players }),
+        body: JSON.stringify({ timestamp: Date.now(), round_event: roundEvent, players }),
       });
       sentFrames += 1;
       if (!res.ok) {
         console.error(`⚠️ ส่ง telemetry ล้มเหลว (HTTP ${res.status}) — ถ้าเป็น 401 ให้ออก Observer Token ใหม่`);
       } else if (sentFrames % 20 === 1) {
-        // log ทุกๆ ~20 เฟรม กันจอถูกถ่วมด้วย log รัว (ข้อมูลมาบ่อยกว่า 1 ครั้ง/วิ)
         console.log(`📡 ส่งแล้ว ${sentFrames} เฟรม — ล่าสุด ${players.length} คน: ${players.map((p) => p.name).join(', ')}`);
       }
     } catch (err) {
