@@ -815,9 +815,9 @@ export default function StreamHubMainPage({
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src="/images/logo/logo2.svg"
+              src="/images/logo/logo2.png"
               alt="Zodiac"
-              className="w-4 h-4 animate-spin"
+              className="w-5 h-5 animate-spin"
               style={{ animationDuration: '3s' }}
             />
           )}
