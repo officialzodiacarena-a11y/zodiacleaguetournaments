@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  spectra-server:
+    image: ghcr.io/valospectra/spectra-server:latest
+    restart: unless-stopped
+    ports:
+      - "5100:5100" # Expose for Spectra-Client (Overwolf) on Caster PC
+    # Port 5200 is used by the adapter internally, no need to expose to the public internet
+    environment:
+      - INSECURE=true # Allows running without SSL setup for quick testing
+
+  spectra-adapter:
+    build:
+      context: ..
+      dockerfile: spectra-vps/Dockerfile.adapter
+    restart: unless-stopped
+    depends_on:
+      - spectra-server
+    env_file:
+      - .env
+    environment:
+      - SPECTRA_URL=ws://spectra-server:5200
+      - BASE_URL=https://www.zodiacleaguetournaments.com
