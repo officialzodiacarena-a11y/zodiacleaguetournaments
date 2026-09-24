@@ -10,6 +10,125 @@
 // ประมาณตามสัดส่วนเกราะจริงของ VALORANT (25 = Light, 50 = Heavy) — ต้องเทียบกับข้อมูลจริงก่อนใช้งานจริง
 import type { TelemetryPlayerFrame } from '@/lib/overlay/telemetry-schema';
 
+export type WinCondition = 'elimination' | 'spike_detonate' | 'spike_defuse' | 'time_expire';
+
+export interface RoundOutcome {
+  winnerTeamId: string;
+  winCondition: WinCondition;
+}
+
+/**
+ * State machine ติดตาม spike events ระหว่างรอบ แล้ว resolve win condition ตอน round_phase === "end"
+ * ตาม Overwolf GEP spec: spike_detonated/spike_defused เป็น push events ที่ยิงก่อน round_phase เปลี่ยนเป็น "end"
+ */
+export class RoundTracker {
+  private spikeDetonated = false;
+  private spikeDefused = false;
+  private _currentRound = 0;
+
+  get currentRound() { return this._currentRound; }
+
+  onSpikeDetonated() { this.spikeDetonated = true; }
+  onSpikeDefused() { this.spikeDefused = true; }
+
+  advanceRound(roundNumber: number) {
+    if (roundNumber > this._currentRound) {
+      this._currentRound = roundNumber;
+      this.resetFlags();
+    }
+  }
+
+  resolveRoundEnd(
+    scoreboard: SpectraScoreboardEntry[],
+    rosterByRiotId: Map<string, RiotIdRosterEntry>,
+    scoreUpdate?: { won: number; lost: number },
+  ): RoundOutcome | null {
+    let winCondition: WinCondition;
+
+    if (this.spikeDetonated) {
+      winCondition = 'spike_detonate';
+    } else if (this.spikeDefused) {
+      winCondition = 'spike_defuse';
+    } else {
+      const eliminated = getEliminatedTeam(scoreboard, rosterByRiotId);
+      winCondition = eliminated ? 'elimination' : 'time_expire';
+    }
+
+    const winnerTeamId = resolveWinnerTeam(winCondition, scoreboard, rosterByRiotId, scoreUpdate);
+    this.resetFlags();
+
+    if (!winnerTeamId) return null;
+    return { winnerTeamId, winCondition };
+  }
+
+  private resetFlags() {
+    this.spikeDetonated = false;
+    this.spikeDefused = false;
+  }
+}
+
+function getEliminatedTeam(
+  scoreboard: SpectraScoreboardEntry[],
+  rosterByRiotId: Map<string, RiotIdRosterEntry>,
+): string | null {
+  const teamAlive = new Map<string, { alive: number; total: number }>();
+  for (const entry of scoreboard) {
+    const roster = rosterByRiotId.get(riotIdKey(entry.name, entry.tagline));
+    if (!roster?.teamId) continue;
+    const stats = teamAlive.get(roster.teamId) ?? { alive: 0, total: 0 };
+    stats.total += 1;
+    if (entry.isAlive) stats.alive += 1;
+    teamAlive.set(roster.teamId, stats);
+  }
+  const teams = [...teamAlive.entries()];
+  if (teams.length !== 2) return null;
+  const [teamA, teamB] = teams;
+  if (teamA[1].alive === 0 && teamB[1].alive > 0) return teamA[0];
+  if (teamB[1].alive === 0 && teamA[1].alive > 0) return teamB[0];
+  return null;
+}
+
+function resolveWinnerTeam(
+  winCondition: WinCondition,
+  scoreboard: SpectraScoreboardEntry[],
+  rosterByRiotId: Map<string, RiotIdRosterEntry>,
+  scoreUpdate?: { won: number; lost: number },
+): string | null {
+  const eliminated = getEliminatedTeam(scoreboard, rosterByRiotId);
+
+  if (winCondition === 'elimination' && eliminated) {
+    // eliminated = ทีมที่ตายหมด ดังนั้นอีกฝั่งชนะ
+    const teamIds = [...new Set(
+      scoreboard
+        .map(e => rosterByRiotId.get(riotIdKey(e.name, e.tagline))?.teamId)
+        .filter((id): id is string => !!id)
+    )];
+    return teamIds.find(id => id !== eliminated) ?? null;
+  }
+
+  // spike_detonate/spike_defuse/time_expire: ถ้ามี score update ใช้ score +1 หา winner
+  // ถ้าไม่มี score update ใช้ isAlive เป็น fallback (ทีมที่ยังเหลือคนเยอะกว่ามักเป็นฝ่ายชนะ)
+  if (eliminated) {
+    const teamIds = [...new Set(
+      scoreboard
+        .map(e => rosterByRiotId.get(riotIdKey(e.name, e.tagline))?.teamId)
+        .filter((id): id is string => !!id)
+    )];
+    return teamIds.find(id => id !== eliminated) ?? null;
+  }
+
+  // ทั้งสองฝั่งยังมีคนเหลือ — ใช้ score update ถ้ามี
+  // Overwolf ส่ง score เป็น { won, lost } จากมุมมอง local player
+  // ถ้าไม่มี score update ก็ return null (ข้อมูลไม่พอ)
+  if (scoreUpdate) {
+    // TODO: ต้องรู้ว่า local player อยู่ทีมไหนถึงจะ map won/lost -> teamId ได้
+    // ตอนนี้ return null ไว้ก่อน — รอทดสอบกับ Spectra-Server จริง
+    return null;
+  }
+
+  return null;
+}
+
 export interface SpectraScoreboardEntry {
   name: string;
   tagline: string;

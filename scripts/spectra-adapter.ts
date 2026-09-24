@@ -20,7 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { io } from 'socket.io-client';
-import { buildTelemetryPlayers, detectRoundWinner, riotIdKey, type RiotIdRosterEntry, type SpectraScoreboardEntry } from '@/lib/spectra/translate';
+import { buildTelemetryPlayers, RoundTracker, riotIdKey, type RiotIdRosterEntry, type SpectraScoreboardEntry } from '@/lib/spectra/translate';
 
 function readEnv(): Record<string, string> {
   const env: Record<string, string> = {};
@@ -102,8 +102,9 @@ async function main() {
 
   const telemetryUrl = `${baseUrl.replace(/\/$/, '')}/api/v1/matches/${matchId}/telemetry`;
   let sentFrames = 0;
-  let currentRound = 0;
   let roundEndSent = false;
+  const tracker = new RoundTracker();
+  let latestScoreboard: SpectraScoreboardEntry[] = [];
 
   console.log(`🔌 เชื่อมต่อ Spectra-Server ที่ ${spectraUrl} (group code: ${groupCode})...`);
   const socket = io(spectraUrl, { reconnection: true });
@@ -117,42 +118,75 @@ async function main() {
     console.error(`⚠️ เชื่อมต่อ Spectra-Server ไม่ได้: ${err.message} — จะลองใหม่อัตโนมัติ`);
   });
 
-  socket.on('match_data', async (payload: { scoreboard?: SpectraScoreboardEntry[]; roundNumber?: number }) => {
-    const scoreboard = payload?.scoreboard;
-    if (!Array.isArray(scoreboard) || scoreboard.length === 0) return;
+  // Overwolf GEP push events: spike_detonated / spike_defused ยิงทันทีกลางรอบ
+  socket.on('spike_detonated', () => {
+    tracker.onSpikeDetonated();
+    console.log('💣 spike_detonated event received');
+  });
 
-    // ตรวจจับรอบใหม่: ถ้า roundNumber เปลี่ยนแปลว่ารอบก่อนหน้าจบไปแล้ว reset flag
-    if (typeof payload.roundNumber === 'number' && payload.roundNumber > currentRound) {
-      currentRound = payload.roundNumber;
-      roundEndSent = false;
+  socket.on('spike_defused', () => {
+    tracker.onSpikeDefused();
+    console.log('🛡️ spike_defused event received');
+  });
+
+  // Overwolf GEP info update: round_phase เปลี่ยนเป็น "end" = รอบจบ → resolve win condition
+  socket.on('round_phase', async (phase: string) => {
+    if (phase !== 'end' || roundEndSent) return;
+
+    const outcome = tracker.resolveRoundEnd(latestScoreboard, rosterByRiotId);
+    if (!outcome) {
+      console.warn(`⚠️ รอบ ${tracker.currentRound} จบแต่ resolve winner ไม่ได้ — ข้อมูล scoreboard ไม่พอ`);
+      return;
     }
 
-    const players = buildTelemetryPlayers(scoreboard, rosterByRiotId);
+    roundEndSent = true;
+    const roundEvent = {
+      stage: 'ROUND_ENDED' as const,
+      game_number: gameNumber,
+      round_number: tracker.currentRound || 1,
+      winner_team_id: outcome.winnerTeamId,
+      win_condition: outcome.winCondition,
+    };
 
-    // ตรวจจับจบรอบจาก isAlive: ถ้าฝั่งใดฝั่งหนึ่งตายหมด = รอบจบ
-    const winnerTeamId = detectRoundWinner(scoreboard, rosterByRiotId);
-    const roundEvent = winnerTeamId && !roundEndSent
-      ? {
-          stage: 'ROUND_ENDED' as const,
-          game_number: gameNumber,
-          round_number: currentRound || 1,
-          winner_team_id: winnerTeamId,
-          win_condition: 'elimination' as const,
-        }
-      : undefined;
-
-    if (roundEvent) {
-      roundEndSent = true;
-      console.log(`🏁 รอบ ${roundEvent.round_number} จบ — ทีมชนะ: ${winnerTeamId} (elimination จาก isAlive)`);
-    }
-
-    if (players.length === 0 && !roundEvent) return;
+    console.log(`🏁 รอบ ${roundEvent.round_number} จบ — ทีมชนะ: ${outcome.winnerTeamId} (${outcome.winCondition})`);
 
     try {
       const res = await fetch(telemetryUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${observerToken}` },
-        body: JSON.stringify({ timestamp: Date.now(), round_event: roundEvent, players }),
+        body: JSON.stringify({ timestamp: Date.now(), round_event: roundEvent, players: buildTelemetryPlayers(latestScoreboard, rosterByRiotId) }),
+      });
+      if (!res.ok) {
+        console.error(`⚠️ ส่ง round_event ล้มเหลว (HTTP ${res.status})`);
+      }
+    } catch (err) {
+      console.error(`⚠️ ยิง round_event ไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
+
+  socket.on('match_data', async (payload: { scoreboard?: SpectraScoreboardEntry[]; roundNumber?: number }) => {
+    const scoreboard = payload?.scoreboard;
+    if (!Array.isArray(scoreboard) || scoreboard.length === 0) return;
+
+    latestScoreboard = scoreboard;
+
+    // ตรวจจับรอบใหม่: roundNumber เปลี่ยน = รอบใหม่เริ่มแล้ว
+    if (typeof payload.roundNumber === 'number') {
+      const prevRound = tracker.currentRound;
+      tracker.advanceRound(payload.roundNumber);
+      if (tracker.currentRound > prevRound) {
+        roundEndSent = false;
+      }
+    }
+
+    const players = buildTelemetryPlayers(scoreboard, rosterByRiotId);
+    if (players.length === 0) return;
+
+    try {
+      const res = await fetch(telemetryUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${observerToken}` },
+        body: JSON.stringify({ timestamp: Date.now(), players }),
       });
       sentFrames += 1;
       if (!res.ok) {
