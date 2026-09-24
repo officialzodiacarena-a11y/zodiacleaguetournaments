@@ -1,26 +1,30 @@
 // scripts/spectra-adapter.ts
-// ตัวเชื่อมสาย: ฟัง WebSocket ของ Spectra-Server (ข้อมูลเงิน/อาวุธ/เกราะ/อัลติจาก Overwolf GEP บนเครื่อง
-// Observer) แล้วแปลง+ยิงต่อเข้า POST /api/v1/matches/[id]/telemetry ตัวเดิมที่ระบบเราใช้อยู่แล้ว
-// (ช่องทางเดียวกับที่ OCR ใช้ส่ง HP — Overlay merge ข้อมูลจากหลายแหล่งด้วยชื่อผู้เล่นอัตโนมัติ)
+// ตัวเชื่อมสาย: ฟัง WebSocket ของ Spectra-Server (event `match_data` เดียว — ข้อมูลทั้งหมดรวมอยู่ใน
+// JSON ก้อนใหญ่ ไม่มี event แยกสำหรับ spike/round_phase) แล้วแปลง+ยิงต่อเข้า
+// POST /api/v1/matches/[id]/telemetry
 //
-// ต้องรันเป็น Node process แยกต่างหาก (ไม่ใช่ route ของ Next.js) เพราะ Vercel serverless function
-// เปิด WebSocket ค้างไว้ยาวๆ ไม่ได้ — รันบนเครื่องไหนก็ได้ที่ต่อถึง Spectra-Server ได้ (เครื่อง Observer เอง
-// หรือเครื่องแยกที่รัน Docker ของ Spectra-Server ก็ได้)
+// Spectra-Server protocol (จาก websocketOutgoing.ts):
+//   - Overlay connect → emit "logon" พร้อม { groupCode }
+//   - Server ตอบ "logon_success"
+//   - Server ส่ง "match_data" ทุกครั้งที่ state เปลี่ยน (scoreboard, round phase, spike, score ฯลฯ)
+//   - match_data payload คือ Match object ที่ strip ฟิลด์ sensitive ออก (groupSecret, replayLog)
 //
-// ⚠️ ยังไม่เคยทดสอบกับ Spectra-Server จริง (ไม่มี Overwolf/Spectra ให้ทดสอบตอนที่เขียน) ต้องตั้งค่า Spectra
-// Client+Server ให้ทำงานได้ก่อน แล้ว dry-run ดู log ให้แน่ใจว่าจับคู่ผู้เล่นถูกคนก่อนเชื่อบนแมตช์จริง
+// ต้องรันเป็น Node process แยกต่างหาก (Vercel serverless เปิด WebSocket ค้างไม่ได้)
 //
 // ใช้:
 //   npx tsx scripts/spectra-adapter.ts --match <matchId> --game <gameNumber> --token <observerToken>
 //     [--spectra-url ws://localhost:5200] [--group-code <code>] [--base-url https://www.zodiacleaguetournaments.com]
-//
-// ตัวแปรที่ต้องมีใน .env.local (โหลดจากไฟล์เดียวกับที่สคริปต์อื่นในโปรเจกต์ใช้):
-//   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (อ่านรายชื่อ+riot id ของแมตช์นี้)
 import fs from 'node:fs';
 import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { io } from 'socket.io-client';
-import { buildTelemetryPlayers, detectRoundWinner, riotIdKey, type RiotIdRosterEntry, type SpectraScoreboardEntry } from '@/lib/spectra/translate';
+import {
+  RoundTracker,
+  buildTelemetryPlayersFromMatchData,
+  riotIdKey,
+  type RiotIdRosterEntry,
+  type SpectraMatchData,
+} from '@/lib/spectra/translate';
 
 function readEnv(): Record<string, string> {
   const env: Record<string, string> = {};
@@ -82,7 +86,7 @@ async function main() {
   const playerIds = (participants ?? []).map((p) => p.player_id);
   const { data: accounts, error: accErr } = await supabase
     .from('game_accounts')
-    .select('player_id, game_name, tag_line')
+    .select('player_id, game_name, tag_line, puuid')
     .in('player_id', playerIds);
   if (accErr) fail(`โหลด Riot ID ไม่สำเร็จ: ${accErr.message}`);
 
@@ -92,76 +96,97 @@ async function main() {
     const playerObj = Array.isArray(p.players) ? p.players[0] : p.players;
     const displayName = (playerObj as { display_name?: string } | null)?.display_name;
     if (!account || !displayName) continue;
-    rosterByRiotId.set(riotIdKey(account.game_name, account.tag_line), { displayName, teamId: p.team_id ?? undefined });
+    rosterByRiotId.set(riotIdKey(account.game_name, account.tag_line), {
+      displayName,
+      teamId: p.team_id ?? undefined,
+      puuid: account.puuid ?? undefined,
+    });
   }
 
   if (rosterByRiotId.size === 0) {
     fail('ไม่พบ Riot ID ของผู้เล่นแมตช์นี้เลย — ต้องผูก Riot ID (game_accounts) ให้ผู้เล่นก่อนใช้สคริปต์นี้ได้');
   }
-  console.log(`✅ พร้อมจับคู่ผู้เล่น ${rosterByRiotId.size}/${playerIds.length} คน (ที่เหลือไม่มี Riot ID ผูกไว้ — ข้ามไป ไม่ error)`);
+  console.log(`✅ พร้อมจับคู่ผู้เล่น ${rosterByRiotId.size}/${playerIds.length} คน`);
 
   const telemetryUrl = `${baseUrl.replace(/\/$/, '')}/api/v1/matches/${matchId}/telemetry`;
   let sentFrames = 0;
-  let currentRound = 0;
-  let roundEndSent = false;
+  let lastSentRoundOutcome = -1;
+  const tracker = new RoundTracker();
 
   console.log(`🔌 เชื่อมต่อ Spectra-Server ที่ ${spectraUrl} (group code: ${groupCode})...`);
   const socket = io(spectraUrl, { reconnection: true });
 
   socket.on('connect', () => {
     console.log('✅ เชื่อมต่อ Spectra-Server สำเร็จ — ส่ง logon...');
-    socket.emit('logon', { groupCode });
+    tracker.resetBaseline();
+    socket.emit('logon', JSON.stringify({ groupCode }));
+  });
+
+  socket.on('logon_success', (msg: string) => {
+    console.log(`✅ Logon สำเร็จ: ${msg}`);
   });
 
   socket.on('connect_error', (err: Error) => {
     console.error(`⚠️ เชื่อมต่อ Spectra-Server ไม่ได้: ${err.message} — จะลองใหม่อัตโนมัติ`);
   });
 
-  socket.on('match_data', async (payload: { scoreboard?: SpectraScoreboardEntry[]; roundNumber?: number }) => {
-    const scoreboard = payload?.scoreboard;
-    if (!Array.isArray(scoreboard) || scoreboard.length === 0) return;
-
-    // ตรวจจับรอบใหม่: ถ้า roundNumber เปลี่ยนแปลว่ารอบก่อนหน้าจบไปแล้ว reset flag
-    if (typeof payload.roundNumber === 'number' && payload.roundNumber > currentRound) {
-      currentRound = payload.roundNumber;
-      roundEndSent = false;
+  // Spectra-Server ส่งข้อมูลทั้งหมดผ่าน match_data event เดียว
+  socket.on('match_data', async (raw: string) => {
+    let matchData: SpectraMatchData;
+    try {
+      matchData = JSON.parse(raw) as SpectraMatchData;
+    } catch {
+      console.error('⚠️ parse match_data ไม่ได้ — ข้ามเฟรมนี้');
+      return;
     }
 
-    const players = buildTelemetryPlayers(scoreboard, rosterByRiotId);
+    if (!matchData.teams || matchData.teams.length < 2) return;
 
-    // ตรวจจับจบรอบจาก isAlive: ถ้าฝั่งใดฝั่งหนึ่งตายหมด = รอบจบ
-    const winnerTeamId = detectRoundWinner(scoreboard, rosterByRiotId);
-    const roundEvent = winnerTeamId && !roundEndSent
-      ? {
+    // Build telemetry frames from nested teams[].players[]
+    const players = buildTelemetryPlayersFromMatchData(matchData.teams, rosterByRiotId);
+
+    // Check for round end
+    const outcome = tracker.processMatchData(matchData, rosterByRiotId);
+
+    // Build payload — always include round_number for server-side idempotency
+    const roundNum = tracker.currentRound > 0 ? tracker.currentRound : 1;
+    const payload: Record<string, unknown> = { timestamp: Date.now(), round_number: roundNum };
+    if (players.length > 0) payload.players = players;
+
+    if (outcome) {
+      const outcomeRound = roundNum > 1 ? roundNum - 1 : 1;
+      // Client-side idempotency: skip duplicate round outcome sends
+      if (outcomeRound === lastSentRoundOutcome) {
+        console.log(`⏭️ รอบ ${outcomeRound} ส่งผลไปแล้ว — ข้าม`);
+      } else {
+        payload.round_event = {
           stage: 'ROUND_ENDED' as const,
           game_number: gameNumber,
-          round_number: currentRound || 1,
-          winner_team_id: winnerTeamId,
-          win_condition: 'elimination' as const,
-        }
-      : undefined;
-
-    if (roundEvent) {
-      roundEndSent = true;
-      console.log(`🏁 รอบ ${roundEvent.round_number} จบ — ทีมชนะ: ${winnerTeamId} (elimination จาก isAlive)`);
+          round_number: outcomeRound,
+          winner_team_id: outcome.winnerTeamId,
+          win_condition: outcome.winCondition,
+        };
+        lastSentRoundOutcome = outcomeRound;
+        console.log(`🏁 รอบจบ — ทีมชนะ: ${outcome.winnerTeamId} (${outcome.winCondition})`);
+      }
     }
 
-    if (players.length === 0 && !roundEvent) return;
+    if (!payload.players && !payload.round_event) return;
 
     try {
       const res = await fetch(telemetryUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${observerToken}` },
-        body: JSON.stringify({ timestamp: Date.now(), round_event: roundEvent, players }),
+        body: JSON.stringify(payload),
       });
       sentFrames += 1;
       if (!res.ok) {
-        console.error(`⚠️ ส่ง telemetry ล้มเหลว (HTTP ${res.status}) — ถ้าเป็น 401 ให้ออก Observer Token ใหม่`);
+        console.error(`⚠️ ส่ง telemetry ล้มเหลว (HTTP ${res.status})`);
       } else if (sentFrames % 20 === 1) {
-        console.log(`📡 ส่งแล้ว ${sentFrames} เฟรม — ล่าสุด ${players.length} คน: ${players.map((p) => p.name).join(', ')}`);
+        console.log(`📡 ส่งแล้ว ${sentFrames} เฟรม (รอบ ${matchData.roundNumber} — ${matchData.roundPhase})`);
       }
     } catch (err) {
-      console.error(`⚠️ ยิง telemetry ไม่สำเร็จ (เครือข่าย): ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`⚠️ ยิง telemetry ไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}`);
     }
   });
 
