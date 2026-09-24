@@ -624,10 +624,12 @@ export default function MatchBroadcastOverlay({
       )}
 
       
-      {/* SPONSOR BADGE (Title Sponsor จริงจาก banners API แทน placeholder เดิม) */}
+      {/* SPONSOR BADGE (Title Sponsor จริงจาก banners API — มุมขวาบน 3D perspective เหมือน EWC broadcast) */}
       {showScoreboard && (
-        <section className="absolute bottom-8 left-8 z-40">
-          <SponsorBadge />
+        <section className="absolute top-16 right-6 z-40" style={{ perspective: '800px' }}>
+          <div style={{ transform: 'rotateY(-8deg) rotateX(2deg)', transformOrigin: 'right center' }}>
+            <SponsorBadge />
+          </div>
         </section>
       )}
 
