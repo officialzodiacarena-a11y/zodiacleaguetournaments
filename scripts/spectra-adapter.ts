@@ -27,7 +27,7 @@ import {
 } from '@/lib/spectra/translate';
 
 function readEnv(): Record<string, string> {
-  const env: Record<string, string> = {};
+  const env: Record<string, string> = { ...process.env } as Record<string, string>;
   const envPath = path.resolve(process.cwd(), '.env.local');
   if (!fs.existsSync(envPath)) return env;
   fs.readFileSync(envPath, 'utf8')
@@ -51,20 +51,21 @@ function fail(message: string): never {
 
 async function main() {
   const env = readEnv();
-  const matchId = argValue('--match');
-  const gameNumber = Number(argValue('--game', '1'));
-  const observerToken = argValue('--token');
-  const spectraUrl = argValue('--spectra-url', 'ws://localhost:5200');
-  const groupCode = argValue('--group-code');
-  const baseUrl = argValue('--base-url', 'https://www.zodiacleaguetournaments.com') ?? 'https://www.zodiacleaguetournaments.com';
+  const matchId = argValue('--match') ?? env.MATCH_ID;
+  const gameNumber = Number(argValue('--game') ?? env.GAME_NUMBER ?? '1');
+  const observerToken = argValue('--token') ?? env.OBSERVER_TOKEN;
+  const spectraUrl = argValue('--spectra-url') ?? env.SPECTRA_URL ?? 'ws://localhost:5200';
+  const groupCode = argValue('--group-code') ?? env.GROUP_CODE;
+  const baseUrl = argValue('--base-url') ?? env.BASE_URL ?? 'https://www.zodiacleaguetournaments.com';
 
-  if (!matchId) fail('ต้องระบุ --match <matchId>');
-  if (!observerToken) fail('ต้องระบุ --token <observerToken> (ออกจากหน้า Spectator Control ก่อน)');
-  if (!groupCode) fail('ต้องระบุ --group-code <code> (Group Code เดียวกับที่ตั้งไว้ใน Spectra-Client)');
+  if (!matchId) fail('ต้องระบุ --match <matchId> หรือตั้งค่า ENV: MATCH_ID');
+  if (!observerToken) fail('ต้องระบุ --token <observerToken> หรือตั้งค่า ENV: OBSERVER_TOKEN');
+  if (!groupCode) fail('ต้องระบุ --group-code <code> หรือตั้งค่า ENV: GROUP_CODE');
 
   const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseKey) fail('ไม่พบ NEXT_PUBLIC_SUPABASE_URL / ANON KEY ใน .env.local');
+  // ใช้ SERVICE_ROLE_KEY เพื่อทะลุ RLS (Row Level Security) ไปดึงข้อมูลบัญชีผู้เล่น
+  const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY || env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseKey) fail('ไม่พบ NEXT_PUBLIC_SUPABASE_URL / KEY ใน .env.local');
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   console.log(`🔎 โหลดรายชื่อ + Riot ID ของแมตช์ ${matchId} เกม ${gameNumber}...`);
@@ -86,7 +87,7 @@ async function main() {
   const playerIds = (participants ?? []).map((p) => p.player_id);
   const { data: accounts, error: accErr } = await supabase
     .from('game_accounts')
-    .select('player_id, game_name, tag_line, puuid')
+    .select('player_id, game_name, tag_line')
     .in('player_id', playerIds);
   if (accErr) fail(`โหลด Riot ID ไม่สำเร็จ: ${accErr.message}`);
 
@@ -99,18 +100,23 @@ async function main() {
     rosterByRiotId.set(riotIdKey(account.game_name, account.tag_line), {
       displayName,
       teamId: p.team_id ?? undefined,
-      puuid: account.puuid ?? undefined,
     });
   }
 
   if (rosterByRiotId.size === 0) {
-    fail('ไม่พบ Riot ID ของผู้เล่นแมตช์นี้เลย — ต้องผูก Riot ID (game_accounts) ให้ผู้เล่นก่อนใช้สคริปต์นี้ได้');
+    console.warn('⚠️ คำเตือน: ไม่พบ Riot ID ในระบบสำหรับแมตช์นี้เลย!');
+    console.warn('🔧 [TEST MODE] สร้างรายชื่อผู้เล่นจำลอง (Player1#TH, Player2#TH) เพื่อให้ทดสอบระบบต่อได้...');
+    rosterByRiotId.set('PLAYER1#TH', { displayName: 'Mock Player 1', teamId: 'mock-team-a' });
+    rosterByRiotId.set('PLAYER2#TH', { displayName: 'Mock Player 2', teamId: 'mock-team-b' });
+  } else {
+    console.log(`✅ พร้อมจับคู่ผู้เล่น ${rosterByRiotId.size}/${playerIds.length} คน`);
   }
-  console.log(`✅ พร้อมจับคู่ผู้เล่น ${rosterByRiotId.size}/${playerIds.length} คน`);
 
   const telemetryUrl = `${baseUrl.replace(/\/$/, '')}/api/v1/matches/${matchId}/telemetry`;
   let sentFrames = 0;
   let lastSentRoundOutcome = -1;
+  let unauthorizedCount = 0;
+  let lastSentPlayersStr = '';
   const tracker = new RoundTracker();
 
   console.log(`🔌 เชื่อมต่อ Spectra-Server ที่ ${spectraUrl} (group code: ${groupCode})...`);
@@ -130,7 +136,6 @@ async function main() {
     console.error(`⚠️ เชื่อมต่อ Spectra-Server ไม่ได้: ${err.message} — จะลองใหม่อัตโนมัติ`);
   });
 
-  // Spectra-Server ส่งข้อมูลทั้งหมดผ่าน match_data event เดียว
   socket.on('match_data', async (raw: string) => {
     let matchData: SpectraMatchData;
     try {
@@ -156,9 +161,7 @@ async function main() {
     if (outcome) {
       const outcomeRound = roundNum > 1 ? roundNum - 1 : 1;
       // Client-side idempotency: skip duplicate round outcome sends
-      if (outcomeRound === lastSentRoundOutcome) {
-        console.log(`⏭️ รอบ ${outcomeRound} ส่งผลไปแล้ว — ข้าม`);
-      } else {
+      if (outcomeRound !== lastSentRoundOutcome) {
         payload.round_event = {
           stage: 'ROUND_ENDED' as const,
           game_number: gameNumber,
@@ -167,11 +170,17 @@ async function main() {
           win_condition: outcome.winCondition,
         };
         lastSentRoundOutcome = outcomeRound;
-        console.log(`🏁 รอบจบ — ทีมชนะ: ${outcome.winnerTeamId} (${outcome.winCondition})`);
+        console.log(`🏁 รอบ ${outcomeRound} จบ — ทีมชนะ: ${outcome.winnerTeamId} (${outcome.winCondition})`);
       }
     }
 
     if (!payload.players && !payload.round_event) return;
+
+    // --- Debounce Logic (กันยิงซ้ำถ้าข้อมูลผู้เล่นไม่เปลี่ยนและไม่มีเหตุการณ์จบแมตช์) ---
+    const currentPlayersStr = payload.players ? JSON.stringify(payload.players) : '';
+    if (!payload.round_event && currentPlayersStr === lastSentPlayersStr) {
+      return; // ไม่มีข้อมูลเปลี่ยน ข้ามการยิง API
+    }
 
     try {
       const res = await fetch(telemetryUrl, {
@@ -179,11 +188,23 @@ async function main() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${observerToken}` },
         body: JSON.stringify(payload),
       });
-      sentFrames += 1;
+      
       if (!res.ok) {
         console.error(`⚠️ ส่ง telemetry ล้มเหลว (HTTP ${res.status})`);
-      } else if (sentFrames % 20 === 1) {
-        console.log(`📡 ส่งแล้ว ${sentFrames} เฟรม (รอบ ${matchData.roundNumber} — ${matchData.roundPhase})`);
+        if (res.status === 401 || res.status === 403) {
+          unauthorizedCount++;
+          console.error(`🚨 Token อาจหมดอายุหรือผิดพลาด (ครั้งที่ ${unauthorizedCount}/3)`);
+          if (unauthorizedCount >= 3) {
+            fail('Token ผิดพลาดเกิน 3 ครั้ง บังคับปิดระบบเพื่อความปลอดภัย (กรุณาอัปเดต Token ใน .env)');
+          }
+        }
+      } else {
+        unauthorizedCount = 0; // รีเซ็ตตัวนับเมื่อสำเร็จ
+        lastSentPlayersStr = currentPlayersStr; // จดจำข้อมูลที่เพิ่งส่งสำเร็จ
+        sentFrames += 1;
+        if (sentFrames % 20 === 1) {
+          console.log(`📡 ส่งสำเร็จ ${sentFrames} เฟรม (อัปเดตล่าสุด: รอบ ${matchData.roundNumber} — ${matchData.roundPhase})`);
+        }
       }
     } catch (err) {
       console.error(`⚠️ ยิง telemetry ไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}`);

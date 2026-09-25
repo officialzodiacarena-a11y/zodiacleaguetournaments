@@ -1,0 +1,14 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy essential package files
+COPY package.json package-lock.json* ./
+RUN npm install --ignore-scripts
+
+# Copy code and tsconfig (needed for path aliases like @/)
+COPY tsconfig.json ./
+COPY scripts/ ./scripts/
+COPY lib/ ./lib/
+
+CMD ["npx", "tsx", "scripts/spectra-adapter.ts"]

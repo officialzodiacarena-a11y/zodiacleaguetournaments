@@ -289,6 +289,8 @@ export function buildTelemetryPlayersFromMatchData(
         armor: translateArmor(player.initialArmor),
         ultPoints: Math.max(0, Math.min(20, Math.round(player.currUltPoints))),
         ultMax: Math.max(1, Math.min(20, Math.round(player.maxUltPoints) || 1)),
+        hp: player.isAlive ? 100 : 0,
+        hpMax: 100,
       });
     }
   }

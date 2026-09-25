@@ -303,7 +303,7 @@ export default function SpectatorHUDControlPanel({
       clearInterval(intervalId);
       supabase.removeChannel(channel);
     };
-  }, [matchId]);
+  }, [matchId, supabase]);
 
   const toggleBuyPhaseHUD = useCallback(() => {
     if (!activeChannel) {
