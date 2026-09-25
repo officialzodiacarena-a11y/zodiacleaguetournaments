@@ -884,27 +884,32 @@ export default function StreamHubMainPage({
           {activeScene === 4 && (() => {
             const teamALogo = (activeMatchData?.team_a as unknown as { logo_url?: string } | null)?.logo_url;
             const teamBLogo = (activeMatchData?.team_b as unknown as { logo_url?: string } | null)?.logo_url;
-            const allPlayers = [...rosterA.map(p => ({ ...p, team: teamA })), ...rosterB.map(p => ({ ...p, team: teamB }))];
+            const teamAColor = '#06b6d4';
+            const teamBColor = '#f43f5e';
             const countdownStr = timerSeconds >= 3600
               ? `${Math.floor(timerSeconds / 3600).toString().padStart(2, '0')}:${Math.floor((timerSeconds % 3600) / 60).toString().padStart(2, '0')}:${(timerSeconds % 60).toString().padStart(2, '0')}`
               : `${Math.floor(timerSeconds / 60).toString().padStart(2, '0')}:${(timerSeconds % 60).toString().padStart(2, '0')}`;
             return (
             <div className="relative w-full h-full bg-black overflow-hidden">
-              {/* Red/dark background with particle effect */}
+              {/* Background layers */}
               <div className="absolute inset-0 bg-gradient-to-br from-red-900/60 via-black to-red-950/40" />
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(220,38,38,0.3)_0%,_transparent_50%)]" />
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_rgba(220,38,38,0.15)_0%,_transparent_60%)]" />
-              {/* Red accent lines top & bottom */}
+              {/* Accent lines */}
               <div className="absolute top-[140px] left-0 right-0 h-[3px] bg-gradient-to-r from-red-600 via-red-500/80 to-transparent" />
-              <div className="absolute bottom-[60px] left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-red-500/80 to-red-600" />
+              <div className="absolute bottom-[120px] left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-red-500/80 to-red-600" />
 
               {/* === TOP LEFT: Countdown === */}
               <div className="absolute top-6 left-8 z-10">
                 <div className="font-black font-mono tracking-wider text-white drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]" style={{ fontSize: '4.5rem', lineHeight: 1 }}>
                   {countdownStr}
                 </div>
-                <div className="text-sm font-bold text-neutral-300 mt-2 tracking-wide">
-                  {activeMatchData?.tournament_name || 'Zodiac League tournament'}
+                {/* Zodiac Arena neon cyberpunk logo */}
+                <div className="mt-3">
+                  <div className="text-[10px] font-mono tracking-[0.3em] text-[#94A3B8] uppercase">12 SIGNS • 4 SEASONS • 1 DESTINY</div>
+                  <h1 className="text-3xl font-black tracking-tight text-white leading-none mt-1" style={{ textShadow: '0 0 20px rgba(232,180,41,0.4), 0 0 40px rgba(232,180,41,0.2)' }}>
+                    ZODIAC <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E8B429] via-[#FCE49C] to-[#E8B429]" style={{ filter: 'drop-shadow(0 0 12px rgba(232,180,41,0.6))' }}>ARENA</span>
+                  </h1>
                 </div>
               </div>
 
@@ -919,7 +924,7 @@ export default function StreamHubMainPage({
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={teamALogo} alt={teamA.tag} className="w-16 h-16 object-contain" />
                       ) : (
-                        <div className="w-16 h-16 rounded-full bg-cyan-500/20 flex items-center justify-center text-xl font-black text-cyan-400">{teamA.tag[0]}</div>
+                        <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-black" style={{ backgroundColor: `${teamAColor}20`, color: teamAColor }}>{teamA.tag[0]}</div>
                       )}
                       <span className="text-sm font-black font-mono text-white uppercase">{teamA.tag}</span>
                     </div>
@@ -929,14 +934,14 @@ export default function StreamHubMainPage({
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={teamBLogo} alt={teamB.tag} className="w-16 h-16 object-contain" />
                       ) : (
-                        <div className="w-16 h-16 rounded-full bg-rose-500/20 flex items-center justify-center text-xl font-black text-rose-400">{teamB.tag[0]}</div>
+                        <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-black" style={{ backgroundColor: `${teamBColor}20`, color: teamBColor }}>{teamB.tag[0]}</div>
                       )}
                       <span className="text-sm font-black font-mono text-white uppercase">{teamB.tag}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Game 2 placeholder (if BO3+) */}
+                {/* Game 2 (if BO3+) */}
                 {bestOf >= 3 && (
                   <div className="bg-black/80 border border-neutral-700/50 rounded-lg p-5">
                     <div className="text-center text-xs font-bold font-mono text-neutral-400 tracking-[3px] mb-4">GAME 2</div>
@@ -946,7 +951,7 @@ export default function StreamHubMainPage({
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={teamALogo} alt={teamA.tag} className="w-16 h-16 object-contain" />
                         ) : (
-                          <div className="w-16 h-16 rounded-full bg-cyan-500/20 flex items-center justify-center text-xl font-black text-cyan-400">{teamA.tag[0]}</div>
+                          <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-black" style={{ backgroundColor: `${teamAColor}20`, color: teamAColor }}>{teamA.tag[0]}</div>
                         )}
                         <span className="text-sm font-black font-mono text-white uppercase">{teamA.tag}</span>
                       </div>
@@ -956,7 +961,7 @@ export default function StreamHubMainPage({
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={teamBLogo} alt={teamB.tag} className="w-16 h-16 object-contain" />
                         ) : (
-                          <div className="w-16 h-16 rounded-full bg-rose-500/20 flex items-center justify-center text-xl font-black text-rose-400">{teamB.tag[0]}</div>
+                          <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-black" style={{ backgroundColor: `${teamBColor}20`, color: teamBColor }}>{teamB.tag[0]}</div>
                         )}
                         <span className="text-sm font-black font-mono text-white uppercase">{teamB.tag}</span>
                       </div>
@@ -965,30 +970,121 @@ export default function StreamHubMainPage({
                 )}
               </div>
 
-              {/* === BOTTOM: Team Lineup Marquee === */}
-              <div className="absolute bottom-0 left-0 right-0 h-[56px] bg-gradient-to-r from-black via-neutral-950 to-black border-t border-red-600/40 flex items-center overflow-hidden z-10">
+              {/* === BOTTOM: Team Lineup Marquee (expanded player cards) === */}
+              <div className="absolute bottom-0 left-0 right-0 h-[115px] bg-gradient-to-r from-black via-neutral-950 to-black border-t border-red-600/40 flex items-center overflow-hidden z-10">
                 <div className="flex-shrink-0 bg-red-700 px-4 h-full flex items-center z-20">
                   <span className="text-xs font-black font-mono text-white uppercase leading-tight">TEAM<br/>LINEUP</span>
                 </div>
                 <div className="flex-1 overflow-hidden relative">
-                  <div className="flex items-center gap-6 animate-[marquee_20s_linear_infinite] whitespace-nowrap">
-                    {[...allPlayers, ...allPlayers].map((p, i) => (
-                      <div key={`${p.id}-${i}`} className="flex items-center gap-2 flex-shrink-0">
-                        <div className="w-9 h-9 bg-white/90 rounded flex items-center justify-center">
-                          <Users className="w-5 h-5 text-neutral-700" />
+                  <div className="flex items-center gap-3 animate-[marquee_30s_linear_infinite] whitespace-nowrap">
+                    {/* Team A group */}
+                    <div className="flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded" style={{ backgroundColor: `${teamAColor}15` }}>
+                      {teamALogo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={teamALogo} alt={teamA.tag} className="w-8 h-8 object-contain" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black" style={{ backgroundColor: `${teamAColor}30`, color: teamAColor }}>{teamA.tag[0]}</div>
+                      )}
+                      <span className="text-xs font-black font-mono uppercase" style={{ color: teamAColor }}>{teamA.tag}</span>
+                    </div>
+                    {rosterA.map(p => (
+                      <div key={`a-${p.id}`} className="flex-shrink-0 w-[140px] h-[90px] rounded-lg p-2.5 flex flex-col justify-between" style={{ border: `2px solid ${teamAColor}60`, backgroundColor: `${teamAColor}08` }}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded flex items-center justify-center" style={{ backgroundColor: `${teamAColor}20` }}>
+                            <Users className="w-4 h-4" style={{ color: teamAColor }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[11px] font-black font-mono text-white truncate uppercase">{p.name}</div>
+                            <div className="text-[9px] font-mono uppercase" style={{ color: teamAColor }}>{teamA.tag}</div>
+                          </div>
                         </div>
-                        <span className="text-xs font-bold font-mono text-neutral-300 uppercase">{p.name}</span>
+                        {p.agent && <div className="text-[9px] font-mono text-neutral-500 truncate">{p.agent}</div>}
+                      </div>
+                    ))}
+
+                    {/* Spacer between teams */}
+                    <div className="flex-shrink-0 w-[40px] flex items-center justify-center">
+                      <div className="w-[2px] h-[70px] bg-gradient-to-b from-transparent via-red-500/50 to-transparent" />
+                    </div>
+
+                    {/* Team B group */}
+                    <div className="flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded" style={{ backgroundColor: `${teamBColor}15` }}>
+                      {teamBLogo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={teamBLogo} alt={teamB.tag} className="w-8 h-8 object-contain" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black" style={{ backgroundColor: `${teamBColor}30`, color: teamBColor }}>{teamB.tag[0]}</div>
+                      )}
+                      <span className="text-xs font-black font-mono uppercase" style={{ color: teamBColor }}>{teamB.tag}</span>
+                    </div>
+                    {rosterB.map(p => (
+                      <div key={`b-${p.id}`} className="flex-shrink-0 w-[140px] h-[90px] rounded-lg p-2.5 flex flex-col justify-between" style={{ border: `2px solid ${teamBColor}60`, backgroundColor: `${teamBColor}08` }}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded flex items-center justify-center" style={{ backgroundColor: `${teamBColor}20` }}>
+                            <Users className="w-4 h-4" style={{ color: teamBColor }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[11px] font-black font-mono text-white truncate uppercase">{p.name}</div>
+                            <div className="text-[9px] font-mono uppercase" style={{ color: teamBColor }}>{teamB.tag}</div>
+                          </div>
+                        </div>
+                        {p.agent && <div className="text-[9px] font-mono text-neutral-500 truncate">{p.agent}</div>}
+                      </div>
+                    ))}
+
+                    {/* Duplicate for infinite scroll */}
+                    <div className="flex-shrink-0 w-[40px]" />
+                    <div className="flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded" style={{ backgroundColor: `${teamAColor}15` }}>
+                      {teamALogo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={teamALogo} alt={teamA.tag} className="w-8 h-8 object-contain" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black" style={{ backgroundColor: `${teamAColor}30`, color: teamAColor }}>{teamA.tag[0]}</div>
+                      )}
+                      <span className="text-xs font-black font-mono uppercase" style={{ color: teamAColor }}>{teamA.tag}</span>
+                    </div>
+                    {rosterA.map(p => (
+                      <div key={`a2-${p.id}`} className="flex-shrink-0 w-[140px] h-[90px] rounded-lg p-2.5 flex flex-col justify-between" style={{ border: `2px solid ${teamAColor}60`, backgroundColor: `${teamAColor}08` }}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded flex items-center justify-center" style={{ backgroundColor: `${teamAColor}20` }}>
+                            <Users className="w-4 h-4" style={{ color: teamAColor }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[11px] font-black font-mono text-white truncate uppercase">{p.name}</div>
+                            <div className="text-[9px] font-mono uppercase" style={{ color: teamAColor }}>{teamA.tag}</div>
+                          </div>
+                        </div>
+                        {p.agent && <div className="text-[9px] font-mono text-neutral-500 truncate">{p.agent}</div>}
+                      </div>
+                    ))}
+                    <div className="flex-shrink-0 w-[40px] flex items-center justify-center">
+                      <div className="w-[2px] h-[70px] bg-gradient-to-b from-transparent via-red-500/50 to-transparent" />
+                    </div>
+                    <div className="flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded" style={{ backgroundColor: `${teamBColor}15` }}>
+                      {teamBLogo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={teamBLogo} alt={teamB.tag} className="w-8 h-8 object-contain" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black" style={{ backgroundColor: `${teamBColor}30`, color: teamBColor }}>{teamB.tag[0]}</div>
+                      )}
+                      <span className="text-xs font-black font-mono uppercase" style={{ color: teamBColor }}>{teamB.tag}</span>
+                    </div>
+                    {rosterB.map(p => (
+                      <div key={`b2-${p.id}`} className="flex-shrink-0 w-[140px] h-[90px] rounded-lg p-2.5 flex flex-col justify-between" style={{ border: `2px solid ${teamBColor}60`, backgroundColor: `${teamBColor}08` }}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded flex items-center justify-center" style={{ backgroundColor: `${teamBColor}20` }}>
+                            <Users className="w-4 h-4" style={{ color: teamBColor }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[11px] font-black font-mono text-white truncate uppercase">{p.name}</div>
+                            <div className="text-[9px] font-mono uppercase" style={{ color: teamBColor }}>{teamB.tag}</div>
+                          </div>
+                        </div>
+                        {p.agent && <div className="text-[9px] font-mono text-neutral-500 truncate">{p.agent}</div>}
                       </div>
                     ))}
                   </div>
                 </div>
-                {/* Team logo divider in marquee */}
-                {teamBLogo && (
-                  <div className="flex-shrink-0 px-3 z-20">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={teamBLogo} alt={teamB.tag} className="w-10 h-10 object-contain" />
-                  </div>
-                )}
               </div>
             </div>
             );
