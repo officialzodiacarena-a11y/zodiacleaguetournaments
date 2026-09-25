@@ -7,14 +7,14 @@
 // capture ต้องเจอ round banner ก่อน confirmation banner ถึงจะโผล่):
 //   1. Pre-Map Roster Lock — ล็อก 5v5 ต่อแม็พก่อนเริ่ม OCR
 //   2. OCR Name-Matching Monitor — จับภาพหน้าจอ 1Hz, ROI crop, OCR, fuzzy match, โชว์สถานะให้แก้มือได้
-//   3. Round-End Confirmation Banner — นับถอยหลัง 10s ก่อนยิง RPC บันทึกรอบอัตโนมัติ
+// Round results are intentionally NOT reported from here: OCR can't tell who won a round, so
+// match_rounds is fed by Spectra only. This panel only relays HP.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { matchOcrPlayerName, type LockedRosterCandidate, type OcrMatchResult } from '@/lib/ocr/fuzzy-matcher';
-import { PLAYER_HP_BAR_ROI, PLAYER_NAME_ROI, ROUND_BANNER_ROI, cropRoi, parseRoundBannerText } from '@/lib/ocr/roi-regions';
+import { PLAYER_HP_BAR_ROI, PLAYER_NAME_ROI, cropRoi } from '@/lib/ocr/roi-regions';
 import { readHpFromCanvas } from '@/lib/ocr/hp-bar';
 import { recognizeText, terminateOcrWorkerPool } from '@/lib/ocr/ocr-worker-pool';
-import type { WinCondition } from '@/lib/overlay/telemetry-schema';
 
 interface TeamMemberCandidate {
   player_id: string;
@@ -68,15 +68,6 @@ export default function OcrObserverBridgePanel({ matchId, gameNumber, teamAId, t
   useEffect(() => {
     observerTokenRef.current = observerToken;
   }, [observerToken]);
-
-  // --- Round-End Confirmation ---
-  const [pendingRound, setPendingRound] = useState<{
-    roundNumber: number;
-    winCondition: WinCondition;
-    confidence: number;
-  } | null>(null);
-  const [countdown, setCountdown] = useState(10);
-  const [lastRoundNumber, setLastRoundNumber] = useState(0);
 
   // โหลดสมาชิกทีม + สถานะล็อกที่มีอยู่แล้วของแม็พนี้ (ถ้ามี)
   useEffect(() => {
@@ -248,20 +239,11 @@ export default function OcrObserverBridgePanel({ matchId, gameNumber, teamAId, t
         }
       }
 
-      // ป้ายจบรอบ
-      const bannerCanvas = cropRoi(video, w, h, ROUND_BANNER_ROI);
-      const bannerText = await recognizeText(bannerCanvas);
-      const winCondition = parseRoundBannerText(bannerText);
-      if (winCondition && !pendingRound) {
-        const nextRoundNumber = lastRoundNumber + 1;
-        setPendingRound({ roundNumber: nextRoundNumber, winCondition, confidence: 90 });
-        setCountdown(10);
-      }
       setOcrError(null);
     } catch (err) {
       setOcrError(err instanceof Error ? err.message : 'OCR ประมวลผลล้มเหลว');
     }
-  }, [lockedRoster, teamAId, teamBId, pendingRound, lastRoundNumber, matchId]);
+  }, [lockedRoster, teamAId, teamBId, matchId]);
 
   const startCapture = async () => {
     if (!lockedRoster) {
@@ -298,70 +280,10 @@ export default function OcrObserverBridgePanel({ matchId, gameNumber, teamAId, t
     };
   }, [stopCapture]);
 
-  const commitRound = useCallback(async () => {
-    if (!pendingRound || !observerToken) {
-      setPendingRound(null);
-      return;
-    }
-    const winnerCandidates = Object.entries(matchResults)
-      .filter(([, r]) => r.status !== 'UNMATCHED')
-      .map(([slotId]) => slotId);
-    // ทีมที่ยังมีชื่อจับคู่ได้เยอะกว่าตอนจบรอบ = ทีมที่ "รอด" -> สันนิษฐานเป็นผู้ชนะรอบ (heuristic เบื้องต้น
-    // ยังไม่แม่นยำ 100% — Observer ควรกด EDIT/OVERRIDE ถ้าไม่ตรง ก่อนนับถอยหลังหมด)
-    const teamAAlive = winnerCandidates.filter((id) => id.startsWith('team_a')).length;
-    const teamBAlive = winnerCandidates.filter((id) => id.startsWith('team_b')).length;
-    const winnerTeamId = teamAAlive >= teamBAlive ? teamAId : teamBId;
-
-    try {
-      await fetch(`/api/v1/matches/${matchId}/telemetry`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${observerToken}` },
-        body: JSON.stringify({
-          timestamp: Date.now(),
-          round_event: {
-            stage: 'ROUND_ENDED',
-            game_number: gameNumber,
-            round_number: pendingRound.roundNumber,
-            winner_team_id: winnerTeamId,
-            win_condition: pendingRound.winCondition,
-            ocr_confidence: pendingRound.confidence,
-          },
-          players: [],
-        }),
-      });
-      setLastRoundNumber(pendingRound.roundNumber);
-    } catch {
-      setOcrError('บันทึกผลรอบล้มเหลว (เครือข่าย) — ลองกดยืนยันซ้ำตอนรอบถัดไป');
-    } finally {
-      setPendingRound(null);
-    }
-  }, [pendingRound, observerToken, matchResults, matchId, gameNumber, teamAId, teamBId]);
-
-  // --- Round-End Confirmation countdown ---
-  useEffect(() => {
-    if (!pendingRound) return;
-    // setTimeout(fn, 0) แทนการเรียก commitRound() ตรงๆ กัน lint react-hooks/set-state-in-effect
-    // (commitRound เรียก setState หลายจุด) ให้ effect นี้ทำหน้าที่แค่ตั้งเวลาอย่างเดียว
-    const t = setTimeout(() => {
-      if (countdown <= 0) {
-        void commitRound();
-      } else {
-        setCountdown((c) => c - 1);
-      }
-    }, 1000);
-    return () => clearTimeout(t);
-  }, [pendingRound, countdown, commitRound]);
-
-  const overrideRound = (winCondition: WinCondition) => {
-    setPendingRound((prev) => (prev ? { ...prev, winCondition } : prev));
-  };
-
-  const rejectRound = () => setPendingRound(null);
-
   return (
     <div className="bg-[#12121A] border border-white/5 rounded-xl p-5 space-y-5">
       <h2 className="font-mono text-sm font-black text-[#8B5CF6] uppercase tracking-wider mb-1 border-b border-white/5 pb-2">
-        🔎 OCR Round &amp; Roster Engine (Map {gameNumber})
+        🔎 OCR HP &amp; Roster Engine (Map {gameNumber})
       </h2>
       <p className="font-mono text-[10px] text-gray-500 leading-relaxed">
         Tesseract.js WASM ทำงาน 100% บนเครื่องนี้ ไม่มีค่าใช้จ่าย ไม่ส่งภาพออกนอกเครื่อง — ต้องล็อกรายชื่อผู้เล่นก่อนเริ่มจับภาพเสมอ
@@ -452,41 +374,6 @@ export default function OcrObserverBridgePanel({ matchId, gameNumber, teamAId, t
             </div>
           )}
 
-          {/* ROUND-END CONFIRMATION BANNER */}
-          {pendingRound && (
-            <div className="border border-amber-500/50 bg-amber-500/10 rounded-lg p-4 space-y-2">
-              <p className="font-mono text-[11px] font-black text-amber-400">
-                ⚠️ OCR ROUND-END DETECTED — ROUND {pendingRound.roundNumber} via {pendingRound.winCondition.toUpperCase()}
-              </p>
-              <p className="font-mono text-[10px] text-gray-400">
-                AUTO-COMMIT IN {countdown}s — ตรวจสอบก่อนหมดเวลาถ้าไม่ตรง
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setCountdown(0)}
-                  className="flex-1 py-1.5 bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 rounded font-mono text-[10px] font-bold"
-                >
-                  CONFIRM NOW
-                </button>
-                <select
-                  onChange={(e) => overrideRound(e.target.value as WinCondition)}
-                  value={pendingRound.winCondition}
-                  className="bg-black/60 border border-white/10 rounded px-2 font-mono text-[10px] text-white"
-                >
-                  <option value="elimination">elimination</option>
-                  <option value="spike_detonate">spike_detonate</option>
-                  <option value="spike_defuse">spike_defuse</option>
-                  <option value="time_expire">time_expire</option>
-                </select>
-                <button
-                  onClick={rejectRound}
-                  className="py-1.5 px-3 bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded font-mono text-[10px]"
-                >
-                  REJECT
-                </button>
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>
