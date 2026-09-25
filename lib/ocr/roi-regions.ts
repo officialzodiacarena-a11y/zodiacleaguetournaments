@@ -69,6 +69,18 @@ export const PLAYER_HP_BAR_ROI: RoiRegion[] = [
   })),
 ];
 
+// ป้ายจบรอบตรงกลางจอ (เช่น "TEAM A ELIMINATED" / "SPIKE HAS BEEN DEFUSED")
+// ⚠️ ภาพอ้างอิงที่มี (EWC 26) เป็นภาพระหว่างรอบกำลังเล่นอยู่ ไม่ใช่ตอนรอบเพิ่งจบ จึงยังไม่เห็นป้ายนี้
+// จริง ค่าด้านล่างยังเป็นค่าประมาณเดิม (กลางจอ ใต้แถบคะแนนบนสุด) ต้องยืนยันกับภาพตอนรอบจบจริงอีกที
+export const ROUND_BANNER_ROI: RoiRegion = {
+  id: 'round_banner',
+  label: 'Round-End Banner',
+  x: 0.32,
+  y: 0.42,
+  width: 0.36,
+  height: 0.08,
+};
+
 // เลขรอบปัจจุบัน — ปรับเทียบจากภาพอ้างอิง: "ROUND 10" + ตัวจับเวลา "1:38" อยู่กึ่งกลางจอบนสุด
 // ใต้แถบ CURRENT/NEXT/DECIDER map banner เล็กน้อย
 export const ROUND_NUMBER_ROI: RoiRegion = {
@@ -99,4 +111,14 @@ export function cropRoi(
   if (!ctx) throw new Error('Canvas 2D context ไม่พร้อมใช้งาน');
   ctx.drawImage(source, sx, sy, sw, sh, 0, 0, sw, sh);
   return canvas;
+}
+
+/** ตีความข้อความ Round Banner ดิบว่าจบรอบด้วยเหตุผลอะไร (ตรงกับ win_condition_enum ใน DB) */
+export function parseRoundBannerText(rawText: string): 'elimination' | 'spike_detonate' | 'spike_defuse' | 'time_expire' | null {
+  const t = rawText.toUpperCase();
+  if (t.includes('DEFUS')) return 'spike_defuse';
+  if (t.includes('DETONAT') || t.includes('EXPLOD')) return 'spike_detonate';
+  if (t.includes('ELIMINAT') || t.includes('DEFEAT')) return 'elimination';
+  if (t.includes('TIME') && (t.includes('EXPIR') || t.includes('UP'))) return 'time_expire';
+  return null;
 }
