@@ -125,6 +125,11 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
 .animate-za-pulse-live { animation: zaPulseLive 1.2s ease-in-out infinite; }
 .animate-za-pulse-glow-gold { animation: zaPulseGlowGold 3s ease-in-out infinite; }
 .animate-za-rotate-slow { animation: zaRotateSlow 12s linear infinite; }

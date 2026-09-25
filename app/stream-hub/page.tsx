@@ -20,7 +20,11 @@ import {
   Trophy,
   RefreshCw,
   Target,
-  Armchair
+  Armchair,
+  Timer,
+  ExternalLink,
+  Radio,
+  ImagePlus
 } from 'lucide-react';
 
 // Production overlay type (หน้าตาจริงตอนนี้แสดงผ่าน iframe ไปที่ /overlay/match/[id] แทนการประกอบเอง — ดูฉาก 5 และ 6)
@@ -609,6 +613,9 @@ export default function StreamHubMainPage({
                 <span className="text-[10px] font-mono font-black text-cyan-400 px-2 py-0.5">
                   SYSTEM SCENES:
                 </span>
+                <button onClick={() => setActiveScene(4)} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 4 ? 'bg-amber-500 text-black shadow-lg' : 'text-amber-300 hover:bg-amber-500/10'}`}>
+                  <Timer className="w-3.5 h-3.5" /> 4. Starting Soon
+                </button>
                 <button onClick={() => setActiveScene(5)} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 5 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
                   <Tv className="w-3.5 h-3.5" /> 5. Ingame Live HUD
                 </button>
@@ -643,6 +650,29 @@ export default function StreamHubMainPage({
                   <Sliders className="w-3.5 h-3.5" /> 11. Test: Clutch 1vX
                 </button>
               </div>
+            </div>
+
+            {/* Row 3.5: External Tab Buttons */}
+            <div className="flex items-center gap-2 pt-1">
+              <span className="text-[10px] font-mono font-black text-neutral-500 px-1">OPEN:</span>
+              <button
+                onClick={() => window.open(`/spectator/control/${currentMatchId}`, 'spectator-control')}
+                className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 text-emerald-300 hover:bg-emerald-500/10 border border-emerald-500/30"
+              >
+                <ExternalLink className="w-3 h-3" /> Spectator Control
+              </button>
+              <button
+                onClick={() => window.open(`/tournament`, 'tournament-bracket')}
+                className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 text-violet-300 hover:bg-violet-500/10 border border-violet-500/30"
+              >
+                <Radio className="w-3 h-3" /> Tournament Bracket + Zodiac Live
+              </button>
+              <button
+                onClick={() => window.open(`/stream-hub/sponsor-overlay?matchId=${currentMatchId}`, 'sponsor-overlay')}
+                className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 text-pink-300 hover:bg-pink-500/10 border border-pink-500/30"
+              >
+                <ImagePlus className="w-3 h-3" /> Live Sponsor Overlay
+              </button>
             </div>
 
             {/* Row 4: Round Scores & Timer */}
@@ -847,6 +877,122 @@ export default function StreamHubMainPage({
             </div>
           )}
           {bgMode === 'chroma' && <div className="absolute inset-0 bg-[#00FF00]" />}
+
+          {/* ========================================================================= */}
+          {/* SCENE 4: STARTING SOON / COUNTDOWN DISPLAY */}
+          {/* ========================================================================= */}
+          {activeScene === 4 && (() => {
+            const teamALogo = (activeMatchData?.team_a as unknown as { logo_url?: string } | null)?.logo_url;
+            const teamBLogo = (activeMatchData?.team_b as unknown as { logo_url?: string } | null)?.logo_url;
+            const allPlayers = [...rosterA.map(p => ({ ...p, team: teamA })), ...rosterB.map(p => ({ ...p, team: teamB }))];
+            const countdownStr = timerSeconds >= 3600
+              ? `${Math.floor(timerSeconds / 3600).toString().padStart(2, '0')}:${Math.floor((timerSeconds % 3600) / 60).toString().padStart(2, '0')}:${(timerSeconds % 60).toString().padStart(2, '0')}`
+              : `${Math.floor(timerSeconds / 60).toString().padStart(2, '0')}:${(timerSeconds % 60).toString().padStart(2, '0')}`;
+            return (
+            <div className="relative w-full h-full bg-black overflow-hidden">
+              {/* Red/dark background with particle effect */}
+              <div className="absolute inset-0 bg-gradient-to-br from-red-900/60 via-black to-red-950/40" />
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(220,38,38,0.3)_0%,_transparent_50%)]" />
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_rgba(220,38,38,0.15)_0%,_transparent_60%)]" />
+              {/* Red accent lines top & bottom */}
+              <div className="absolute top-[140px] left-0 right-0 h-[3px] bg-gradient-to-r from-red-600 via-red-500/80 to-transparent" />
+              <div className="absolute bottom-[60px] left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-red-500/80 to-red-600" />
+
+              {/* === TOP LEFT: Countdown === */}
+              <div className="absolute top-6 left-8 z-10">
+                <div className="font-black font-mono tracking-wider text-white drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]" style={{ fontSize: '4.5rem', lineHeight: 1 }}>
+                  {countdownStr}
+                </div>
+                <div className="text-sm font-bold text-neutral-300 mt-2 tracking-wide">
+                  {activeMatchData?.tournament_name || 'Zodiac League tournament'}
+                </div>
+              </div>
+
+              {/* === RIGHT SIDE: Game Cards === */}
+              <div className="absolute top-[160px] right-8 z-10 flex flex-col gap-4 w-[420px]">
+                {/* Game 1 */}
+                <div className="bg-black/80 border border-neutral-700/50 rounded-lg p-5">
+                  <div className="text-center text-xs font-bold font-mono text-neutral-400 tracking-[3px] mb-4">GAME 1</div>
+                  <div className="flex items-center justify-center gap-6">
+                    <div className="flex flex-col items-center gap-2">
+                      {teamALogo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={teamALogo} alt={teamA.tag} className="w-16 h-16 object-contain" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-full bg-cyan-500/20 flex items-center justify-center text-xl font-black text-cyan-400">{teamA.tag[0]}</div>
+                      )}
+                      <span className="text-sm font-black font-mono text-white uppercase">{teamA.tag}</span>
+                    </div>
+                    <span className="text-2xl font-black font-mono text-neutral-400">VS</span>
+                    <div className="flex flex-col items-center gap-2">
+                      {teamBLogo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={teamBLogo} alt={teamB.tag} className="w-16 h-16 object-contain" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-full bg-rose-500/20 flex items-center justify-center text-xl font-black text-rose-400">{teamB.tag[0]}</div>
+                      )}
+                      <span className="text-sm font-black font-mono text-white uppercase">{teamB.tag}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Game 2 placeholder (if BO3+) */}
+                {bestOf >= 3 && (
+                  <div className="bg-black/80 border border-neutral-700/50 rounded-lg p-5">
+                    <div className="text-center text-xs font-bold font-mono text-neutral-400 tracking-[3px] mb-4">GAME 2</div>
+                    <div className="flex items-center justify-center gap-6">
+                      <div className="flex flex-col items-center gap-2">
+                        {teamALogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={teamALogo} alt={teamA.tag} className="w-16 h-16 object-contain" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-cyan-500/20 flex items-center justify-center text-xl font-black text-cyan-400">{teamA.tag[0]}</div>
+                        )}
+                        <span className="text-sm font-black font-mono text-white uppercase">{teamA.tag}</span>
+                      </div>
+                      <span className="text-2xl font-black font-mono text-neutral-400">VS</span>
+                      <div className="flex flex-col items-center gap-2">
+                        {teamBLogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={teamBLogo} alt={teamB.tag} className="w-16 h-16 object-contain" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-rose-500/20 flex items-center justify-center text-xl font-black text-rose-400">{teamB.tag[0]}</div>
+                        )}
+                        <span className="text-sm font-black font-mono text-white uppercase">{teamB.tag}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* === BOTTOM: Team Lineup Marquee === */}
+              <div className="absolute bottom-0 left-0 right-0 h-[56px] bg-gradient-to-r from-black via-neutral-950 to-black border-t border-red-600/40 flex items-center overflow-hidden z-10">
+                <div className="flex-shrink-0 bg-red-700 px-4 h-full flex items-center z-20">
+                  <span className="text-xs font-black font-mono text-white uppercase leading-tight">TEAM<br/>LINEUP</span>
+                </div>
+                <div className="flex-1 overflow-hidden relative">
+                  <div className="flex items-center gap-6 animate-[marquee_20s_linear_infinite] whitespace-nowrap">
+                    {[...allPlayers, ...allPlayers].map((p, i) => (
+                      <div key={`${p.id}-${i}`} className="flex items-center gap-2 flex-shrink-0">
+                        <div className="w-9 h-9 bg-white/90 rounded flex items-center justify-center">
+                          <Users className="w-5 h-5 text-neutral-700" />
+                        </div>
+                        <span className="text-xs font-bold font-mono text-neutral-300 uppercase">{p.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Team logo divider in marquee */}
+                {teamBLogo && (
+                  <div className="flex-shrink-0 px-3 z-20">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={teamBLogo} alt={teamB.tag} className="w-10 h-10 object-contain" />
+                  </div>
+                )}
+              </div>
+            </div>
+            );
+          })()}
 
           {/* ========================================================================= */}
           {/* SCENE 5 & 6: ของจริงหน้าเดียว — แปะ /overlay/match/[id] ตัวที่ OBS ใช้จริงผ่าน iframe */}
