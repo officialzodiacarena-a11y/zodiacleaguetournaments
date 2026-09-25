@@ -885,10 +885,8 @@ export default function StreamHubMainPage({
           {/* SCENE 4: STARTING SOON / COUNTDOWN DISPLAY */}
           {/* ========================================================================= */}
           {activeScene === 4 && (() => {
-            const dbLogoA = (activeMatchData?.team_a as unknown as { logo_url?: string } | null)?.logo_url;
-            const dbLogoB = (activeMatchData?.team_b as unknown as { logo_url?: string } | null)?.logo_url;
-            const teamALogo = dbLogoA || `/images/Team_Logo/${teamA.tag}.png`;
-            const teamBLogo = dbLogoB || `/images/Team_Logo/${teamB.tag}.png`;
+            const teamALogo = `/images/Team_Logo/${teamA.tag}.png`;
+            const teamBLogo = `/images/Team_Logo/${teamB.tag}.png`;
             const teamAColor = '#06b6d4';
             const teamBColor = '#f43f5e';
             const countdownStr = timerSeconds >= 3600
