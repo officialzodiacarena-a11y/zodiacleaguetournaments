@@ -78,7 +78,7 @@ npx tsx scripts/spectra-adapter.ts --match "<MATCH_ID>" --token "<OBSERVER_TOKEN
 
 ---
 
-## 🔁 6. อัปเดตจากโคลท์ — 25 ก.ย. 2026 (session ต่อจากแอนดี้) — PR #49 `feat/round-tracker-veto-strip`
+## 🔁 6. อัปเดตจากโคลท์ — 25 ก.ย. 2026 (session ต่อจากแอนดี้) — PR #49 + PR #50 `feat/round-tracker-veto-strip`
 
 > ส่วนนี้เพิ่มต่อท้าย ไม่ได้แก้ส่วนที่ 1-5 ของแอนดี้ อ่านส่วนนี้ก่อนแตะโค้ด Spectra / OCR / Round Tracker
 
@@ -114,3 +114,15 @@ npx tsx scripts/spectra-adapter.ts --match "<MATCH_ID>" --token "<OBSERVER_TOKEN
 - ต้องลองติดตั้ง Spectra-Client (.exe จาก GitHub) บนเครื่อง Observer เพื่อตอบว่าต้องลงแอป Overwolf แยกหรือไม่
 - `observer-bridge/` = แอป Overwolf ของเราที่โดนปฏิเสธ (เมล 23 ก.ย.) ไม่มีใครเรียกใช้แล้ว ยังไม่ลบ (รอพี่หยัดสั่ง)
 - ไม่ต้องอ้างเอกสาร Vault เก่าอีก — ใช้โค้ดจริง + git + GitHub PR เป็นหลัก
+
+> งาน Stream Hub / Broadcast Control / Live Source ที่ทำต่อจากนี้ (26 ก.ย.) อยู่ใน `STREAM_HUB_KOLT_HANDOVER.md`
+
+---
+
+## 📝 Change Log
+
+| วันที่ | ผู้แก้ | สิ่งที่แก้ | เหตุผลที่แก้ |
+|---|---|---|---|
+| 2026-09-25 | แอนดี้ | สร้างเอกสาร ส่วนที่ 1–5 | ส่งต่องาน Spectra Adapter ให้โคลท์ |
+| 2026-09-25 | โคลท์ | เพิ่มส่วนที่ 6 | สรุปงาน round tracker / hotfix HP / กติกาเจ้าของข้อมูล |
+| 2026-09-26 | โคลท์ | หัวข้อส่วนที่ 6: "PR #49" → "PR #49 + PR #50" และเพิ่มลิงก์ไป `STREAM_HUB_KOLT_HANDOVER.md` | commit ชุดหลังของส่วนที่ 6 (`50bbe76` ถึง `97be949`) เข้า main ผ่าน PR #50 ไม่ใช่ #49 — session ก่อนแจ้งไว้ว่าหัวข้อยังไม่ตรง |

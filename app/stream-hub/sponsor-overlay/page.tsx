@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, use } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { ImagePlus, Trash2, Eye, EyeOff, GripVertical } from 'lucide-react';
+import { SponsorBoxController } from '@/components/stream-hub/SponsorBoxController';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yjygevsdfebdyzywbpdr.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_Y3j6k9biGK8YsBiHkaibkw_IcAFbWQj';
@@ -36,11 +37,14 @@ const SHOW_OPTIONS: { value: ShowOn; label: string }[] = [
   { value: 'starting-soon', label: 'หน้ารอ (Starting Soon)' },
 ];
 
-export default function SponsorOverlayPage() {
-  const [matchId] = useState(() => {
-    if (typeof window === 'undefined') return '';
-    return new URLSearchParams(window.location.search).get('matchId') || '';
-  });
+export default function SponsorOverlayPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  // อ่านจาก searchParams ของ Next (เดิมอ่าน window.location ตอน render ทำให้ server/client ไม่ตรงกัน = hydration error)
+  const rawMatchId = use(searchParams).matchId;
+  const matchId = typeof rawMatchId === 'string' ? rawMatchId : '';
   const [logos, setLogos] = useState<SponsorLogo[]>([]);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -121,6 +125,11 @@ export default function SponsorOverlayPage() {
             </div>
           )}
         </div>
+
+        {/* กล่องรูปสปอนเซอร์หมุนวน (5.3 ในฉาก Starting Soon ของ Stream Hub) */}
+        <SponsorBoxController matchId={matchId} />
+
+        <h2 className="pt-2 font-mono text-sm font-black uppercase text-neutral-400">โลโก้ลอยบน Overlay (ของเดิม)</h2>
 
         {/* Upload area */}
         <label className="flex items-center justify-center gap-3 p-6 border-2 border-dashed border-white/20 rounded-xl hover:border-pink-500/50 hover:bg-pink-500/5 cursor-pointer transition-all">
