@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, use } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, use } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import type { TelemetryPlayerFrame } from '@/lib/overlay/telemetry-schema';
 import {
@@ -26,8 +26,28 @@ import {
   Radio,
   ImagePlus,
   Swords,
-  Shield
+  Shield,
+  Keyboard
 } from 'lucide-react';
+import { comboFromEvent, useStreamHubHotkeys, HOTKEY_ACTIONS, DEFAULT_HOTKEYS } from '@/components/stream-hub/hotkeys';
+import { HotkeySettingsModal } from '@/components/stream-hub/HotkeySettingsModal';
+import { NetworkStat } from '@/components/stream-hub/NetworkStat';
+import { SpectatorLinkPanel, type FeedSource } from '@/components/stream-hub/SpectatorLinkPanel';
+import { LiveFeedPlayer } from '@/components/stream-hub/LiveFeedPlayer';
+import { LiveFeedScene } from '@/components/stream-hub/LiveFeedScene';
+import { readLiveSource, isExternalFeed, LIVE_SOURCE_OFF, type LiveSource } from '@/lib/stream-hub/live-source';
+import { SponsorBox } from '@/components/stream-hub/SponsorBox';
+import {
+  SPONSOR_BOX_EVENTS,
+  SPONSOR_BOX_SIZE,
+  HUB_CACHE_KEY,
+  DEFAULT_SPONSOR_BOX_SETTINGS,
+  clampSettings,
+  loadSnapshot,
+  saveSnapshot,
+  type SponsorBoxImage,
+  type SponsorBoxSettings,
+} from '@/lib/stream-hub/sponsor-box';
 
 // Production overlay type (หน้าตาจริงตอนนี้แสดงผ่าน iframe ไปที่ /overlay/match/[id] แทนการประกอบเอง — ดูฉาก 5 และ 6)
 import type { BuyPhasePlayer } from '@/components/overlay/BuyPhaseHud';
@@ -122,6 +142,9 @@ export default function StreamHubMainPage({
   const [currentMap, setCurrentMap] = useState<string>('ASCENT');
   const [tournamentName, setTournamentName] = useState<string>('ZODIAC ARENA');
   const [subStage, setSubStage] = useState<string>('LIVE MATCH');
+  // แหล่งภาพ (ตั้งจากหน้า Broadcast Control) — B/C = ภาพจากภายนอก ปิดระบบที่อาศัยข้อมูลในเกม
+  const [liveSource, setLiveSource] = useState<LiveSource>(LIVE_SOURCE_OFF);
+  const externalFeed = isExternalFeed(liveSource);
 
   // Roster ผู้เล่นจริงของแมตช์ที่เลือก — ดึงจาก team_members ทุกครั้งที่สลับแมตช์ (เรียงตาม jersey_number
   // เป็นตัวแทน "ลำดับที่นั่งจริง" เพราะตาราง team_members ไม่มีคอลัมน์ลำดับที่นั่งโดยตรง)
@@ -131,13 +154,81 @@ export default function StreamHubMainPage({
   // ช่องส่งสัญญาณจริงไปหา Overlay ตัวที่ OBS ใช้ (channel ชื่อเดียวกับที่ app/overlay/match/[id]/page.tsx ฟังอยู่)
   // ปุ่ม/สไลเดอร์ในห้องคุมจะยิงผ่านช่องนี้ ไม่ใช่แค่แก้ state ในเครื่องเฉยๆ เหมือนก่อนหน้านี้
   const broadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // telemetry จากในเกมล่าสุด (โชว์ในแถบ Spectator Link) — แยกแหล่งด้วยฟิลด์ debug ของ OCR (raw_ocr_name)
+  const [lastFrameAt, setLastFrameAt] = useState<number | null>(null);
+  const [feedSource, setFeedSource] = useState<FeedSource | null>(null);
+  // คำสั่งจากหน้า Broadcast Control (รีโมต) — ชี้ไปที่ runAction ตัวล่าสุดเสมอ
+  const remoteActionRef = useRef<(id: string) => void>(() => {});
+  // กล่องรูปสปอนเซอร์ (5.3) — รับจากหน้า sponsor-overlay ผ่าน Realtime, เก็บสำเนาในเครื่องกันรีเฟรชแล้วหาย
+  const [sponsorBox, setSponsorBox] = useState<{
+    settings: SponsorBoxSettings;
+    order: string[];
+    byId: Record<string, SponsorBoxImage>;
+  }>({ settings: DEFAULT_SPONSOR_BOX_SETTINGS, order: [], byId: {} });
+  const sponsorImages = useMemo(
+    () => sponsorBox.order.map((id) => sponsorBox.byId[id]).filter((img): img is SponsorBoxImage => !!img),
+    [sponsorBox],
+  );
+  // เขียนสำเนาลงเครื่องเฉพาะตอนข้อมูลกล่องเปลี่ยน (ไม่ใช่ทุกรอบโพล) — และต้องโหลดสำเนาเดิมเสร็จก่อน ไม่งั้นค่าว่างตอนเปิดหน้าจะเขียนทับ
+  const sponsorCacheLoadedRef = useRef(false);
   useEffect(() => {
-    const channel = supabase.channel(`match-realtime-${currentMatchId}`);
-    channel.subscribe();
+    if (!sponsorCacheLoadedRef.current) return;
+    saveSnapshot(HUB_CACHE_KEY, { settings: sponsorBox.settings, images: sponsorImages });
+  }, [sponsorBox.settings, sponsorImages]);
+  useEffect(() => {
+    const channel = supabase
+      .channel(`match-realtime-${currentMatchId}`)
+      .on('broadcast', { event: 'stream_telemetry_relay' }, ({ payload }) => {
+        const players = (payload as { players?: { raw_ocr_name?: string }[] })?.players ?? [];
+        setFeedSource(players.some((p) => p.raw_ocr_name) ? 'OCR' : 'BRIDGE');
+        setLastFrameAt(Date.now());
+      })
+      .on('broadcast', { event: 'toggle_buy_phase' }, ({ payload }) => {
+        const enabled = (payload as { enabled?: boolean })?.enabled;
+        if (typeof enabled === 'boolean') setShowBuyPhase(enabled);
+      })
+      .on('broadcast', { event: 'hub_action' }, ({ payload }) => {
+        const action = (payload as { action?: string })?.action;
+        if (action) remoteActionRef.current(action);
+      })
+      .on('broadcast', { event: SPONSOR_BOX_EVENTS.state }, ({ payload }) => {
+        const p = payload as { settings?: Partial<SponsorBoxSettings>; order?: string[] };
+        setSponsorBox((prev) => ({
+          settings: clampSettings(p.settings),
+          order: Array.isArray(p.order) ? p.order : prev.order,
+          byId: prev.byId,
+        }));
+      })
+      .on('broadcast', { event: SPONSOR_BOX_EVENTS.image }, ({ payload }) => {
+        const img = payload as SponsorBoxImage;
+        if (!img?.id || !img?.dataUrl) return;
+        setSponsorBox((prev) => ({ ...prev, byId: { ...prev.byId, [img.id]: img } }));
+      });
+    channel.subscribe((status) => {
+      if (status !== 'SUBSCRIBED') return;
+      // โหลดสำเนาในเครื่องก่อน (โชว์ได้ทันทีแม้หน้า sponsor-overlay ปิดอยู่) แล้วขอข้อมูลล่าสุด
+      const cached = loadSnapshot(HUB_CACHE_KEY);
+      sponsorCacheLoadedRef.current = true;
+      if (cached) {
+        setSponsorBox((prev) =>
+          prev.order.length
+            ? prev
+            : {
+                settings: cached.settings,
+                order: cached.images.map((i) => i.id),
+                byId: Object.fromEntries(cached.images.map((i) => [i.id, i])),
+              },
+        );
+      }
+      channel.send({ type: 'broadcast', event: SPONSOR_BOX_EVENTS.request, payload: {} });
+    });
     broadcastChannelRef.current = channel;
     return () => {
       supabase.removeChannel(channel);
       broadcastChannelRef.current = null;
+      // สลับแมตช์ = สถานะ telemetry ของแมตช์เก่าไม่เกี่ยวแล้ว
+      setLastFrameAt(null);
+      setFeedSource(null);
     };
   }, [currentMatchId]);
 
@@ -277,9 +368,10 @@ export default function StreamHubMainPage({
         if (matchData.team_b) setTeamB({ id: matchData.team_b.id, name: matchData.team_b.name, tag: matchData.team_b.tag });
         setScoreA(matchData.rounds_won_a ?? 0);
         setScoreB(matchData.rounds_won_b ?? 0);
-        setWinsA(0);
-        setWinsB(0);
         setBestOf(matchData.best_of ?? 1);
+        // เก็บเป็น state ใหม่เฉพาะตอนค่าเปลี่ยน — โพลทุก 3 วิ ไม่ควรทำให้ตัวเล่นวิดีโอโหลดใหม่
+        const nextSource = readLiveSource(matchData.format_config);
+        setLiveSource((prev) => (prev.mode === nextSource.mode && prev.url === nextSource.url ? prev : nextSource));
         if (tour?.name) setTournamentName(tour.name);
         setSubStage(matchData.status === 'LIVE' ? 'LIVE MATCH' : matchData.status === 'READY_CHECK' ? 'READY CHECK (นั่งที่)' : matchData.status);
 
@@ -345,7 +437,14 @@ export default function StreamHubMainPage({
         .eq('match_id', matchId)
         .order('game_number', { ascending: true });
 
-      if (gamesData) setRealMapGames(gamesData);
+      if (gamesData) {
+        setRealMapGames(gamesData);
+        // สกอร์ซีรีส์ (BO) = จำนวนแมพที่แต่ละทีมชนะจริงใน match_games
+        if (matchData) {
+          setWinsA(gamesData.filter((g) => g.winner_team_id && g.winner_team_id === matchData.team_a_id).length);
+          setWinsB(gamesData.filter((g) => g.winner_team_id && g.winner_team_id === matchData.team_b_id).length);
+        }
+      }
     } catch (err) {
       console.error('Failed to load match details:', err);
     }
@@ -385,21 +484,64 @@ export default function StreamHubMainPage({
     return () => clearInterval(interval);
   }, [isTimerRunning, timerSeconds]);
 
-  // Alt+C hotkey
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === 'c' || e.key === 'C' || e.code === 'KeyC')) {
-        e.preventDefault();
+  // คำสั่งของแท็บ SYSTEM SCENES + Buy Phase — ปุ่มบนหน้าจอกับ Hotkey เรียกตัวเดียวกัน
+  const runAction = useCallback((id: string) => {
+    switch (id) {
+      case 'startingSoon': setActiveScene(4); break;
+      case 'liveHud': setActiveScene(5); break;
+      case 'cleanVeto': setActiveScene(7); break;
+      case 'intermission': setActiveScene(8); break;
+      case 'ingameVeto': setActiveScene(9); break;
+      case 'captainVeto': setActiveScene(10); break;
+      case 'testClutch':
+        if (externalFeed) return; // โหมด B/C ไม่มีข้อมูลเลือดให้ทดสอบ
+        // ทดสอบฉาก Clutch / Last Man Standing บน Overlay จริง — ยิง HP ปลอมผ่าน telemetry จริง (path เดียวกับ Observer Bridge)
+        // ทำให้ทีม A เหลือรอด 1 คน (คนแรกของ roster) ส่วนทีม B รอดครบ เพื่อดูว่า Overlay ขึ้นป้าย 1vX ถูกไหม
+        if (rosterA.length < 2 || rosterB.length < 2) return;
+        sendTelemetry([
+          ...rosterA.map((p, i) => ({ name: p.name, hp: i === 0 ? 100 : 0 })),
+          ...rosterB.map((p) => ({ name: p.name, hp: 100 })),
+        ]);
+        break;
+      case 'buyPhase':
+        if (externalFeed) return; // โหมด B/C ไม่มีข้อมูลเงิน/อาวุธ
         setShowBuyPhase((prev) => {
           const next = !prev;
           sendToggleBuyPhase(next);
           return next;
         });
-      }
+        break;
+    }
+  }, [externalFeed, rosterA, rosterB, sendTelemetry, sendToggleBuyPhase]);
+
+  useEffect(() => {
+    remoteActionRef.current = runAction;
+  }, [runAction]);
+
+  // แจ้งฉากปัจจุบันให้หน้า Broadcast Control (รีโมต) ไฮไลต์ปุ่มถูก — ส่งตอนเปลี่ยน + ย้ำทุก 5 วิ เผื่อรีโมตเพิ่งเปิด
+  useEffect(() => {
+    const announce = () =>
+      broadcastChannelRef.current?.send({ type: 'broadcast', event: 'hub_scene_state', payload: { scene: activeScene } });
+    announce();
+    const t = setInterval(announce, 5000);
+    return () => clearInterval(t);
+  }, [activeScene, currentMatchId]);
+
+  // Hotkey (ผูกกับบัญชีผู้ใช้ ตั้งค่าได้จากปุ่ม Hotkeys) — ค่าเริ่มต้น Alt+1..7 = แท็บ 1..7, Alt+C = Buy Phase
+  const { hotkeys, save: saveHotkeys, userId } = useStreamHubHotkeys(DEFAULT_HOTKEYS);
+  const [showHotkeySettings, setShowHotkeySettings] = useState<boolean>(false);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      const actionId = Object.keys(hotkeys).find((id) => hotkeys[id] === combo);
+      if (!actionId) return;
+      e.preventDefault();
+      runAction(actionId);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [sendToggleBuyPhase]);
+  }, [hotkeys, runAction]);
 
   const handleSelectMatch = (matchId: string) => {
     setCurrentMatchId(matchId);
@@ -410,6 +552,16 @@ export default function StreamHubMainPage({
 
   return (
     <div className={`min-h-screen font-sans ${bgMode === 'chroma' ? 'bg-[#00FF00]' : bgMode === 'transparent' ? 'bg-transparent' : 'bg-[#060810] text-white'}`}>
+      {showHotkeySettings && (
+        <HotkeySettingsModal
+          actions={HOTKEY_ACTIONS}
+          hotkeys={hotkeys}
+          defaults={DEFAULT_HOTKEYS}
+          signedIn={!!userId}
+          onSave={saveHotkeys}
+          onClose={() => setShowHotkeySettings(false)}
+        />
+      )}
 
       {/* ========================================================================= */}
       {/* TOP HEADER CONTROLS */}
@@ -632,54 +784,39 @@ export default function StreamHubMainPage({
                 <span className="text-[10px] font-mono font-black text-cyan-400 px-2 py-0.5">
                   SYSTEM SCENES:
                 </span>
-                <button onClick={() => setActiveScene(4)} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 4 ? 'bg-amber-500 text-black shadow-lg' : 'text-amber-300 hover:bg-amber-500/10'}`}>
-                  <Timer className="w-3.5 h-3.5" /> 4. Starting Soon
+                <button onClick={() => runAction('startingSoon')} title={hotkeys.startingSoon || undefined} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 4 ? 'bg-amber-500 text-black shadow-lg' : 'text-amber-300 hover:bg-amber-500/10'}`}>
+                  <Timer className="w-3.5 h-3.5" /> 1. Starting Soon
                 </button>
-                <button onClick={() => setActiveScene(5)} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 5 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
-                  <Tv className="w-3.5 h-3.5" /> 5. Ingame Live HUD
+                <button onClick={() => runAction('liveHud')} title={hotkeys.liveHud || undefined} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 5 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
+                  <Tv className="w-3.5 h-3.5" /> {externalFeed ? `2. Live Feed (${liveSource.mode})` : '2. Ingame Live HUD'}
                 </button>
-                <button onClick={() => { setActiveScene(6); setShowBuyPhase(true); }} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 6 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
-                  <Users className="w-3.5 h-3.5" /> 6. BuyPhase HUD
+                <button onClick={() => runAction('cleanVeto')} title={hotkeys.cleanVeto || undefined} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 7 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
+                  <Layers className="w-3.5 h-3.5" /> 3. Clean Map Veto
                 </button>
-                <button onClick={() => setActiveScene(7)} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 7 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
-                  <Layers className="w-3.5 h-3.5" /> 7. Clean Map Veto
+                <button onClick={() => runAction('intermission')} title={hotkeys.intermission || undefined} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 8 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
+                  <Trophy className="w-3.5 h-3.5" /> 4. Clean Intermission/MVP
                 </button>
-                <button onClick={() => setActiveScene(8)} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 8 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
-                  <Trophy className="w-3.5 h-3.5" /> 8. Clean Intermission/MVP
+                <button onClick={() => runAction('ingameVeto')} title={hotkeys.ingameVeto || undefined} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 9 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
+                  <Sliders className="w-3.5 h-3.5" /> 5. Ingame Map Veto
                 </button>
-                <button onClick={() => setActiveScene(9)} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 9 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
-                  <Sliders className="w-3.5 h-3.5" /> 9. Ingame Map Veto
-                </button>
-                <button onClick={() => setActiveScene(10)} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 10 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
-                  <Target className="w-3.5 h-3.5" /> 10. Captain Veto Room
+                <button onClick={() => runAction('captainVeto')} title={hotkeys.captainVeto || undefined} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 10 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
+                  <Target className="w-3.5 h-3.5" /> 6. Captain Veto Room
                 </button>
                 <button
-                  onClick={() => {
-                    // ทดสอบฉาก Clutch / Last Man Standing บน Overlay จริง — ยิง HP ปลอมผ่าน telemetry จริง (path เดียวกับ Observer Bridge)
-                    // ทำให้ MWL เหลือรอด 1 คน (คนแรกของ roster) ส่วน DEF รอดครบ เพื่อดูว่า Overlay ขึ้นป้าย 1vX ถูกไหม
-                    if (rosterA.length < 2 || rosterB.length < 2) return;
-                    sendTelemetry([
-                      ...rosterA.map((p, i) => ({ name: p.name, hp: i === 0 ? 100 : 0 })),
-                      ...rosterB.map((p) => ({ name: p.name, hp: 100 })),
-                    ]);
-                  }}
-                  className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 text-rose-300 hover:bg-rose-500/10 border border-rose-500/30"
-                  title="ยิง HP ปลอมผ่าน telemetry จริงเพื่อทดสอบฉาก Clutch บน Overlay (ไม่ได้เปลี่ยน Scene ของห้องคุม)"
+                  onClick={() => runAction('testClutch')}
+                  disabled={externalFeed}
+                  className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 text-rose-300 hover:bg-rose-500/10 border border-rose-500/30 disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  title={externalFeed ? 'ปิดอยู่ — โหมดสตรีมภายนอกไม่มีข้อมูลเลือด' : 'ยิง HP ปลอมผ่าน telemetry จริงเพื่อทดสอบฉาก Clutch บน Overlay (ไม่ได้เปลี่ยน Scene ของห้องคุม)'}
                 >
-                  <Sliders className="w-3.5 h-3.5" /> 11. Test: Clutch 1vX
+                  <Sliders className="w-3.5 h-3.5" /> 7. Test: Clutch 1vX
                 </button>
               </div>
             </div>
 
-            {/* Row 3.5: External Tab Buttons */}
-            <div className="flex items-center gap-2 pt-1">
+            {/* Row 3.5: External Tab Buttons + Spectator Link (ชิดขวา) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono font-black text-neutral-500 px-1">OPEN:</span>
-              <button
-                onClick={() => window.open(`/spectator/control/${currentMatchId}`, 'spectator-control')}
-                className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 text-emerald-300 hover:bg-emerald-500/10 border border-emerald-500/30"
-              >
-                <ExternalLink className="w-3 h-3" /> Spectator Control
-              </button>
               <button
                 onClick={() => window.open(`/tournament`, 'tournament-bracket')}
                 className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 text-violet-300 hover:bg-violet-500/10 border border-violet-500/30"
@@ -693,75 +830,61 @@ export default function StreamHubMainPage({
                 <ImagePlus className="w-3 h-3" /> Live Sponsor Overlay
               </button>
             </div>
+              <SpectatorLinkPanel
+                key={currentMatchId}
+                matchId={currentMatchId}
+                teamAId={activeMatchData?.team_a ? teamA.id : null}
+                teamBId={activeMatchData?.team_b ? teamB.id : null}
+                teamATag={teamA.tag}
+                teamBTag={teamB.tag}
+                lastFrameAt={lastFrameAt}
+                source={feedSource}
+                disabled={externalFeed}
+              />
+            </div>
 
             {/* Row 4: Round Scores & Timer */}
             <div className="flex flex-wrap items-center justify-between text-xs text-neutral-300 gap-3 pt-1 border-t border-white/5">
 
-              {/* Independent Round Scores */}
-              <div className="flex items-center gap-2 bg-black/60 px-3 py-1 rounded-xl border border-white/15 font-mono">
-                <span className="text-neutral-400 font-bold text-[11px]">Round Scores:</span>
-
-                {/* Team A */}
-                <div className="flex items-center gap-1 bg-[#00D4FF]/10 px-2 py-0.5 rounded border border-[#00D4FF]/30">
-                  <span className="text-[#00D4FF] font-black text-xs">{teamA.tag}</span>
-                  <button onClick={() => setScoreA(prev => Math.max(0, prev - 1))} className="w-5 h-5 rounded bg-white/10 hover:bg-[#00D4FF]/30 text-white font-black flex items-center justify-center text-xs">-</button>
-                  <input type="number" min={0} max={99} value={scoreA} onChange={(e) => setScoreA(Math.max(0, parseInt(e.target.value) || 0))} className="w-7 text-center bg-transparent text-white font-mono font-black text-sm outline-none" />
-                  <button onClick={() => setScoreA(prev => prev + 1)} className="w-5 h-5 rounded bg-[#00D4FF]/20 hover:bg-[#00D4FF]/40 text-[#00D4FF] font-black flex items-center justify-center text-xs">+</button>
-                </div>
-
-                <span className="text-neutral-500 font-bold">:</span>
-
-                {/* Team B */}
-                <div className="flex items-center gap-1 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/30">
-                  <button onClick={() => setScoreB(prev => Math.max(0, prev - 1))} className="w-5 h-5 rounded bg-white/10 hover:bg-rose-500/30 text-white font-black flex items-center justify-center text-xs">-</button>
-                  <input type="number" min={0} max={99} value={scoreB} onChange={(e) => setScoreB(Math.max(0, parseInt(e.target.value) || 0))} className="w-7 text-center bg-transparent text-white font-mono font-black text-sm outline-none" />
-                  <button onClick={() => setScoreB(prev => prev + 1)} className="w-5 h-5 rounded bg-rose-500/20 hover:bg-rose-500/40 text-rose-400 font-black flex items-center justify-center text-xs">+</button>
-                  <span className="text-rose-400 font-black text-xs">{teamB.tag}</span>
-                </div>
-
-                {/* Buy Phase Alt+C — ยิงสัญญาณจริงไปเปิด/ปิด Buy Phase HUD บน Overlay ที่ OBS ใช้ */}
-                <button
-                  onClick={() => {
-                    const next = !showBuyPhase;
-                    setShowBuyPhase(next);
-                    sendToggleBuyPhase(next);
-                  }}
-                  className={`ml-1 px-2 py-0.5 rounded font-mono text-[11px] font-bold border transition-all ${
-                    showBuyPhase ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.3)]' : 'bg-white/5 text-neutral-400 border-white/10'
-                  }`}
+              {/* สกอร์ซีรีส์จริง (ดูอย่างเดียว) + Ping/ความเร็วเซิร์ฟเวอร์ + ตั้งค่า Hotkey */}
+              <div className="flex flex-wrap items-center gap-2 bg-black/60 px-3 py-1 rounded-xl border border-white/15 font-mono">
+                <div
+                  className="flex items-center gap-2 bg-white/5 px-2 py-0.5 rounded border border-[#C9A84C]/30"
+                  title="จำนวนแมพที่แต่ละทีมชนะ (จาก match_games จริง)"
                 >
-                  Buy Phase [Alt+C]: {showBuyPhase ? 'ON' : 'OFF'}
+                  <span className="text-[#C9A84C] font-black text-[11px]">BO{bestOf}</span>
+                  <span className="text-[#00D4FF] font-black text-xs">{teamA.tag}</span>
+                  <span className="text-white font-black text-sm">{winsA}</span>
+                  <span className="text-neutral-500 font-bold">-</span>
+                  <span className="text-white font-black text-sm">{winsB}</span>
+                  <span className="text-rose-400 font-black text-xs">{teamB.tag}</span>
+                  <span className="text-neutral-500 text-[10px]">First to {Math.floor(bestOf / 2) + 1}</span>
+                </div>
+
+                <NetworkStat />
+
+                <button
+                  onClick={() => setShowHotkeySettings(true)}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 text-[11px] font-bold"
+                >
+                  <Keyboard className="w-3.5 h-3.5" /> Hotkeys
                 </button>
 
-                {/* HP Quick Controls */}
-                <div className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded border border-white/10 text-[10px] font-mono">
-                  <span className="text-emerald-400 font-bold">HP:</span>
-                  <button
-                    onClick={() => {
-                      setRosterA(prev => prev.map(p => ({ ...p, hp: 100, hpMax: 100 })));
-                      setRosterB(prev => prev.map(p => ({ ...p, hp: 100, hpMax: 100 })));
-                    }}
-                    className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
-                  >
-                    100 All
-                  </button>
-                  <button
-                    onClick={() => {
-                      setRosterA(prev => prev.map(p => ({ ...p, hp: Math.max(0, (p.hp ?? 100) - 25) })));
-                    }}
-                    className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30"
-                  >
-                    -25 MWL
-                  </button>
-                  <button
-                    onClick={() => {
-                      setRosterB(prev => prev.map(p => ({ ...p, hp: Math.max(0, (p.hp ?? 100) - 25) })));
-                    }}
-                    className="px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 hover:bg-rose-500/30"
-                  >
-                    -25 DEF
-                  </button>
-                </div>
+                <button
+                  onClick={() => window.open(`/spectator/control/${currentMatchId}`, 'spectator-control')}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 text-[11px] font-bold"
+                >
+                  <ExternalLink className="w-3 h-3" /> HUD Control
+                </button>
+
+                {/* ไฟบอกสถานะ Buy Phase บน Overlay (สลับด้วย Hotkey — ค่าเริ่มต้น Alt+C) */}
+                <span
+                  className={`flex items-center gap-1 text-[10px] font-bold ${externalFeed ? 'text-neutral-600 line-through' : showBuyPhase ? 'text-amber-300' : 'text-neutral-500'}`}
+                  title={externalFeed ? 'ปิดอยู่ — โหมดสตรีมภายนอกไม่มีข้อมูลเงิน/อาวุธ' : `สลับด้วย ${hotkeys.buyPhase || 'Hotkey'}`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${!externalFeed && showBuyPhase ? 'bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.9)] animate-pulse' : 'bg-neutral-600'}`} />
+                  BUY {!externalFeed && showBuyPhase ? 'ON' : 'OFF'}
+                </span>
               </div>
 
               {/* Timer Controls */}
@@ -770,6 +893,11 @@ export default function StreamHubMainPage({
                   <Clock className="w-3.5 h-3.5 text-amber-400" />
                   Timer:
                 </span>
+
+                {/* ปุ่มเล่น/หยุดอยู่หน้าเวลา แยกห่างจากปุ่มรีเซ็ต กันกดพลาด */}
+                <button onClick={() => setIsTimerRunning(!isTimerRunning)} className={`p-1.5 rounded ${isTimerRunning ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'}`} title={isTimerRunning ? 'หยุดเวลา' : 'เริ่มนับถอยหลัง'}>
+                  {isTimerRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                </button>
 
                 <div className="flex items-center bg-white/10 rounded border border-white/20 px-1.5 py-0.5">
                   {timerSeconds >= 3600 && (
@@ -825,20 +953,33 @@ export default function StreamHubMainPage({
                   />
                 </div>
 
-                <button onClick={() => setIsTimerRunning(!isTimerRunning)} className={`p-1.5 rounded ${isTimerRunning ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
-                  {isTimerRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                </button>
-                <button onClick={() => setTimerSeconds(135)} className="p-1.5 rounded bg-white/5 hover:bg-white/10 text-neutral-400">
+                <button onClick={() => setTimerSeconds(135)} className="p-1.5 rounded bg-white/5 hover:bg-white/10 text-neutral-400" title="รีเซ็ตเป็น 02:15">
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
 
-                <div className="flex items-center gap-1 border-l border-white/10 pl-1.5">
-                  <button onClick={() => setTimerSeconds(300)} className="px-1.5 py-0.5 rounded bg-white/5 text-[10px]">05:00</button>
-                  <button onClick={() => setTimerSeconds(135)} className="px-1.5 py-0.5 rounded bg-white/5 text-[10px]">02:15</button>
-                  <button onClick={() => setTimerSeconds(prev => prev + 600)} className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 text-[10px] font-bold">+10:00</button>
-                  <button onClick={() => setTimerSeconds(prev => prev + 1200)} className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 text-[10px] font-bold">+20:00</button>
-                  <button onClick={() => setTimerSeconds(prev => prev + 3600)} className="px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300 text-[10px] font-bold">+1 Hrs</button>
-                </div>
+                {/* ตั้งเวลาด่วน — ยุบเป็น dropdown ให้แถบเวลาสั้นลง */}
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === 'set300') setTimerSeconds(300);
+                    else if (v === 'set135') setTimerSeconds(135);
+                    else if (v === 'add600') setTimerSeconds((prev) => prev + 600);
+                    else if (v === 'add1200') setTimerSeconds((prev) => prev + 1200);
+                    else if (v === 'add3600') setTimerSeconds((prev) => prev + 3600);
+                  }}
+                  className="bg-white/5 border border-white/10 rounded px-1 py-0.5 text-[10px] text-amber-300 font-bold outline-none cursor-pointer"
+                  style={{ colorScheme: 'dark' }}
+                  title="ตั้งเวลาด่วน"
+                >
+                  {/* รายการตัวเลือกพื้นเข้ม (ค่าเริ่มต้นของเบราว์เซอร์เป็นพื้นขาว อ่านตัวสีทองยาก) */}
+                  <option value="" disabled className="bg-[#0B0F17] text-neutral-500">เวลาด่วน</option>
+                  <option value="set300" className="bg-[#0B0F17] text-white">05:00</option>
+                  <option value="set135" className="bg-[#0B0F17] text-white">02:15</option>
+                  <option value="add600" className="bg-[#0B0F17] text-amber-300">+10:00</option>
+                  <option value="add1200" className="bg-[#0B0F17] text-amber-300">+20:00</option>
+                  <option value="add3600" className="bg-[#0B0F17] text-orange-300">+1 ชม.</option>
+                </select>
               </div>
 
             </div>
@@ -1065,6 +1206,53 @@ export default function StreamHubMainPage({
                 </div>
               </div>
 
+              {/* === 5.1 LEFT: กล่องวิดีโอ (Live Source โหมด A — คลิป/ไลฟ์จากเว็บ) === */}
+              {liveSource.mode === 'A' && (
+                <div
+                  className="absolute left-16 top-[330px] z-10 w-[790px] aspect-video rounded-xl overflow-hidden"
+                  style={{ border: '1px solid rgba(232,180,41,0.35)', boxShadow: '0 24px 60px rgba(0,0,0,0.65), 0 0 24px rgba(220,38,38,0.25)' }}
+                >
+                  <LiveFeedPlayer key={liveSource.url} source={liveSource} className="absolute inset-0" />
+                </div>
+              )}
+
+              {/* === คอลัมน์กลาง (x 880–1210): 5.2 ธงผู้สนับสนุนหลัก + 5.3 กล่องรูปสปอนเซอร์หมุนวน === */}
+              <div className="absolute left-[880px] top-[330px] z-10 w-[330px] flex flex-col items-center gap-[24px]">
+                {/* 5.2 ธง Title Sponsor — ข้อมูลเดียวกับ Overlay / หน้าเว็บ (Luminary Global) */}
+                <div
+                  className="w-[200px] h-[306px] flex flex-col items-center pt-4"
+                  style={{
+                    background: 'linear-gradient(180deg, rgba(40,28,6,0.95), rgba(12,9,4,0.97))',
+                    border: '1px solid rgba(232,180,41,0.55)',
+                    clipPath: 'polygon(0 0, 100% 0, 100% 88%, 50% 100%, 0 88%)',
+                    boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+                  }}
+                >
+                  <span className="text-[10px] font-black tracking-[3px] text-[#E8B429]">TITLE SPONSOR</span>
+                  <div className="w-10 h-px bg-[#E8B429]/60 my-2" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/images/sponser/luminary_global.jpg"
+                    alt="Luminary Global"
+                    className="w-[140px] h-[140px] object-cover rounded-lg"
+                    style={{ boxShadow: '0 0 0 1px rgba(232,180,41,0.45), 0 8px 20px rgba(0,0,0,0.5)' }}
+                  />
+                  <span className="mt-3 text-sm font-black tracking-wider text-white text-center leading-tight">
+                    LUMINARY<br />GLOBAL
+                  </span>
+                </div>
+
+                {/* 5.3 กล่องรูปสปอนเซอร์ (ตั้งค่าจากหน้า Live Sponsor Overlay) — ขนาดล็อกตายตัว */}
+                {sponsorImages.length > 0 && sponsorBox.settings.enabled && (
+                  <div
+                    className="rounded-lg overflow-hidden"
+                    style={{ border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 16px 36px rgba(0,0,0,0.55)', background: 'rgba(0,0,0,0.55)' }}
+                  >
+                    <SponsorBox images={sponsorImages} settings={sponsorBox.settings} width={SPONSOR_BOX_SIZE.w} height={SPONSOR_BOX_SIZE.h} />
+                  </div>
+                )}
+              </div>
+
               {/* === RIGHT SIDE: unified Game Card (Game 1 / Game 2 divided by a hairline) === */}
               <div className="absolute top-[180px] right-8 z-10 w-[640px]">
                 <div
@@ -1122,7 +1310,19 @@ export default function StreamHubMainPage({
           {/* เดิมสองฉากนี้เขียนหน้าตา HUD ซ้ำเองจากข้อมูลปลอม ทำให้พรีวิวกับของจริงไม่ตรงกัน */}
           {/* ตอนนี้พรีวิวคือของจริง 100% — แก้ดีไซน์ที่ components/overlay/* จุดเดียว เห็นผลทั้งสองที่ */}
           {/* ========================================================================= */}
-          {(activeScene === 5 || activeScene === 6) && (
+          {/* โหมด B/C: แท็บ 2 เป็น Live Feed — ภาพจากภายนอก + HUD ที่ไม่พึ่งข้อมูลในเกม */}
+          {(activeScene === 5 || activeScene === 6) && externalFeed && (
+            <LiveFeedScene
+              source={liveSource}
+              teamATag={teamA.tag}
+              teamBTag={teamB.tag}
+              winsA={winsA}
+              winsB={winsB}
+              bestOf={bestOf}
+              mapName={currentMap}
+            />
+          )}
+          {(activeScene === 5 || activeScene === 6) && !externalFeed && (
             <div className="relative w-full h-full bg-black/60">
               <iframe
                 key={currentMatchId}

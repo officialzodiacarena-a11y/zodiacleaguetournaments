@@ -1,11 +1,25 @@
 "use client";
 
 import { TEAM_A_HEX, TEAM_B_HEX } from "@/components/overlay/series";
-import OcrObserverBridgePanel from "@/components/observer/OcrObserverBridgePanel";
+import { comboFromEvent, useStreamHubHotkeys, HUB_TABS, HOTKEY_ACTIONS, DEFAULT_HOTKEYS } from "@/components/stream-hub/hotkeys";
+import { HotkeySettingsModal } from "@/components/stream-hub/HotkeySettingsModal";
+import { LiveFeedPlayer } from "@/components/stream-hub/LiveFeedPlayer";
+import { parseExternalEmbedUrl, readLiveSource, type LiveSourceMode } from "@/lib/stream-hub/live-source";
+
+// ตัวเลือก Live Source — ข้อความอธิบายสั้นๆ ให้คนคุมรู้ว่าแต่ละโหมดปิดอะไรบ้าง
+const LIVE_SOURCE_OPTIONS: { mode: LiveSourceMode; title: string; hint: string }[] = [
+  { mode: "OFF", title: "ปกติ", hint: "ภาพเกมจาก OBS · ระบบข้อมูลในเกมทำงานครบ" },
+  { mode: "A", title: "A · คลิปหน้า Starting Soon", hint: "แปะลิงก์ YouTube / Twitch / Kick / เว็บคลิป → โชว์ในกล่องวิดีโอของแท็บ 1" },
+  { mode: "B", title: "B · ไลฟ์จากลิงก์เว็บ + HUD เรา", hint: "แท็บ 2 กลายเป็น Live Feed · ปิด Spectator Link, Buy Phase, Test Clutch" },
+  { mode: "C", title: "C · Clean Feed (HLS)", hint: "ลิงก์ .m3u8 จากเซิร์ฟเวอร์ที่แปลง RTMP แล้ว · ข้อแม้เดียวกับ B" },
+];
 
 import React, { useEffect, useState, useCallback, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+
+// หน้า Broadcast Control — ห้องคุมการถ่ายทอด (รีโมตของ Stream Hub + ฉาก Overlay + สกอร์/แมพ + สถานะแมตช์)
+// ส่วน "ข้อมูลจากในเกม" (รหัสห้อง / Observer Token / OCR) ย้ายไปอยู่แผง Spectator Link ในหน้า Stream Hub แล้ว
 
 
 export type SceneName = "VETO" | "LIVE" | "AWAITING_RESULT" | "COMPLETED";
@@ -80,47 +94,6 @@ const ALLOWED_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
   CANCELLED: [],
 };
 
-// HELPER: ดึงลิงก์ Embed จาก YouTube / Twitch / Kick
-function parseExternalEmbedUrl(rawUrl: string | null | undefined): { embedUrl: string | null; platform: string } {
-  if (!rawUrl) return { embedUrl: null, platform: "NONE" };
-  const trimmed = rawUrl.trim();
-
-  // 1. YouTube (Video ID 11 หลัก หรือ URL)
-  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
-    return {
-      embedUrl: `https://www.youtube-nocookie.com/embed/${trimmed}?autoplay=1&mute=0`,
-      platform: "YOUTUBE",
-    };
-  }
-  const ytMatch = trimmed.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|live\/|watch\?.+&v=))([\w-]{11})/);
-  if (ytMatch && ytMatch[1]) {
-    return {
-      embedUrl: `https://www.youtube-nocookie.com/embed/${ytMatch[1]}?autoplay=1&mute=0`,
-      platform: "YOUTUBE",
-    };
-  }
-
-  // 2. Twitch Stream (twitch.tv/username)
-  const twitchMatch = trimmed.match(/twitch\.tv\/([a-zA-Z0-9_]+)/);
-  if (twitchMatch && twitchMatch[1]) {
-    const parentDomain = typeof window !== "undefined" ? window.location.hostname : "localhost";
-    return {
-      embedUrl: `https://player.twitch.tv/?channel=${twitchMatch[1]}&parent=${parentDomain}&autoplay=true`,
-      platform: "TWITCH",
-    };
-  }
-
-  // 3. Kick Stream (kick.com/username)
-  const kickMatch = trimmed.match(/kick\.com\/([a-zA-Z0-9_]+)/);
-  if (kickMatch && kickMatch[1]) {
-    return {
-      embedUrl: `https://player.kick.com/${kickMatch[1]}?autoplay=true`,
-      platform: "KICK",
-    };
-  }
-
-  return { embedUrl: trimmed, platform: "CUSTOM" };
-}
 
 export default function SpectatorHUDControlPanel({
   params,
@@ -147,13 +120,19 @@ export default function SpectatorHUDControlPanel({
   const [activeChannel, setActiveChannel] = useState<RealtimeChannel | null>(null);
   const [bannerType, setBannerType] = useState<string>("NORMAL");
   const [bannerMessage, setBannerMessage] = useState<string>("");
-  const [lobbyCodeInput, setLobbyCodeInput] = useState<string>("");
   const [streamUrlInput, setStreamUrlInput] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [authorized, setAuthorized] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ type: "info" | "error"; msg: string } | null>(null);
-  const [observerToken, setObserverToken] = useState<string | null>(null);
-  const [observerTokenLoading, setObserverTokenLoading] = useState<boolean>(false);
+  // มีแถว stream_sessions จริงไหม — ไม่มี = ไม่โชว์ตัวเลข FPS/Bitrate (เดิมโชว์ค่าตั้งต้น 60 FPS / 6 Mbps ซึ่งไม่ใช่ของจริง)
+  const [hasStreamSession, setHasStreamSession] = useState<boolean>(false);
+  // ฉากปัจจุบันของหน้า Stream Hub (Stream Hub แจ้งมาทาง hub_scene_state) — null = ยังไม่มี Stream Hub เปิดอยู่
+  const [hubScene, setHubScene] = useState<number | null>(null);
+  const [showHotkeySettings, setShowHotkeySettings] = useState<boolean>(false);
+  // ฟอร์ม Live Source (ค่าที่บันทึกจริงอ่านจาก match.format_config.live_source)
+  const [liveModeInput, setLiveModeInput] = useState<LiveSourceMode | null>(null);
+  const [liveUrlInput, setLiveUrlInput] = useState<string>("");
+  const [liveSaving, setLiveSaving] = useState<boolean>(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -246,16 +225,17 @@ export default function SpectatorHUDControlPanel({
           .from("streams")
           .select("id")
           .eq("match_id", matchId)
-          .single();
+          .maybeSingle();
 
         if (streamData && isMounted) {
           const { data: sessionData } = await supabase
             .from("stream_sessions")
             .select("is_connected, current_fps, current_bitrate_kbps, health_status, connected_at")
             .eq("stream_id", streamData.id)
-            .single();
+            .maybeSingle();
 
           if (sessionData && isMounted) {
+            setHasStreamSession(true);
             setTelemetry({
               is_connected: sessionData.is_connected,
               current_fps: sessionData.current_fps || 60,
@@ -288,6 +268,10 @@ export default function SpectatorHUDControlPanel({
         } else {
           if (isMounted) setShowBuyPhase((prev) => !prev);
         }
+      })
+      .on("broadcast", { event: "hub_scene_state" }, (payload) => {
+        const scene = (payload.payload as { scene?: number })?.scene;
+        if (typeof scene === "number" && isMounted) setHubScene(scene);
       });
 
     channel.subscribe((status) => {
@@ -325,17 +309,33 @@ export default function SpectatorHUDControlPanel({
     });
   }, [activeChannel, showBuyPhase]);
 
-  // Alt + C Hotkey สำหรับ Director / Spectator Control Room
+  // สั่งหน้า Stream Hub ให้สลับแท็บ (Stream Hub ฟัง hub_action ในช่อง match-realtime เดียวกัน)
+  const sendHubAction = useCallback(
+    (actionId: string) => {
+      if (!activeChannel) {
+        setFeedback({ type: "error", msg: "สัญญาณเซิร์ฟเวอร์เรียลไทม์ออฟไลน์ กรุณาลองใหม่" });
+        return;
+      }
+      activeChannel.send({ type: "broadcast", event: "hub_action", payload: { action: actionId } });
+    },
+    [activeChannel],
+  );
+
+  // Hotkey ชุดเดียวกับหน้า Stream Hub (ผูกกับบัญชีผู้ใช้) — กดที่หน้านี้ = สั่ง Stream Hub จากระยะไกล
+  const { hotkeys, save: saveHotkeys, userId } = useStreamHubHotkeys(DEFAULT_HOTKEYS);
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === "c" || e.key === "C" || e.code === "KeyC")) {
-        e.preventDefault();
-        toggleBuyPhaseHUD();
-      }
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      const actionId = Object.keys(hotkeys).find((id) => hotkeys[id] === combo);
+      if (!actionId) return;
+      e.preventDefault();
+      if (actionId === "buyPhase") toggleBuyPhaseHUD();
+      else sendHubAction(actionId);
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleBuyPhaseHUD]);
+  }, [hotkeys, sendHubAction, toggleBuyPhaseHUD]);
 
   const changeLiveScene = (sceneName: SceneName) => {
     if (!activeChannel) {
@@ -515,29 +515,37 @@ export default function SpectatorHUDControlPanel({
     }
   };
 
-  const updateLobbyRoomCode = async () => {
-    if (!lobbyCodeInput.trim() || !match) return;
-
-    const updatedConfig: MatchFormatConfig = {
-      ...(match.format_config || {}),
-      lobby_code: lobbyCodeInput,
-    };
-
+  // บันทึก Live Source ของหน้า Stream Hub ลง format_config.live_source (merge กับคีย์อื่นที่เก็บอยู่)
+  const saveLiveSource = async (mode: LiveSourceMode, url: string) => {
+    if (!match) return;
+    if (mode !== "OFF" && !url.trim()) {
+      setFeedback({ type: "error", msg: "ใส่ลิงก์ก่อนบันทึกโหมด " + mode });
+      return;
+    }
+    setLiveSaving(true);
     try {
-      const { error } = await supabase
-        .from("matches")
-        .update({ format_config: updatedConfig })
-        .eq("id", matchId);
-
-      if (error) {
-        setFeedback({ type: "error", msg: `บันทึกรหัสห้องแข่งล้มเหลว: ${error.message}` });
+      // บันทึกผ่านเซิร์ฟเวอร์ (ตรวจสิทธิ์ broadcast) — เขียนตรงจากเบราว์เซอร์ RLS จะบล็อกเงียบๆ
+      const res = await fetch(`/api/v1/matches/${matchId}/broadcast-config`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ live_source: { mode, url: mode === "OFF" ? "" : url.trim() } }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setFeedback({ type: "error", msg: `บันทึก Live Source ไม่สำเร็จ: ${json?.error?.message || res.status}` });
       } else {
-        setFeedback({ type: "info", msg: `อัปเดตรหัสห้องแข่งเป็น [ ${lobbyCodeInput} ] สำเร็จ` });
-        setMatch((prev) => (prev ? { ...prev, format_config: updatedConfig } : null));
+        setMatch((prev) => (prev ? { ...prev, format_config: { ...(prev.format_config || {}), live_source: json.live_source } } : null));
+        setLiveModeInput(null);
+        setLiveUrlInput("");
+        setFeedback({
+          type: "info",
+          msg: mode === "OFF" ? "กลับสู่โหมดปกติแล้ว — ระบบข้อมูลในเกมเปิดใช้งาน" : `ตั้ง Live Source เป็นโหมด ${mode} แล้ว — Stream Hub จะเปลี่ยนตามภายในไม่กี่วินาที`,
+        });
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "การประมวลผลเครือข่ายล้มเหลว";
-      setFeedback({ type: "error", msg });
+    } catch {
+      setFeedback({ type: "error", msg: "บันทึก Live Source ไม่สำเร็จ (เครือข่าย)" });
+    } finally {
+      setLiveSaving(false);
     }
   };
 
@@ -571,27 +579,6 @@ export default function SpectatorHUDControlPanel({
     }
   };
 
-  // ออก/หมุน Observer Bridge Token — เครื่องคนจับกล้องเอาไปตั้งค่าเพื่อยิง telemetry เข้า /api/v1/matches/[id]/telemetry
-  // token ดิบแสดงให้เห็นแค่ครั้งเดียวตอนกดปุ่มนี้ (เหมือน API key ทั่วไป) — ระบบเก็บแค่ hash ไว้
-  const mintObserverToken = async () => {
-    setObserverTokenLoading(true);
-    try {
-      const res = await fetch(`/api/v1/matches/${matchId}/observer-token`, { method: "POST" });
-      const json = await res.json();
-      if (!res.ok) {
-        setFeedback({ type: "error", msg: `ออก Observer Token ล้มเหลว: ${json?.error?.message || res.statusText}` });
-        return;
-      }
-      setObserverToken(json.token as string);
-      setFeedback({ type: "info", msg: "ออก Observer Token ใหม่แล้ว — คัดลอกไปตั้งค่าที่เครื่องคนจับกล้องทันที (token เก่าใช้ไม่ได้อีกต่อไป)" });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "การเชื่อมต่อเครือข่ายล้มเหลว";
-      setFeedback({ type: "error", msg });
-    } finally {
-      setObserverTokenLoading(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-[#0A0A0F] font-mono text-xs font-bold text-[#00D4FF]">
@@ -614,9 +601,12 @@ export default function SpectatorHUDControlPanel({
     );
   }
 
-  const currentLobbyCode = (match?.format_config?.lobby_code as string) || "ZA-KEY-99";
   const currentStreamUrl = (match?.format_config?.stream_url as string) || "https://www.youtube.com/live/4T8fqMG0cDA";
   const { embedUrl: currentEmbedUrl, platform: activePlatform } = parseExternalEmbedUrl(currentStreamUrl);
+  const savedLiveSource = readLiveSource(match?.format_config);
+  // ฟอร์มยังไม่ถูกแตะ = แสดงค่าที่บันทึกอยู่
+  const liveMode: LiveSourceMode = liveModeInput ?? savedLiveSource.mode;
+  const liveUrl = liveModeInput === null ? savedLiveSource.url : liveUrlInput;
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white font-sans p-6 relative">
@@ -628,14 +618,41 @@ export default function SpectatorHUDControlPanel({
             {userRole} MODE ACTIVE
           </span>
           <h1 className="text-xl font-mono font-black tracking-widest text-white uppercase mt-1">
-            Spectator HUD Control Center
+            Broadcast Control
           </h1>
+          <p className="font-mono text-[10px] text-gray-500 mt-0.5">
+            {match?.team_a?.tag || "TEAM A"} vs {match?.team_b?.tag || "TEAM B"} · ห้องคุมการถ่ายทอด (รีโมตของ Stream Hub)
+          </p>
         </div>
-        <div className="text-right font-mono text-xs">
-          <span className="text-gray-500">MATCH STATUS: </span>
-          <span className="font-bold text-[#00D4FF]">{match?.status || "LIVE"}</span>
+        <div className="flex items-center gap-2 font-mono text-xs">
+          <span className="text-gray-500">MATCH STATUS:</span>
+          <span className="font-bold text-[#00D4FF] mr-2">{match?.status || "—"}</span>
+          <button
+            onClick={() => setShowHotkeySettings(true)}
+            className="px-3 py-1.5 rounded border border-[#00D4FF]/30 bg-[#00D4FF]/10 text-[#00D4FF] hover:bg-[#00D4FF]/20 font-bold"
+          >
+            ⌨ Hotkeys
+          </button>
+          <a
+            href={`/stream-hub/${matchId}`}
+            target="stream-hub"
+            className="px-3 py-1.5 rounded border border-white/10 bg-black/40 text-gray-300 hover:text-white hover:border-white/30 font-bold"
+          >
+            ↗ Stream Hub
+          </a>
         </div>
       </header>
+
+      {showHotkeySettings && (
+        <HotkeySettingsModal
+          actions={HOTKEY_ACTIONS}
+          hotkeys={hotkeys}
+          defaults={DEFAULT_HOTKEYS}
+          signedIn={!!userId}
+          onSave={saveHotkeys}
+          onClose={() => setShowHotkeySettings(false)}
+        />
+      )}
 
       {feedback && (
         <div
@@ -704,11 +721,82 @@ export default function SpectatorHUDControlPanel({
             </div>
           </div>
 
+          {/* LIVE SOURCE — แหล่งภาพของหน้า Stream Hub (A / B / C) */}
+          <div className="bg-[#12121A] border border-white/5 rounded-xl p-5">
+            <h2 className="font-mono text-sm font-black text-[#00D4FF] uppercase tracking-wider mb-3 border-b border-white/5 pb-2 flex items-center justify-between">
+              <span>🛰️ Live Source (Stream Hub)</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded border font-mono ${savedLiveSource.mode === "OFF" ? "text-gray-400 border-white/10" : "text-amber-300 border-amber-500/40 bg-amber-500/10"}`}>
+                ใช้อยู่: {savedLiveSource.mode === "OFF" ? "ปกติ" : `โหมด ${savedLiveSource.mode}`}
+              </span>
+            </h2>
+
+            <div className="space-y-1.5 mb-3">
+              {LIVE_SOURCE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.mode}
+                  onClick={() => {
+                    setLiveModeInput(opt.mode);
+                    setLiveUrlInput(opt.mode === savedLiveSource.mode ? savedLiveSource.url : "");
+                  }}
+                  className={`w-full text-left rounded-lg border px-3 py-2 font-mono transition ${
+                    liveMode === opt.mode ? "border-[#00D4FF] bg-[#00D4FF]/10" : "border-white/5 bg-black/30 hover:border-white/20"
+                  }`}
+                >
+                  <div className={`text-[11px] font-black ${liveMode === opt.mode ? "text-[#00D4FF]" : "text-gray-200"}`}>{opt.title}</div>
+                  <div className="text-[10px] text-gray-500 mt-0.5">{opt.hint}</div>
+                </button>
+              ))}
+            </div>
+
+            {liveMode !== "OFF" && (
+              <input
+                type="text"
+                value={liveUrl}
+                onChange={(e) => {
+                  setLiveModeInput(liveMode);
+                  setLiveUrlInput(e.target.value);
+                }}
+                placeholder={liveMode === "C" ? "https://.../live/index.m3u8" : "https://youtube.com/live/... หรือลิงก์ embed"}
+                className="w-full mb-3 bg-black/60 border border-white/10 rounded px-3 py-1.5 font-mono text-xs focus:outline-none focus:border-[#00D4FF]"
+              />
+            )}
+
+            {liveMode !== "OFF" && liveUrl.trim() && (
+              <LiveFeedPlayer key={`${liveMode}:${liveUrl}`} muted source={{ mode: liveMode, url: liveUrl.trim() }} className="w-full aspect-video rounded-lg overflow-hidden border border-white/10 mb-3" />
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => saveLiveSource(liveMode, liveUrl)}
+                disabled={liveSaving || liveModeInput === null}
+                className="flex-1 py-2 bg-[#00D4FF]/10 border border-[#00D4FF]/30 text-[#00D4FF] hover:bg-[#00D4FF]/20 rounded font-mono text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {liveSaving ? "กำลังบันทึก..." : "ใช้โหมดนี้"}
+              </button>
+              {liveModeInput !== null && (
+                <button
+                  onClick={() => {
+                    setLiveModeInput(null);
+                    setLiveUrlInput("");
+                  }}
+                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-gray-300 rounded font-mono text-xs transition"
+                >
+                  ยกเลิก
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* TELEMETRY STATUS */}
           <div className="bg-[#12121A] border border-white/5 rounded-xl p-5 relative overflow-hidden">
             <h2 className="font-mono text-sm font-black text-[#00D4FF] uppercase tracking-wider mb-4 border-b border-white/5 pb-2">
               📊 Stream Telemetry Status
             </h2>
+            {!hasStreamSession ? (
+              <p className="font-mono text-[10px] text-gray-500 leading-relaxed">
+                ยังไม่มีข้อมูลสตรีมจากระบบ Ingest (ตาราง stream_sessions) สำหรับแมตช์นี้ — จะแสดง FPS / Bitrate จริงเมื่อมีการส่งสัญญาณเข้า
+              </p>
+            ) : (
             <div className="space-y-4 font-mono text-xs">
               <div className="flex justify-between">
                 <span className="text-gray-500">SOURCE BUFFER:</span>
@@ -747,89 +835,57 @@ export default function SpectatorHUDControlPanel({
                 </span>
               </div>
             </div>
-          </div>
-
-          {/* MATCH ROOM CONFIG */}
-          <div className="bg-[#12121A] border border-white/5 rounded-xl p-5">
-            <h2 className="font-mono text-sm font-black text-[#00D4FF] uppercase tracking-wider mb-4 border-b border-white/5 pb-2">
-              🔑 Match Room Config
-            </h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block font-mono text-[10px] text-gray-500 uppercase mb-1.5">
-                  Lobby Room Code (JSONB format_config)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={lobbyCodeInput}
-                    onChange={(e) => setLobbyCodeInput(e.target.value.toUpperCase())}
-                    placeholder={currentLobbyCode}
-                    className="flex-1 bg-black/60 border border-white/10 rounded px-3 py-1.5 font-mono text-xs focus:outline-none focus:border-[#00D4FF] uppercase"
-                  />
-                  <button
-                    onClick={updateLobbyRoomCode}
-                    className="px-3 py-1.5 bg-[#00D4FF]/10 border border-[#00D4FF]/30 text-[#00D4FF] hover:bg-[#00D4FF]/20 rounded font-mono text-xs transition"
-                  >
-                    SAVE
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* OBSERVER BRIDGE (คนจับกล้อง) — ยิง telemetry รายรอบ (เงิน/อาวุธ/เกราะ/Ult/HP) เข้า Buy Phase HUD */}
-          <div className="bg-[#12121A] border border-white/5 rounded-xl p-5">
-            <h2 className="font-mono text-sm font-black text-[#00D4FF] uppercase tracking-wider mb-4 border-b border-white/5 pb-2">
-              🎥 Observer Bridge
-            </h2>
-            <p className="font-mono text-[10px] text-gray-500 mb-4 leading-relaxed uppercase">
-              * เครื่องคนจับกล้อง (Spectator ในเกม) เท่านั้นที่ต้องตั้งค่านี้ — ใช้ token ยิง telemetry เข้า Buy Phase HUD ทุกวินาที
-            </p>
-            <button
-              onClick={mintObserverToken}
-              disabled={observerTokenLoading}
-              className="w-full px-3 py-2 bg-[#00D4FF]/10 border border-[#00D4FF]/30 text-[#00D4FF] hover:bg-[#00D4FF]/20 rounded font-mono text-xs font-bold transition disabled:opacity-40"
-            >
-              {observerTokenLoading ? "GENERATING..." : observerToken ? "ROTATE TOKEN (INVALIDATES OLD ONE)" : "GENERATE OBSERVER TOKEN"}
-            </button>
-            {observerToken && (
-              <div className="mt-3 space-y-2">
-                <div>
-                  <label className="block font-mono text-[10px] text-gray-500 uppercase mb-1">Endpoint (POST)</label>
-                  <pre className="bg-black/60 border border-white/10 rounded px-3 py-2 font-mono text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap break-all select-all">
-{`${typeof window !== "undefined" ? window.location.origin : ""}/api/v1/matches/${matchId}/telemetry`}
-                  </pre>
-                </div>
-                <div>
-                  <label className="block font-mono text-[10px] text-gray-500 uppercase mb-1">Token (แสดงครั้งเดียว — คัดลอกเดี๋ยวนี้)</label>
-                  <pre className="bg-black/60 border border-[#00D4FF]/40 rounded px-3 py-2 font-mono text-[10px] text-[#00D4FF] overflow-x-auto whitespace-pre-wrap break-all select-all">
-{observerToken}
-                  </pre>
-                </div>
-                <p className="font-mono text-[9px] text-gray-600 leading-relaxed">
-                  ใส่ header <code className="text-gray-400">Authorization: Bearer &lt;token&gt;</code> ในทุก request จาก Observer Bridge
-                </p>
-              </div>
             )}
           </div>
 
-          {/* OCR ROUND & ROSTER ENGINE — SPEC-OCR-TELEMETRY-ROUNDS-V8.01-001 Part 1+3 */}
-          {match?.team_a_id && match?.team_b_id && (
-            <OcrObserverBridgePanel
-              matchId={matchId}
-              gameNumber={seriesState?.current_game_number ?? 1}
-              teamAId={match.team_a_id}
-              teamBId={match.team_b_id}
-              teamATag={match.team_a?.tag || "TEAM A"}
-              teamBTag={match.team_b?.tag || "TEAM B"}
-              observerToken={observerToken}
-            />
-          )}
+          {/* ข้อมูลจากในเกมย้ายไป Stream Hub แล้ว — บอกทางไว้กันคนเคยใช้หน้านี้หาไม่เจอ */}
+          <div className="bg-violet-500/5 border border-violet-500/20 rounded-xl p-4 font-mono text-[10px] text-gray-400 leading-relaxed">
+            <span className="text-violet-300 font-black">รหัสห้อง / Observer Token / OCR</span> ย้ายไปอยู่ที่หน้า Stream Hub →
+            แถบ <span className="text-violet-300 font-bold">SPECTATOR LINK</span> → ปุ่ม Setup
+          </div>
         </section>
 
         {/* PANEL B: OBS OVERLAY SCENE CONTROLLER */}
         <section className="col-span-12 lg:col-span-5 space-y-6">
+          {/* STREAM HUB REMOTE — สลับแท็บของหน้า Stream Hub จากที่นี่ (ปุ่มลัดชุดเดียวกัน) */}
+          <div className="bg-[#12121A] border border-[#00D4FF]/20 rounded-xl p-5">
+            <h2 className="font-mono text-sm font-black text-[#00D4FF] uppercase tracking-wider mb-1 border-b border-white/5 pb-2 flex items-center justify-between">
+              <span>📺 Stream Hub Remote</span>
+              <span className={`text-[10px] font-bold normal-case tracking-normal ${hubScene === null ? "text-gray-500" : "text-emerald-400"}`}>
+                {hubScene === null ? "○ ยังไม่เจอหน้า Stream Hub" : "● เชื่อมต่อแล้ว"}
+              </span>
+            </h2>
+            <p className="font-mono text-[10px] text-gray-500 mb-3 leading-relaxed">
+              กดปุ่มหรือใช้ปุ่มลัดที่หน้านี้ได้เลย — หน้า Stream Hub (ที่ OBS จับอยู่) จะสลับตาม
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {HUB_TABS.map((tab) => {
+                const active = tab.scene !== null && tab.scene === hubScene;
+                const isTest = tab.scene === null;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => sendHubAction(tab.id)}
+                    className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left font-mono text-[11px] font-bold transition ${
+                      active
+                        ? "bg-[#00D4FF]/15 border-[#00D4FF] text-[#00D4FF]"
+                        : isTest
+                          ? "bg-black/40 border-rose-500/30 text-rose-300 hover:bg-rose-500/10"
+                          : "bg-black/40 border-white/5 text-gray-300 hover:text-white hover:border-white/20"
+                    }`}
+                  >
+                    <span className="truncate">{tab.label}</span>
+                    {hotkeys[tab.id] && (
+                      <kbd className="shrink-0 rounded border border-white/10 bg-white/5 px-1 text-[9px] font-normal text-gray-400">
+                        {hotkeys[tab.id]}
+                      </kbd>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="bg-[#12121A] border border-white/5 rounded-xl p-5 relative">
             <h2 className="font-mono text-sm font-black text-[#C9A84C] uppercase tracking-wider mb-4 border-b border-white/5 pb-2">
               🎬 OBS Overlay Scene Switcher
@@ -869,9 +925,11 @@ export default function SpectatorHUDControlPanel({
               <div>
                 <span className="font-mono text-xs font-black text-[#00D4FF] flex items-center gap-2">
                   <span>🎮 BUY PHASE HUD</span>
-                  <span className="px-1.5 py-0.2 bg-[#00D4FF]/20 text-[#00D4FF] border border-[#00D4FF]/40 rounded text-[9px]">
-                    Alt + C
-                  </span>
+                  {hotkeys.buyPhase && (
+                    <span className="px-1.5 py-0.2 bg-[#00D4FF]/20 text-[#00D4FF] border border-[#00D4FF]/40 rounded text-[9px]">
+                      {hotkeys.buyPhase}
+                    </span>
+                  )}
                 </span>
                 <span className="font-mono text-[10px] text-gray-400 block mt-0.5">
                   สถานะ: {showBuyPhase ? "🟢 กำลังแสดงบนสตรีม OBS" : "⚪ ซ่อนอยู่"}
@@ -885,7 +943,7 @@ export default function SpectatorHUDControlPanel({
                     : "bg-black/50 border-white/10 text-gray-300 hover:border-[#00D4FF]/50 hover:text-white"
                 }`}
               >
-                {showBuyPhase ? "HUD: ACTIVE (Alt+C)" : "TOGGLE BUY PHASE"}
+                {showBuyPhase ? "HUD: ACTIVE" : "TOGGLE BUY PHASE"}
               </button>
             </div>
           </div>
