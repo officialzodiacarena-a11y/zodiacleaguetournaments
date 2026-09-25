@@ -45,14 +45,15 @@ export default function SponsorOverlayPage() {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('matchId') || '';
     setMatchId(id);
-
-    if (id) {
-      const ch = supabase.channel(`match:${id}:overlay`);
-      ch.subscribe();
-      channelRef.current = ch;
-      return () => { supabase.removeChannel(ch); };
-    }
   }, []);
+
+  useEffect(() => {
+    if (!matchId) return;
+    const ch = supabase.channel(`match:${matchId}:overlay`);
+    ch.subscribe();
+    channelRef.current = ch;
+    return () => { supabase.removeChannel(ch); };
+  }, [matchId]);
 
   const broadcastLogos = useCallback((updated: SponsorLogo[]) => {
     channelRef.current?.send({
