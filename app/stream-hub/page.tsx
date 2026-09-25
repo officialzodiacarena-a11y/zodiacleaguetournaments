@@ -37,6 +37,9 @@ import { LiveFeedPlayer } from '@/components/stream-hub/LiveFeedPlayer';
 import { LiveFeedScene } from '@/components/stream-hub/LiveFeedScene';
 import { readLiveSource, isExternalFeed, LIVE_SOURCE_OFF, type LiveSource } from '@/lib/stream-hub/live-source';
 import { SponsorBox } from '@/components/stream-hub/SponsorBox';
+import { ZodiacEmblem3D } from '@/components/stream-hub/ZodiacEmblem3D';
+import { IceFireSpaceBackground } from '@/components/stream-hub/IceFireSpaceBackground';
+import { SceneTransition } from '@/components/stream-hub/SceneTransition';
 import {
   SPONSOR_BOX_EVENTS,
   SPONSOR_BOX_SIZE,
@@ -485,14 +488,29 @@ export default function StreamHubMainPage({
   }, [isTimerRunning, timerSeconds]);
 
   // คำสั่งของแท็บ SYSTEM SCENES + Buy Phase — ปุ่มบนหน้าจอกับ Hotkey เรียกตัวเดียวกัน
+  // เปลี่ยนฉากผ่านทรานซิชั่น (เฟดดำ → โลโก้หมุนขยายบังจอ → สลับฉากตอนบังมิด)
+  const [transitionId, setTransitionId] = useState(0);
+  const pendingSceneRef = useRef<number | null>(null);
+  const activeSceneRef = useRef(activeScene);
+  activeSceneRef.current = activeScene;
+  const goScene = useCallback((scene: number) => {
+    if (scene === activeSceneRef.current && pendingSceneRef.current === null) return;
+    pendingSceneRef.current = scene;
+    setTransitionId((n) => n + 1);
+  }, []);
+  const onTransitionCovered = useCallback(() => {
+    if (pendingSceneRef.current !== null) setActiveScene(pendingSceneRef.current);
+    pendingSceneRef.current = null;
+  }, []);
+
   const runAction = useCallback((id: string) => {
     switch (id) {
-      case 'startingSoon': setActiveScene(4); break;
-      case 'liveHud': setActiveScene(5); break;
-      case 'cleanVeto': setActiveScene(7); break;
-      case 'intermission': setActiveScene(8); break;
-      case 'ingameVeto': setActiveScene(9); break;
-      case 'captainVeto': setActiveScene(10); break;
+      case 'startingSoon': goScene(4); break;
+      case 'liveHud': goScene(5); break;
+      case 'cleanVeto': goScene(7); break;
+      case 'intermission': goScene(8); break;
+      case 'ingameVeto': goScene(9); break;
+      case 'captainVeto': goScene(10); break;
       case 'testClutch':
         if (externalFeed) return; // โหมด B/C ไม่มีข้อมูลเลือดให้ทดสอบ
         // ทดสอบฉาก Clutch / Last Man Standing บน Overlay จริง — ยิง HP ปลอมผ่าน telemetry จริง (path เดียวกับ Observer Bridge)
@@ -1022,6 +1040,8 @@ export default function StreamHubMainPage({
           }`}
         >
 
+          <SceneTransition playId={transitionId} onCovered={onTransitionCovered} />
+
           {/* Backgrounds */}
           {bgMode === 'amber' && (
             <div className="absolute inset-0 bg-[#0d0703] overflow-hidden pointer-events-none">
@@ -1162,25 +1182,14 @@ export default function StreamHubMainPage({
 
             return (
             <div className="relative w-full h-full bg-black overflow-hidden">
-              {/* Background layers */}
-              <div className="absolute inset-0 bg-gradient-to-br from-red-900/60 via-black to-red-950/40" />
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(220,38,38,0.3)_0%,_transparent_50%)]" />
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_rgba(220,38,38,0.15)_0%,_transparent_60%)]" />
+              {/* Background: อวกาศน้ำแข็ง (ซ้าย ฟ้า) vs ไฟ (ขวา แดง) */}
+              <IceFireSpaceBackground className="absolute inset-0" />
               {/* Cinematic vignette for depth */}
               <div className="absolute inset-0 shadow-[inset_0_0_180px_rgba(0,0,0,0.55)] pointer-events-none z-[5]" />
-              {/* Accent lines */}
-              <div className="absolute top-[160px] left-0 right-0 h-[3px] bg-gradient-to-r from-red-600 via-red-500/80 to-transparent" />
-              <div className="absolute bottom-[120px] left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-red-500/80 to-red-600" />
 
-              {/* === TOP CENTER: Zodiac League emblem === */}
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/images/logo/logo2.png"
-                  alt="Zodiac League"
-                  className="w-auto object-contain"
-                  style={{ height: '288px', filter: 'drop-shadow(0 0 24px rgba(232,180,41,0.35))' }}
-                />
+              {/* === TOP CENTER: Zodiac League emblem (3D ลอย) === */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+                <ZodiacEmblem3D size={330} />
               </div>
 
               {/* === TOP LEFT: Zodiac Arena neon logo + Countdown === */}

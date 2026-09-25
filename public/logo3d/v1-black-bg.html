@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zodiac Arena 3D Emblem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #04060d; --ink: #e9e3d2; --muted: #8a8574; --gold: #e2b65a; --line: rgba(226,182,90,.28); }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: 'Chakra Petch', system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; }
+  .hud { position: fixed; inset: 0; pointer-events: none; }
+  .brand { position: absolute; top: 20px; left: 24px; letter-spacing: .28em; font-size: 12px; color: var(--muted); text-transform: uppercase; }
+  .brand b { color: var(--gold); font-weight: 700; }
+  .hint { position: absolute; bottom: 22px; left: 24px; font-size: 12px; color: var(--muted); letter-spacing: .08em; }
+  .actions { position: absolute; bottom: 16px; right: 20px; display: flex; gap: 10px; pointer-events: auto; }
+  .actions button { font: 600 13px 'Chakra Petch', sans-serif; letter-spacing: .06em; color: var(--ink); background: rgba(10,12,20,.72); border: 1px solid var(--line); padding: 9px 16px; border-radius: 8px; cursor: pointer; backdrop-filter: blur(6px); }
+  .actions button:hover { border-color: var(--gold); color: var(--gold); }
+  #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); color: var(--gold); letter-spacing: .3em; font-size: 13px; transition: opacity .8s; z-index: 5; }
+  #loading.done { opacity: 0; pointer-events: none; }
+  @media (max-width: 560px) { .hint { display: none; } .actions { left: 16px; right: 16px; justify-content: center; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="loading">กำลังหลอมโลโก้…</div>
+<div class="hud">
+  <div class="brand"><b>ZODIAC ARENA</b> &nbsp;·&nbsp; 3D EMBLEM</div>
+  <div class="hint">ลากเพื่อหมุน · scroll เพื่อซูม</div>
+  <div class="actions">
+    <button id="replay">เล่นอินโทรใหม่</button>
+    <button id="snap">บันทึกภาพ PNG</button>
+  </div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// ---------- image analysis: turn the flat logo into height / material maps ----------
+const img = await new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = 'ZodiacArena.png'; });
+
+function pixels(size) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(img, 0, 0, size, size);
+  return x.getImageData(0, 0, size, size).data;
+}
+function analyse(data, n) {
+  const lum = new Float32Array(n * n), sat = new Float32Array(n * n);
+  for (let i = 0; i < n * n; i++) {
+    const r = data[i * 4] / 255, g = data[i * 4 + 1] / 255, b = data[i * 4 + 2] / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    lum[i] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    sat[i] = mx > 0 ? (mx - mn) / mx : 0;
+  }
+  return { lum, sat };
+}
+function boxH(a, o, w, h, r) {
+  const d = 2 * r + 1;
+  for (let y = 0; y < h; y++) {
+    const row = y * w; let s = 0;
+    for (let k = -r; k <= r; k++) s += a[row + Math.min(w - 1, Math.max(0, k))];
+    for (let x = 0; x < w; x++) {
+      o[row + x] = s / d;
+      s += a[row + Math.min(w - 1, x + r + 1)] - a[row + Math.max(0, x - r)];
+    }
+  }
+}
+function boxV(a, o, w, h, r) {
+  const d = 2 * r + 1;
+  for (let x = 0; x < w; x++) {
+    let s = 0;
+    for (let k = -r; k <= r; k++) s += a[Math.min(h - 1, Math.max(0, k)) * w + x];
+    for (let y = 0; y < h; y++) {
+      o[y * w + x] = s / d;
+      s += a[Math.min(h - 1, y + r + 1) * w + x] - a[Math.max(0, y - r) * w + x];
+    }
+  }
+}
+function blur(src, n, r, passes = 3) {
+  let a = new Float32Array(src), b = new Float32Array(src.length);
+  for (let p = 0; p < passes; p++) { boxH(a, b, n, n, r); boxV(b, a, n, n, r); }
+  return a;
+}
+const smooth = (e0, e1, v) => { const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+
+// Silhouette at full res: flood-fill the dark / hazy background from the border.
+const M = 1024;
+const low = pixels(M);
+const { lum: L, sat: S } = analyse(low, M);
+const protectedPx = (x, y) => {
+  const u = x / M, v = y / M;
+  if ((u - 0.5) ** 2 + (v - 0.39) ** 2 < 0.33 ** 2) return true;          // zodiac wheel
+  if (u > 0.15 && u < 0.85 && v > 0.56 && v < 0.72) return true;         // ZODIAC banner
+  if (u > 0.2 && u < 0.8 && v >= 0.72 && v < 0.84) return true;          // LEAGUE / TOURNAMENT / VALORANT
+  if (v >= 0.84 && v < 0.96 && Math.abs(u - 0.5) < 0.16 * (0.96 - v) / 0.12) return true; // shield tip
+  return false;
+};
+const bgCand = i => L[i] < 0.2 || (S[i] > 0.5 && L[i] < 0.42);
+const bg = new Uint8Array(M * M), stack = new Int32Array(M * M); let sp = 0;
+const seed = i => { if (!bg[i] && bgCand(i) && !protectedPx(i % M, (i / M) | 0)) { bg[i] = 1; stack[sp++] = i; } };
+for (let k = 0; k < M; k++) { seed(k); seed((M - 1) * M + k); seed(k * M); seed(k * M + M - 1); }
+while (sp) {
+  const i = stack[--sp], x = i % M, y = (i / M) | 0;
+  if (x > 0) seed(i - 1); if (x < M - 1) seed(i + 1);
+  if (y > 0) seed(i - M); if (y < M - 1) seed(i + M);
+}
+let mask = new Float32Array(M * M);
+for (let i = 0; i < M * M; i++) mask[i] = bg[i] ? 0 : 1;
+// open/close: drop stray sparks and pinholes
+mask = blur(mask, M, 3, 2); for (let i = 0; i < M * M; i++) mask[i] = mask[i] > 0.5 ? 1 : 0;
+const bm = blur(mask, M, 5, 3);                       // soft edge -> bevel + alpha
+
+const LB = blur(L, M, 7, 3), LS = blur(L, M, 1, 1);
+const depth = new Float32Array(M * M);
+let dMax = 0;
+for (let y = 0; y < M; y++) for (let x = 0; x < M; x++) {
+  const i = y * M + x, u = x / M, v = y / M;
+  const edge = smooth(0.5, 0.64, bm[i]);
+  const core = Math.exp(-((u - 0.5) ** 2 + (v - 0.42) ** 2) / (2 * 0.17 ** 2)); // lift the Z
+  const d = edge * (0.28 + 0.5 * LB[i] + 0.22 * LS[i] + 0.45 * core * LB[i]);
+  depth[i] = d; if (d > dMax) dMax = d;
+}
+for (let i = 0; i < M * M; i++) depth[i] /= dMax;
+
+function toTexture(n, fill, srgb = false) {
+  const c = document.createElement('canvas'); c.width = c.height = n;
+  const x = c.getContext('2d'); const id = x.createImageData(n, n);
+  fill(id.data); x.putImageData(id, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+const alphaTex = toTexture(M, d => { for (let i = 0; i < M * M; i++) { const a = Math.round(bm[i] * 255); d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = a; d[i * 4 + 3] = 255; } });
+// metal where the logo is bright (gold / silver), duller in the dark inlays
+const mrTex = toTexture(M, d => {
+  for (let i = 0; i < M * M; i++) {
+    const metal = Math.min(1, Math.max(0, LB[i] * 1.9 - 0.08));
+    d[i * 4] = 0; d[i * 4 + 1] = Math.round((0.62 - 0.4 * metal) * 255); d[i * 4 + 2] = Math.round((0.35 + 0.65 * metal) * 255); d[i * 4 + 3] = 255;
+  }
+});
+// energy haze: everything the silhouette cut away (blue/red lightning, sparks)
+const hazeTex = toTexture(M, d => {
+  for (let i = 0; i < M * M; i++) {
+    const k = 1 - smooth(0.25, 0.55, bm[i]);
+    d[i * 4] = low[i * 4] * k; d[i * 4 + 1] = low[i * 4 + 1] * k; d[i * 4 + 2] = low[i * 4 + 2] * k; d[i * 4 + 3] = 255;
+  }
+}, true);
+
+// fine surface detail (cracks, engraving) as a normal map at full res
+const N = 1024;
+const hi = pixels(N);
+const H = blur(analyse(hi, N).lum, N, 1, 1);
+const normalTex = toTexture(N, d => {
+  const s = 4.6;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const i = y * N + x;
+    const dx = (H[y * N + Math.min(N - 1, x + 1)] - H[y * N + Math.max(0, x - 1)]) * 0.5;
+    const dv = (H[Math.max(0, y - 1) * N + x] - H[Math.min(N - 1, y + 1) * N + x]) * 0.5;
+    let nx = -dx * s, ny = -dv * s, nz = 1; const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+    d[i * 4] = (nx * 0.5 + 0.5) * 255; d[i * 4 + 1] = (ny * 0.5 + 0.5) * 255; d[i * 4 + 2] = (nz * 0.5 + 0.5) * 255; d[i * 4 + 3] = 255;
+  }
+});
+// unsharp-mask the colour so engraving and cracks read crisply on the metal
+const logoTex = (() => {
+  const ch = [0, 1, 2].map(c => { const a = new Float32Array(N * N); for (let i = 0; i < N * N; i++) a[i] = hi[i * 4 + c]; return a; });
+  const soft = ch.map(a => blur(a, N, 2, 2));
+  const t = toTexture(N, d => {
+    for (let i = 0; i < N * N; i++) for (let c = 0; c < 3; c++) d[i * 4 + c] = ch[c][i] + 0.7 * (ch[c][i] - soft[c][i]);
+    for (let i = 0; i < N * N; i++) d[i * 4 + 3] = 255;
+  }, true);
+  t.anisotropy = 16;
+  return t;
+})();
+
+// ---------- scene ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.92;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+{
+  const c = document.createElement('canvas'); c.width = c.height = 512;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(256, 230, 20, 256, 256, 380);
+  g.addColorStop(0, '#141a2e'); g.addColorStop(0.55, '#070a15'); g.addColorStop(1, '#020308');
+  x.fillStyle = g; x.fillRect(0, 0, 512, 512);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; scene.background = t;
+}
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.6;
+
+const camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(0, 0, 11.5);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.enablePan = false;
+controls.minDistance = 6; controls.maxDistance = 20;
+
+// emblem: displaced relief (front) + mirrored darker shell (back)
+const W = 6, SEG = 512;
+function relief(scale) {
+  const geo = new THREE.PlaneGeometry(W, W, SEG, SEG);
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  for (let i = 0; i < pos.count; i++) {
+    const fx = uv.getX(i) * (M - 1), fy = (1 - uv.getY(i)) * (M - 1);
+    const x0 = Math.floor(fx), y0 = Math.floor(fy), x1 = Math.min(M - 1, x0 + 1), y1 = Math.min(M - 1, y0 + 1);
+    const tx = fx - x0, ty = fy - y0;
+    const d = (depth[y0 * M + x0] * (1 - tx) + depth[y0 * M + x1] * tx) * (1 - ty) + (depth[y1 * M + x0] * (1 - tx) + depth[y1 * M + x1] * tx) * ty;
+    pos.setZ(i, d * scale);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+const emblem = new THREE.Group();
+scene.add(emblem);
+
+const front = new THREE.Mesh(relief(0.62), new THREE.MeshStandardMaterial({
+  map: logoTex, normalMap: normalTex, normalScale: new THREE.Vector2(1.5, 1.5),
+  roughnessMap: mrTex, metalnessMap: mrTex, roughness: 1, metalness: 1,
+  alphaMap: alphaTex, alphaTest: 0.5,
+  emissiveMap: logoTex, emissive: 0xffffff, emissiveIntensity: 0.15, envMapIntensity: 1.0,
+}));
+emblem.add(front);
+
+const back = new THREE.Mesh(relief(-0.22), new THREE.MeshStandardMaterial({
+  color: 0x1a1d24, normalMap: normalTex, roughness: 0.42, metalness: 0.92,
+  alphaMap: alphaTex, alphaTest: 0.5, side: THREE.BackSide,
+}));
+emblem.add(back);
+
+// full-detail card of the original pixels just behind the relief: keeps every shard tip
+// and the lightning exactly as drawn; only near-black background becomes transparent
+const cardAlpha = toTexture(M, d => {
+  for (let i = 0; i < M * M; i++) {
+    const v = Math.max(low[i * 4], low[i * 4 + 1], low[i * 4 + 2]) / 255;
+    const a = Math.max(bm[i] > 0.5 ? 1 : 0, smooth(0.05, 0.22, v));
+    d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = Math.round(a * 255); d[i * 4 + 3] = 255;
+  }
+});
+const haze = new THREE.Mesh(new THREE.PlaneGeometry(W, W), new THREE.MeshBasicMaterial({
+  map: logoTex, alphaMap: cardAlpha, transparent: true, depthWrite: false,
+}));
+haze.position.z = -0.01;
+haze.renderOrder = -1;
+emblem.add(haze);
+
+function glowSprite(color, scale, x, y, z, opacity) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g2 = c.getContext('2d'); const g = g2.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.35, 'rgba(255,255,255,.35)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  g2.fillStyle = g; g2.fillRect(0, 0, 256, 256);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity }));
+  s.scale.setScalar(scale); s.position.set(x, y, z); s.userData.base = opacity;
+  return s;
+}
+const glows = [
+  glowSprite(0xffc36b, 7.5, 0, 0.6, -1.4, 0.16),
+  glowSprite(0x3f7bff, 4.6, -2.7, -0.1, -1.2, 0.22),
+  glowSprite(0xff3b30, 4.6, 2.7, -0.1, -1.2, 0.22),
+];
+glows.forEach(g => emblem.add(g));
+
+// sparks: blue on the left, red on the right, gold through the middle
+const SPARKS = 750;
+const sGeo = new THREE.BufferGeometry();
+const sPos = new Float32Array(SPARKS * 3), sCol = new Float32Array(SPARKS * 3), sVel = new Float32Array(SPARKS);
+const blue = new THREE.Color(0x5b8dff), red = new THREE.Color(0xff4a3a), gold = new THREE.Color(0xffd27a), tmp = new THREE.Color();
+function resetSpark(i, anywhere) {
+  const x = (Math.random() * 2 - 1) * 4.6;
+  sPos[i * 3] = x; sPos[i * 3 + 1] = anywhere ? (Math.random() * 2 - 1) * 3.8 : -3.8; sPos[i * 3 + 2] = (Math.random() * 2 - 1) * 1.8;
+  sVel[i] = 0.12 + Math.random() * 0.45;
+  if (x < -1.1) tmp.copy(blue); else if (x > 1.1) tmp.copy(red); else tmp.copy(gold);
+  tmp.multiplyScalar(0.5 + Math.random() * 0.9);
+  sCol[i * 3] = tmp.r; sCol[i * 3 + 1] = tmp.g; sCol[i * 3 + 2] = tmp.b;
+}
+for (let i = 0; i < SPARKS; i++) resetSpark(i, true);
+sGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+sGeo.setAttribute('color', new THREE.BufferAttribute(sCol, 3));
+const dot = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, '#fff'); g.addColorStop(0.3, 'rgba(255,255,255,.6)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
+const sparks = new THREE.Points(sGeo, new THREE.PointsMaterial({ size: 0.06, map: dot, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, toneMapped: false }));
+scene.add(sparks);
+
+// lights: warm key, blue/red rims, and a white sweep that makes the metal glint
+scene.add(new THREE.AmbientLight(0x404660, 0.35));
+const key = new THREE.DirectionalLight(0xfff0d6, 1.5); key.position.set(2, 4, 6); scene.add(key);
+const rimL = new THREE.PointLight(0x3d7bff, 70); rimL.position.set(-5, 0.8, 2.5); scene.add(rimL);
+const rimR = new THREE.PointLight(0xff3326, 70); rimR.position.set(5, -0.2, 2.5); scene.add(rimR);
+const sweep = new THREE.PointLight(0xffffff, 0); sweep.position.set(-7, 1.5, 4); scene.add(sweep);
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.45, 0.9);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// ---------- motion ----------
+const pointer = new THREE.Vector2(), tilt = new THREE.Vector2();
+addEventListener('pointermove', e => { pointer.set(e.clientX / innerWidth * 2 - 1, e.clientY / innerHeight * 2 - 1); });
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+});
+
+const clock = new THREE.Clock();
+let introStart = 0;
+const INTRO = 2.6, SWEEP_EVERY = 7;
+const easeOutCubic = t => 1 - (1 - t) ** 3;
+const easeOutBack = t => { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2; };
+document.getElementById('replay').onclick = () => { introStart = clock.getElapsedTime(); };
+document.getElementById('snap').onclick = () => {
+  composer.render();
+  const a = document.createElement('a'); a.download = 'zodiac-arena-3d.png'; a.href = renderer.domElement.toDataURL('image/png'); a.click();
+};
+
+let lastT = 0;
+function frame() {
+  const t = clock.getElapsedTime(), dt = Math.min(t - lastT, 0.05); lastT = t;
+  const p = Math.min(1, (t - introStart) / INTRO);
+
+  tilt.lerp(pointer, 0.05);
+  const intro = 1 - easeOutCubic(p);
+  emblem.scale.setScalar(0.35 + 0.65 * easeOutBack(p));
+  emblem.rotation.y = -Math.PI * 1.15 * intro + 0.22 * Math.sin(t * 0.35) + tilt.x * 0.18;
+  emblem.rotation.x = 0.06 * Math.sin(t * 0.5) + tilt.y * 0.12;
+  emblem.position.y = 0.07 * Math.sin(t * 0.9);
+
+  // glint sweep: once right after the intro, then every few seconds
+  const since = (t - introStart - INTRO + 0.4);
+  const phase = since < 0 ? -1 : (since % SWEEP_EVERY) / 1.6;
+  if (phase >= 0 && phase <= 1) { sweep.position.x = -7 + 14 * phase; sweep.intensity = 160 * Math.sin(Math.PI * phase); }
+  else sweep.intensity = 0;
+
+  const pulse = 0.5 + 0.5 * Math.sin(t * 2.3);
+  rimL.intensity = 40 + 25 * pulse; rimR.intensity = 40 + 25 * (1 - pulse);
+  glows[1].material.opacity = glows[1].userData.base * (0.7 + 0.5 * pulse);
+  glows[2].material.opacity = glows[2].userData.base * (0.7 + 0.5 * (1 - pulse));
+  bloom.strength = 0.32 + 0.9 * intro * intro;
+
+  for (let i = 0; i < SPARKS; i++) {
+    sPos[i * 3 + 1] += sVel[i] * dt;
+    sPos[i * 3] += Math.sin(t * 1.3 + i) * 0.002;
+    if (sPos[i * 3 + 1] > 3.8) resetSpark(i, false);
+  }
+  sGeo.attributes.position.needsUpdate = true;
+  sparks.material.opacity = 0.65 + 0.35 * Math.sin(t * 5.0);
+
+  controls.update();
+  composer.render();
+  requestAnimationFrame(frame);
+}
+introStart = clock.getElapsedTime();
+frame();
+document.getElementById('loading').classList.add('done');
+</script>
+</body>
+</html>
