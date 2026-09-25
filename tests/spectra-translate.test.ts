@@ -354,6 +354,22 @@ test('buildTelemetryPlayersFromMatchData: maps nested teams[].players[] correctl
   assert.equal(frames[2].name, 'Zap');
 });
 
+// Spectra only knows alive/dead — it must not overwrite the real HP that OCR reads mid-round.
+test('buildTelemetryPlayersFromMatchData: HP ownership — dead=0, buy phase=100, alive in combat=omitted', () => {
+  const roster = rosterWithTeams();
+  const teams = makeTeams(0, 0);
+  teams[0].players[0].isAlive = false;
+
+  const combat = buildTelemetryPlayersFromMatchData(teams, roster, 'combat');
+  assert.equal(combat[0].hp, 0);
+  assert.equal(combat[1].hp, undefined);
+  assert.equal(combat[1].hpMax, undefined);
+
+  teams[0].players[0].isAlive = true;
+  const shopping = buildTelemetryPlayersFromMatchData(teams, roster, 'shopping');
+  assert.ok(shopping.every((f) => f.hp === 100));
+});
+
 // --- Baseline guard (QA item #1) ---
 
 test('RoundTracker: first processMatchData is baseline only — no outcome even if scores differ from zero', () => {

@@ -269,6 +269,7 @@ export function detectRoundWinner(
 export function buildTelemetryPlayersFromMatchData(
   teams: SpectraTeamData[],
   rosterByRiotId: Map<string, RiotIdRosterEntry>,
+  roundPhase?: string,
 ): TelemetryPlayerFrame[] {
   const frames: TelemetryPlayerFrame[] = [];
   for (const team of teams) {
@@ -289,8 +290,13 @@ export function buildTelemetryPlayersFromMatchData(
         armor: translateArmor(player.initialArmor),
         ultPoints: Math.max(0, Math.min(20, Math.round(player.currUltPoints))),
         ultMax: Math.max(1, Math.min(20, Math.round(player.maxUltPoints) || 1)),
-        hp: player.isAlive ? 100 : 0,
-        hpMax: 100,
+        // Spectra only knows alive/dead, so it must not overwrite the real HP that OCR reads mid-round.
+        // It owns: dead -> 0, and full HP during the buy phase (everyone respawns, no damage possible).
+        ...(!player.isAlive
+          ? { hp: 0, hpMax: 100 }
+          : roundPhase === 'shopping'
+            ? { hp: 100, hpMax: 100 }
+            : {}),
       });
     }
   }
