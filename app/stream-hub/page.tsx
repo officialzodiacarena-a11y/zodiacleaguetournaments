@@ -20,7 +20,11 @@ import {
   Trophy,
   RefreshCw,
   Target,
-  Armchair
+  Armchair,
+  Timer,
+  ExternalLink,
+  Radio,
+  ImagePlus
 } from 'lucide-react';
 
 // Production overlay type (หน้าตาจริงตอนนี้แสดงผ่าน iframe ไปที่ /overlay/match/[id] แทนการประกอบเอง — ดูฉาก 5 และ 6)
@@ -609,6 +613,9 @@ export default function StreamHubMainPage({
                 <span className="text-[10px] font-mono font-black text-cyan-400 px-2 py-0.5">
                   SYSTEM SCENES:
                 </span>
+                <button onClick={() => setActiveScene(4)} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 4 ? 'bg-amber-500 text-black shadow-lg' : 'text-amber-300 hover:bg-amber-500/10'}`}>
+                  <Timer className="w-3.5 h-3.5" /> 4. Starting Soon
+                </button>
                 <button onClick={() => setActiveScene(5)} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 5 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
                   <Tv className="w-3.5 h-3.5" /> 5. Ingame Live HUD
                 </button>
@@ -643,6 +650,29 @@ export default function StreamHubMainPage({
                   <Sliders className="w-3.5 h-3.5" /> 11. Test: Clutch 1vX
                 </button>
               </div>
+            </div>
+
+            {/* Row 3.5: External Tab Buttons */}
+            <div className="flex items-center gap-2 pt-1">
+              <span className="text-[10px] font-mono font-black text-neutral-500 px-1">OPEN:</span>
+              <button
+                onClick={() => window.open(`/spectator/control/${currentMatchId}`, 'spectator-control')}
+                className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 text-emerald-300 hover:bg-emerald-500/10 border border-emerald-500/30"
+              >
+                <ExternalLink className="w-3 h-3" /> Spectator Control
+              </button>
+              <button
+                onClick={() => window.open(`/tournament`, 'tournament-bracket')}
+                className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 text-violet-300 hover:bg-violet-500/10 border border-violet-500/30"
+              >
+                <Radio className="w-3 h-3" /> Tournament Bracket + Zodiac Live
+              </button>
+              <button
+                onClick={() => window.open(`/stream-hub/sponsor-overlay?matchId=${currentMatchId}`, 'sponsor-overlay')}
+                className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 text-pink-300 hover:bg-pink-500/10 border border-pink-500/30"
+              >
+                <ImagePlus className="w-3 h-3" /> Live Sponsor Overlay
+              </button>
             </div>
 
             {/* Row 4: Round Scores & Timer */}
@@ -847,6 +877,80 @@ export default function StreamHubMainPage({
             </div>
           )}
           {bgMode === 'chroma' && <div className="absolute inset-0 bg-[#00FF00]" />}
+
+          {/* ========================================================================= */}
+          {/* SCENE 4: STARTING SOON / COUNTDOWN DISPLAY */}
+          {/* ========================================================================= */}
+          {activeScene === 4 && (
+            <div className="relative w-full h-full flex flex-col items-center justify-center bg-[#060810] overflow-hidden">
+              {/* Background glow */}
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(232,180,41,0.08)_0%,_transparent_70%)]" />
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,_rgba(0,212,255,0.05)_0%,_transparent_60%)]" />
+
+              {/* Tournament branding */}
+              <div className="relative z-10 flex flex-col items-center gap-2 mb-8">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/images/logo/logo2.svg" alt="Zodiac Arena" className="w-16 h-16 opacity-60" />
+                <span className="text-xs font-mono font-bold text-neutral-500 tracking-[4px] uppercase">
+                  {activeMatchData?.tournament_name || 'ZODIAC LEAGUE TOURNAMENTS'}
+                </span>
+              </div>
+
+              {/* Match info */}
+              <div className="relative z-10 flex items-center gap-6 mb-10">
+                <div className="text-right">
+                  <div className="text-2xl font-black font-mono text-[#00D4FF] uppercase">{teamA.tag}</div>
+                  <div className="text-xs font-mono text-neutral-500">{teamA.name}</div>
+                </div>
+                <div className="text-xl font-black font-mono text-neutral-600">VS</div>
+                <div className="text-left">
+                  <div className="text-2xl font-black font-mono text-rose-400 uppercase">{teamB.tag}</div>
+                  <div className="text-xs font-mono text-neutral-500">{teamB.name}</div>
+                </div>
+              </div>
+
+              {/* Countdown display */}
+              <div className="relative z-10 flex flex-col items-center gap-3">
+                <span className="text-xs font-mono font-bold text-amber-400/80 tracking-[6px] uppercase">
+                  {timerSeconds > 0 ? 'STARTING IN' : 'STARTING NOW'}
+                </span>
+                <div className="font-mono font-black tracking-wider" style={{ fontSize: timerSeconds >= 3600 ? '6rem' : '8rem', lineHeight: 1 }}>
+                  {timerSeconds >= 3600 ? (
+                    <span className="text-white drop-shadow-[0_0_40px_rgba(232,180,41,0.4)]">
+                      {Math.floor(timerSeconds / 3600).toString().padStart(2, '0')}
+                      <span className="text-amber-400 animate-pulse">:</span>
+                      {Math.floor((timerSeconds % 3600) / 60).toString().padStart(2, '0')}
+                      <span className="text-amber-400 animate-pulse">:</span>
+                      {(timerSeconds % 60).toString().padStart(2, '0')}
+                    </span>
+                  ) : (
+                    <span className="text-white drop-shadow-[0_0_60px_rgba(0,212,255,0.3)]">
+                      {Math.floor(timerSeconds / 60).toString().padStart(2, '0')}
+                      <span className="text-cyan-400 animate-pulse">:</span>
+                      {(timerSeconds % 60).toString().padStart(2, '0')}
+                    </span>
+                  )}
+                </div>
+                {!isTimerRunning && timerSeconds > 0 && (
+                  <span className="text-xs font-mono text-neutral-600 animate-pulse">PAUSED</span>
+                )}
+              </div>
+
+              {/* Map info */}
+              {currentMap && (
+                <div className="relative z-10 mt-8 text-xs font-mono text-neutral-600">
+                  MAP: <span className="text-neutral-400 font-bold">{currentMap}</span> • {bestOf > 1 ? `BEST OF ${bestOf}` : 'BO1'}
+                </div>
+              )}
+
+              {/* Bottom branding line */}
+              <div className="absolute bottom-6 flex items-center gap-2 text-[10px] font-mono text-neutral-700">
+                <span className="tracking-[3px]">ZODIAC ARENA</span>
+                <span>•</span>
+                <span className="tracking-[2px]">ESPORTS SAAS PROTOCOL</span>
+              </div>
+            </div>
+          )}
 
           {/* ========================================================================= */}
           {/* SCENE 5 & 6: ของจริงหน้าเดียว — แปะ /overlay/match/[id] ตัวที่ OBS ใช้จริงผ่าน iframe */}
