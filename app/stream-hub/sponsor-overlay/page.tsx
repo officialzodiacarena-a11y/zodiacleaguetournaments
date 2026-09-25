@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { ImagePlus, Trash2, Eye, EyeOff, GripVertical } from 'lucide-react';
 
@@ -37,15 +38,10 @@ const SHOW_OPTIONS: { value: ShowOn; label: string }[] = [
 ];
 
 export default function SponsorOverlayPage() {
+  const searchParams = useSearchParams();
+  const matchId = useMemo(() => searchParams.get('matchId') || '', [searchParams]);
   const [logos, setLogos] = useState<SponsorLogo[]>([]);
-  const [matchId, setMatchId] = useState<string>('');
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get('matchId') || '';
-    setMatchId(id);
-  }, []);
 
   useEffect(() => {
     if (!matchId) return;
