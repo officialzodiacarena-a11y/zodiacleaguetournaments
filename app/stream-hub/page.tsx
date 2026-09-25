@@ -123,8 +123,8 @@ export default function StreamHubMainPage({
 
   // Roster ผู้เล่นจริงของแมตช์ที่เลือก — ดึงจาก team_members ทุกครั้งที่สลับแมตช์ (เรียงตาม jersey_number
   // เป็นตัวแทน "ลำดับที่นั่งจริง" เพราะตาราง team_members ไม่มีคอลัมน์ลำดับที่นั่งโดยตรง)
-  const [rosterA, setRosterA] = useState<BuyPhasePlayer[]>([]);
-  const [rosterB, setRosterB] = useState<BuyPhasePlayer[]>([]);
+  const [rosterA, setRosterA] = useState<(BuyPhasePlayer & { avatarUrl?: string | null })[]>([]);
+  const [rosterB, setRosterB] = useState<(BuyPhasePlayer & { avatarUrl?: string | null })[]>([]);
 
   // ช่องส่งสัญญาณจริงไปหา Overlay ตัวที่ OBS ใช้ (channel ชื่อเดียวกับที่ app/overlay/match/[id]/page.tsx ฟังอยู่)
   // ปุ่ม/สไลเดอร์ในห้องคุมจะยิงผ่านช่องนี้ ไม่ใช่แค่แก้ state ในเครื่องเฉยๆ เหมือนก่อนหน้านี้
@@ -280,29 +280,32 @@ export default function StreamHubMainPage({
         if (matchData.team_a_id && matchData.team_b_id) {
           const { data: members } = await supabase
             .from('team_members')
-            .select('id, team_id, jersey_number, players!team_members_player_id_fkey(display_name)')
+            .select('id, team_id, jersey_number, players!team_members_player_id_fkey(display_name, avatar_url)')
             .eq('status', 'ACTIVE')
             .in('team_id', [matchData.team_a_id, matchData.team_b_id])
             .order('jersey_number', { ascending: true, nullsFirst: false });
 
-          const toRoster = (teamId: string): BuyPhasePlayer[] =>
+          type PlayerRow = { display_name?: string; avatar_url?: string | null };
+          const toRoster = (teamId: string): (BuyPhasePlayer & { avatarUrl?: string | null })[] =>
             (members || [])
               .filter((m) => m.team_id === teamId)
-              .map((m) => ({
-                id: m.id,
-                name:
-                  (Array.isArray(m.players) ? m.players[0]?.display_name : (m.players as { display_name?: string } | null)?.display_name) ||
-                  'Unknown',
-                kills: 0,
-                deaths: 0,
-                assists: 0,
-                hp: 100,
-                hpMax: 100,
-                credits: 0,
-                armor: 'NONE' as const,
-                ultPoints: 0,
-                ultMax: 8,
-              }));
+              .map((m) => {
+                const pRow: PlayerRow | undefined = Array.isArray(m.players) ? m.players[0] : (m.players as PlayerRow | null) ?? undefined;
+                return {
+                  id: m.id,
+                  name: pRow?.display_name || 'Unknown',
+                  avatarUrl: pRow?.avatar_url ?? null,
+                  kills: 0,
+                  deaths: 0,
+                  assists: 0,
+                  hp: 100,
+                  hpMax: 100,
+                  credits: 0,
+                  armor: 'NONE' as const,
+                  ultPoints: 0,
+                  ultMax: 8,
+                };
+              });
 
           setRosterA(toRoster(matchData.team_a_id));
           setRosterB(toRoster(matchData.team_b_id));
@@ -897,12 +900,17 @@ export default function StreamHubMainPage({
               <img src={src} alt={tag} className={`${size} object-contain`} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             );
 
-            const renderPlayerCard = (p: BuyPhasePlayer, teamTag: string, color: string, keyPrefix: string) => (
+            const renderPlayerCard = (p: BuyPhasePlayer & { avatarUrl?: string | null }, teamTag: string, color: string, keyPrefix: string) => (
               <div key={`${keyPrefix}-${p.id}`} className="flex-shrink-0 w-[160px] h-[90px] rounded-lg p-2.5 flex flex-col justify-between" style={{ border: `2px solid ${color}60`, backgroundColor: `${color}08` }}>
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded flex items-center justify-center" style={{ backgroundColor: `${color}20` }}>
-                    <Users className="w-4 h-4" style={{ color }} />
-                  </div>
+                  {p.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.avatarUrl} alt={p.name} className="w-9 h-9 rounded object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  ) : (
+                    <div className="w-9 h-9 rounded flex items-center justify-center" style={{ backgroundColor: `${color}20` }}>
+                      <Users className="w-4 h-4" style={{ color }} />
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="text-[11px] font-black font-mono text-white truncate uppercase">{p.name}</div>
                     <div className="text-[9px] font-mono uppercase" style={{ color }}>{teamTag}</div>
@@ -926,13 +934,10 @@ export default function StreamHubMainPage({
               <div className="absolute top-[160px] left-0 right-0 h-[3px] bg-gradient-to-r from-red-600 via-red-500/80 to-transparent" />
               <div className="absolute bottom-[120px] left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-red-500/80 to-red-600" />
 
-              {/* === TOP LEFT: Countdown + Zodiac Arena branding === */}
+              {/* === TOP LEFT: Countdown only === */}
               <div className="absolute top-5 left-8 z-10">
                 <div className="font-black font-mono tracking-wider text-white" style={{ fontSize: '5rem', lineHeight: 1, textShadow: '0 0 40px rgba(255,255,255,0.25), 0 0 80px rgba(220,38,38,0.15)', fontStyle: 'italic' }}>
                   {countdownStr}
-                </div>
-                <div className="mt-2 text-sm font-bold text-neutral-400 tracking-wide">
-                  {activeMatchData?.tournament_name || tournamentName}
                 </div>
               </div>
 
@@ -971,14 +976,6 @@ export default function StreamHubMainPage({
                     </div>
                   </div>
                 )}
-              </div>
-
-              {/* === Zodiac Arena neon branding — bottom left above marquee === */}
-              <div className="absolute bottom-[130px] left-8 z-10">
-                <div className="text-[10px] font-mono tracking-[0.3em] text-[#94A3B8] uppercase">12 SIGNS • 4 SEASONS • 1 DESTINY</div>
-                <h1 className="text-4xl font-black tracking-tight text-white leading-none mt-1" style={{ textShadow: '0 0 30px rgba(232,180,41,0.5), 0 0 60px rgba(232,180,41,0.2), 0 0 100px rgba(232,180,41,0.1)' }}>
-                  ZODIAC <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E8B429] via-[#FCE49C] to-[#E8B429]" style={{ filter: 'drop-shadow(0 0 15px rgba(232,180,41,0.7))' }}>ARENA</span>
-                </h1>
               </div>
 
               {/* === BOTTOM: Team Lineup Marquee === */}
