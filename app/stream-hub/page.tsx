@@ -492,7 +492,7 @@ export default function StreamHubMainPage({
   const [transitionId, setTransitionId] = useState(0);
   const pendingSceneRef = useRef<number | null>(null);
   const activeSceneRef = useRef(activeScene);
-  activeSceneRef.current = activeScene;
+  useEffect(() => { activeSceneRef.current = activeScene; }, [activeScene]);
   const goScene = useCallback((scene: number) => {
     if (scene === activeSceneRef.current && pendingSceneRef.current === null) return;
     pendingSceneRef.current = scene;
@@ -530,7 +530,7 @@ export default function StreamHubMainPage({
         });
         break;
     }
-  }, [externalFeed, rosterA, rosterB, sendTelemetry, sendToggleBuyPhase]);
+  }, [goScene, externalFeed, rosterA, rosterB, sendTelemetry, sendToggleBuyPhase]);
 
   useEffect(() => {
     remoteActionRef.current = runAction;

@@ -14,7 +14,7 @@ export function SceneTransition({ playId, onCovered }: { playId: number; onCover
   const shadeRef = useRef<HTMLDivElement>(null);
   const logoRef = useRef<HTMLImageElement>(null);
   const coveredRef = useRef(onCovered);
-  coveredRef.current = onCovered;
+  useEffect(() => { coveredRef.current = onCovered; }, [onCovered]);
 
   useEffect(() => {
     if (!playId) return;
