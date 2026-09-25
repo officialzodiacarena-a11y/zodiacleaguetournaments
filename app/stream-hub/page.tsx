@@ -895,9 +895,19 @@ export default function StreamHubMainPage({
               ? `${Math.floor(timerSeconds / 3600).toString().padStart(2, '0')}:${Math.floor((timerSeconds % 3600) / 60).toString().padStart(2, '0')}:${(timerSeconds % 60).toString().padStart(2, '0')}`
               : `${Math.floor(timerSeconds / 60).toString().padStart(2, '0')}:${(timerSeconds % 60).toString().padStart(2, '0')}`;
 
-            const renderTeamLogo = (src: string, tag: string, size: string) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={src} alt={tag} className={`${size} object-contain`} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            const renderTeamLogo = (src: string, tag: string, size: string, color?: string) => (
+              <div className={`${size} relative flex items-center justify-center`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt={tag}
+                  className={`${size} object-contain absolute inset-0`}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+                <div className={`${size} rounded-full flex items-center justify-center text-xl font-black`} style={{ backgroundColor: `${color || '#666'}30`, color: color || '#999' }}>
+                  {tag[0]}
+                </div>
+              </div>
             );
 
             const renderPlayerCard = (p: BuyPhasePlayer & { avatarUrl?: string | null }, teamTag: string, color: string, keyPrefix: string) => (
@@ -934,10 +944,16 @@ export default function StreamHubMainPage({
               <div className="absolute top-[160px] left-0 right-0 h-[3px] bg-gradient-to-r from-red-600 via-red-500/80 to-transparent" />
               <div className="absolute bottom-[120px] left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-red-500/80 to-red-600" />
 
-              {/* === TOP LEFT: Countdown only === */}
+              {/* === TOP LEFT: Countdown + Zodiac Arena neon logo === */}
               <div className="absolute top-5 left-8 z-10">
                 <div className="font-black font-mono tracking-wider text-white" style={{ fontSize: '5rem', lineHeight: 1, textShadow: '0 0 40px rgba(255,255,255,0.25), 0 0 80px rgba(220,38,38,0.15)', fontStyle: 'italic' }}>
                   {countdownStr}
+                </div>
+                <div className="mt-3">
+                  <div className="text-[10px] font-mono tracking-[0.3em] text-[#94A3B8] uppercase">12 SIGNS • 4 SEASONS • 1 DESTINY</div>
+                  <h1 className="text-3xl font-black tracking-tight text-white leading-none mt-1" style={{ textShadow: '0 0 20px rgba(232,180,41,0.4), 0 0 40px rgba(232,180,41,0.2)' }}>
+                    ZODIAC <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E8B429] via-[#FCE49C] to-[#E8B429]" style={{ filter: 'drop-shadow(0 0 12px rgba(232,180,41,0.6))' }}>ARENA</span>
+                  </h1>
                 </div>
               </div>
 
@@ -948,12 +964,12 @@ export default function StreamHubMainPage({
                   <div className="text-center text-xs font-bold font-mono text-neutral-400 tracking-[3px] mb-5">GAME 1</div>
                   <div className="flex items-center justify-center gap-8">
                     <div className="flex flex-col items-center gap-3">
-                      {renderTeamLogo(teamALogo, teamA.tag, 'w-20 h-20')}
+                      {renderTeamLogo(teamALogo, teamA.tag, 'w-20 h-20', teamAColor)}
                       <span className="text-base font-black font-mono text-white uppercase tracking-wide">{teamA.tag}</span>
                     </div>
                     <span className="text-3xl font-black font-mono text-neutral-400">VS</span>
                     <div className="flex flex-col items-center gap-3">
-                      {renderTeamLogo(teamBLogo, teamB.tag, 'w-20 h-20')}
+                      {renderTeamLogo(teamBLogo, teamB.tag, 'w-20 h-20', teamBColor)}
                       <span className="text-base font-black font-mono text-white uppercase tracking-wide">{teamB.tag}</span>
                     </div>
                   </div>
@@ -965,12 +981,12 @@ export default function StreamHubMainPage({
                     <div className="text-center text-xs font-bold font-mono text-neutral-400 tracking-[3px] mb-5">GAME 2</div>
                     <div className="flex items-center justify-center gap-8">
                       <div className="flex flex-col items-center gap-3">
-                        {renderTeamLogo(teamALogo, teamA.tag, 'w-20 h-20')}
+                        {renderTeamLogo(teamALogo, teamA.tag, 'w-20 h-20', teamAColor)}
                         <span className="text-base font-black font-mono text-white uppercase tracking-wide">{teamA.tag}</span>
                       </div>
                       <span className="text-3xl font-black font-mono text-neutral-400">VS</span>
                       <div className="flex flex-col items-center gap-3">
-                        {renderTeamLogo(teamBLogo, teamB.tag, 'w-20 h-20')}
+                        {renderTeamLogo(teamBLogo, teamB.tag, 'w-20 h-20', teamBColor)}
                         <span className="text-base font-black font-mono text-white uppercase tracking-wide">{teamB.tag}</span>
                       </div>
                     </div>
@@ -987,7 +1003,7 @@ export default function StreamHubMainPage({
                   <div className="flex items-center gap-3 animate-[marquee_30s_linear_infinite] whitespace-nowrap">
                     {/* Team A group */}
                     <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1 rounded" style={{ backgroundColor: `${teamAColor}15` }}>
-                      {renderTeamLogo(teamALogo, teamA.tag, 'w-8 h-8')}
+                      {renderTeamLogo(teamALogo, teamA.tag, 'w-8 h-8', teamAColor)}
                       <span className="text-xs font-black font-mono uppercase" style={{ color: teamAColor }}>{teamA.tag}</span>
                     </div>
                     {rosterA.map(p => renderPlayerCard(p, teamA.tag, teamAColor, 'a'))}
@@ -998,7 +1014,7 @@ export default function StreamHubMainPage({
 
                     {/* Team B group */}
                     <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1 rounded" style={{ backgroundColor: `${teamBColor}15` }}>
-                      {renderTeamLogo(teamBLogo, teamB.tag, 'w-8 h-8')}
+                      {renderTeamLogo(teamBLogo, teamB.tag, 'w-8 h-8', teamBColor)}
                       <span className="text-xs font-black font-mono uppercase" style={{ color: teamBColor }}>{teamB.tag}</span>
                     </div>
                     {rosterB.map(p => renderPlayerCard(p, teamB.tag, teamBColor, 'b'))}
@@ -1006,7 +1022,7 @@ export default function StreamHubMainPage({
                     {/* Duplicate for infinite scroll */}
                     <div className="flex-shrink-0 w-[40px]" />
                     <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1 rounded" style={{ backgroundColor: `${teamAColor}15` }}>
-                      {renderTeamLogo(teamALogo, teamA.tag, 'w-8 h-8')}
+                      {renderTeamLogo(teamALogo, teamA.tag, 'w-8 h-8', teamAColor)}
                       <span className="text-xs font-black font-mono uppercase" style={{ color: teamAColor }}>{teamA.tag}</span>
                     </div>
                     {rosterA.map(p => renderPlayerCard(p, teamA.tag, teamAColor, 'a2'))}
@@ -1014,7 +1030,7 @@ export default function StreamHubMainPage({
                       <div className="w-[2px] h-[70px] bg-gradient-to-b from-transparent via-red-500/50 to-transparent" />
                     </div>
                     <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1 rounded" style={{ backgroundColor: `${teamBColor}15` }}>
-                      {renderTeamLogo(teamBLogo, teamB.tag, 'w-8 h-8')}
+                      {renderTeamLogo(teamBLogo, teamB.tag, 'w-8 h-8', teamBColor)}
                       <span className="text-xs font-black font-mono uppercase" style={{ color: teamBColor }}>{teamB.tag}</span>
                     </div>
                     {rosterB.map(p => renderPlayerCard(p, teamB.tag, teamBColor, 'b2'))}
