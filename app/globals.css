@@ -44,25 +44,6 @@ body {
     border-color: rgba(245, 197, 66, 0.4);
   }
 }
-@keyframes floatSlow {
-  0%, 100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-10px) rotate(0.5deg);
-  }
-}
-
-@keyframes pulseEmergency {
-  0%, 100% {
-    box-shadow: 0 0 35px rgba(245, 197, 66, 0.4), 0 0 15px rgba(245, 197, 66, 0.2);
-    border-color: rgba(245, 197, 66, 0.9);
-  }
-  50% {
-    box-shadow: 0 0 15px rgba(245, 197, 66, 0.15), 0 0 5px rgba(245, 197, 66, 0.1);
-    border-color: rgba(245, 197, 66, 0.4);
-  }
-}
 
 .animate-floatSlow {
   animation: floatSlow 6s ease-in-out infinite;

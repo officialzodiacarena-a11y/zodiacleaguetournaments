@@ -24,12 +24,14 @@ import {
   Timer,
   ExternalLink,
   Radio,
-  ImagePlus
+  ImagePlus,
+  Swords,
+  Shield
 } from 'lucide-react';
 
 // Production overlay type (หน้าตาจริงตอนนี้แสดงผ่าน iframe ไปที่ /overlay/match/[id] แทนการประกอบเอง — ดูฉาก 5 และ 6)
 import type { BuyPhasePlayer } from '@/components/overlay/BuyPhaseHud';
-import { TEAM_A_TEXT, TEAM_B_TEXT, DetailCell, type OverlayTeam, type OverlayVeto } from '@/components/overlay/series';
+import { TEAM_A_TEXT, TEAM_B_TEXT, DetailCell, isGameDone, type OverlayTeam, type OverlayVeto, type OverlayGame } from '@/components/overlay/series';
 
 // Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yjygevsdfebdyzywbpdr.supabase.co';
@@ -114,6 +116,31 @@ export default function StreamHubMainPage({
   const [teamB, setTeamB] = useState<OverlayTeam>({ id: 'team-b', name: 'DEFENDERS', tag: 'DEF' });
   const [scoreA, setScoreA] = useState<number>(0);
   const [scoreB, setScoreB] = useState<number>(0);
+  const [roundRecording, setRoundRecording] = useState<boolean>(false);
+  const [roundRecordMsg, setRoundRecordMsg] = useState<string | null>(null);
+  const recordRound = async (method: 'POST' | 'DELETE', winnerTeamId?: string) => {
+    setRoundRecording(true);
+    setRoundRecordMsg(null);
+    try {
+      const res = await fetch(`/api/v1/matches/${currentMatchId}/rounds/record`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: method === 'POST' ? JSON.stringify({ winner_team_id: winnerTeamId }) : undefined,
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setRoundRecordMsg(json?.error?.message || `บันทึกไม่สำเร็จ (${res.status})`);
+        return;
+      }
+      setScoreA(json.rounds_won_a);
+      setScoreB(json.rounds_won_b);
+      setRoundRecordMsg(method === 'POST' ? `บันทึกรอบ ${json.round_number} แล้ว` : `ย้อนรอบ ${json.removed_round} แล้ว`);
+    } catch {
+      setRoundRecordMsg('บันทึกไม่สำเร็จ (เครือข่าย)');
+    } finally {
+      setRoundRecording(false);
+    }
+  };
   const [winsA, setWinsA] = useState<number>(0);
   const [winsB, setWinsB] = useState<number>(0);
   const [bestOf, setBestOf] = useState<number>(1);
@@ -123,8 +150,8 @@ export default function StreamHubMainPage({
 
   // Roster ผู้เล่นจริงของแมตช์ที่เลือก — ดึงจาก team_members ทุกครั้งที่สลับแมตช์ (เรียงตาม jersey_number
   // เป็นตัวแทน "ลำดับที่นั่งจริง" เพราะตาราง team_members ไม่มีคอลัมน์ลำดับที่นั่งโดยตรง)
-  const [rosterA, setRosterA] = useState<BuyPhasePlayer[]>([]);
-  const [rosterB, setRosterB] = useState<BuyPhasePlayer[]>([]);
+  const [rosterA, setRosterA] = useState<(BuyPhasePlayer & { avatarUrl?: string | null })[]>([]);
+  const [rosterB, setRosterB] = useState<(BuyPhasePlayer & { avatarUrl?: string | null })[]>([]);
 
   // ช่องส่งสัญญาณจริงไปหา Overlay ตัวที่ OBS ใช้ (channel ชื่อเดียวกับที่ app/overlay/match/[id]/page.tsx ฟังอยู่)
   // ปุ่ม/สไลเดอร์ในห้องคุมจะยิงผ่านช่องนี้ ไม่ใช่แค่แก้ state ในเครื่องเฉยๆ เหมือนก่อนหน้านี้
@@ -157,6 +184,11 @@ export default function StreamHubMainPage({
 
   // Real Map Vetoes from database
   const [realVetoes, setRealVetoes] = useState<OverlayVeto[]>([]);
+  // Completed/live map scores (per-map result), keyed by map_name for the ingame veto strip
+  const [realMapGames, setRealMapGames] = useState<(OverlayGame & {
+    team_a_side_start: string | null;
+    team_b_side_start: string | null;
+  })[]>([]);
 
   // Timer
   const [timerSeconds, setTimerSeconds] = useState<number>(135);
@@ -280,29 +312,32 @@ export default function StreamHubMainPage({
         if (matchData.team_a_id && matchData.team_b_id) {
           const { data: members } = await supabase
             .from('team_members')
-            .select('id, team_id, jersey_number, players!team_members_player_id_fkey(display_name)')
+            .select('id, team_id, jersey_number, players!team_members_player_id_fkey(display_name, avatar_url)')
             .eq('status', 'ACTIVE')
             .in('team_id', [matchData.team_a_id, matchData.team_b_id])
             .order('jersey_number', { ascending: true, nullsFirst: false });
 
-          const toRoster = (teamId: string): BuyPhasePlayer[] =>
+          type PlayerRow = { display_name?: string; avatar_url?: string | null };
+          const toRoster = (teamId: string): (BuyPhasePlayer & { avatarUrl?: string | null })[] =>
             (members || [])
               .filter((m) => m.team_id === teamId)
-              .map((m) => ({
-                id: m.id,
-                name:
-                  (Array.isArray(m.players) ? m.players[0]?.display_name : (m.players as { display_name?: string } | null)?.display_name) ||
-                  'Unknown',
-                kills: 0,
-                deaths: 0,
-                assists: 0,
-                hp: 100,
-                hpMax: 100,
-                credits: 0,
-                armor: 'NONE' as const,
-                ultPoints: 0,
-                ultMax: 8,
-              }));
+              .map((m) => {
+                const pRow: PlayerRow | undefined = Array.isArray(m.players) ? m.players[0] : (m.players as PlayerRow | null) ?? undefined;
+                return {
+                  id: m.id,
+                  name: pRow?.display_name || 'Unknown',
+                  avatarUrl: pRow?.avatar_url ?? null,
+                  kills: 0,
+                  deaths: 0,
+                  assists: 0,
+                  hp: 100,
+                  hpMax: 100,
+                  credits: 0,
+                  armor: 'NONE' as const,
+                  ultPoints: 0,
+                  ultMax: 8,
+                };
+              });
 
           setRosterA(toRoster(matchData.team_a_id));
           setRosterB(toRoster(matchData.team_b_id));
@@ -327,6 +362,15 @@ export default function StreamHubMainPage({
         const picked = vetoData.find(v => v.action === 'PICK');
         if (picked) setCurrentMap(picked.map_name);
       }
+
+      // Fetch per-map results (score/winner/side) for the ingame veto strip
+      const { data: gamesData } = await supabase
+        .from('match_games')
+        .select('game_number, map_name, status, score_a, score_b, winner_team_id, team_a_side_start, team_b_side_start')
+        .eq('match_id', matchId)
+        .order('game_number', { ascending: true });
+
+      if (gamesData) setRealMapGames(gamesData);
     } catch (err) {
       console.error('Failed to load match details:', err);
     }
@@ -629,7 +673,7 @@ export default function StreamHubMainPage({
                   <Trophy className="w-3.5 h-3.5" /> 8. Clean Intermission/MVP
                 </button>
                 <button onClick={() => setActiveScene(9)} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 9 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
-                  <Sliders className="w-3.5 h-3.5" /> 9. Spectator Control Room
+                  <Sliders className="w-3.5 h-3.5" /> 9. Ingame Map Veto
                 </button>
                 <button onClick={() => setActiveScene(10)} className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${activeScene === 10 ? 'bg-cyan-500 text-black shadow-lg' : 'text-cyan-300 hover:bg-cyan-500/10'}`}>
                   <Target className="w-3.5 h-3.5" /> 10. Captain Veto Room
@@ -698,6 +742,30 @@ export default function StreamHubMainPage({
                   <input type="number" min={0} max={99} value={scoreB} onChange={(e) => setScoreB(Math.max(0, parseInt(e.target.value) || 0))} className="w-7 text-center bg-transparent text-white font-mono font-black text-sm outline-none" />
                   <button onClick={() => setScoreB(prev => prev + 1)} className="w-5 h-5 rounded bg-rose-500/20 hover:bg-rose-500/40 text-rose-400 font-black flex items-center justify-center text-xs">+</button>
                   <span className="text-rose-400 font-black text-xs">{teamB.tag}</span>
+                </div>
+
+                {/* บันทึกผู้ชนะรอบลง match_rounds ผ่าน RPC ตัวเดียวกับ Spectra/OCR — เซิร์ฟเวอร์คำนวณเลขแมพ/รอบเอง */}
+                <div className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded border border-white/10">
+                  <span className="text-neutral-500 font-bold text-[10px]">รอบชนะ:</span>
+                  {[teamA, teamB].map((team, i) => (
+                    <button
+                      key={team.id || i}
+                      disabled={roundRecording || !team.id}
+                      onClick={() => recordRound('POST', team.id)}
+                      className={`px-1.5 py-0.2 rounded font-bold disabled:opacity-40 ${i === 0 ? 'bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30' : 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30'}`}
+                    >
+                      {team.tag}
+                    </button>
+                  ))}
+                  <button
+                    disabled={roundRecording}
+                    onClick={() => recordRound('DELETE')}
+                    title="ย้อนรอบล่าสุดของแมพนี้"
+                    className="px-1.5 py-0.2 rounded font-bold bg-white/10 text-neutral-300 hover:bg-white/20 disabled:opacity-40"
+                  >
+                    ↶
+                  </button>
+                  {roundRecordMsg && <span className="text-[10px] text-amber-300 max-w-[220px] truncate" title={roundRecordMsg}>{roundRecordMsg}</span>}
                 </div>
 
                 {/* Buy Phase Alt+C — ยิงสัญญาณจริงไปเปิด/ปิด Buy Phase HUD บน Overlay ที่ OBS ใช้ */}
@@ -882,113 +950,217 @@ export default function StreamHubMainPage({
           {/* SCENE 4: STARTING SOON / COUNTDOWN DISPLAY */}
           {/* ========================================================================= */}
           {activeScene === 4 && (() => {
-            const teamALogo = (activeMatchData?.team_a as unknown as { logo_url?: string } | null)?.logo_url;
-            const teamBLogo = (activeMatchData?.team_b as unknown as { logo_url?: string } | null)?.logo_url;
-            const allPlayers = [...rosterA.map(p => ({ ...p, team: teamA })), ...rosterB.map(p => ({ ...p, team: teamB }))];
+            const teamALogo = `/images/Team_Logo/${teamA.tag}.png`;
+            const teamBLogo = `/images/Team_Logo/${teamB.tag}.png`;
+            const teamAColor = '#06b6d4';
+            const teamBColor = '#f43f5e';
             const countdownStr = timerSeconds >= 3600
               ? `${Math.floor(timerSeconds / 3600).toString().padStart(2, '0')}:${Math.floor((timerSeconds % 3600) / 60).toString().padStart(2, '0')}:${(timerSeconds % 60).toString().padStart(2, '0')}`
               : `${Math.floor(timerSeconds / 60).toString().padStart(2, '0')}:${(timerSeconds % 60).toString().padStart(2, '0')}`;
+
+            // Medallion-style team badge: glowing ring plate behind the logo so any artwork
+            // (circular or square) sits inside cleanly; letter fallback stays underneath so a
+            // broken image never leaves an empty hole.
+            const renderTeamLogo = (src: string, tag: string, color: string, size: 'small' | 'marquee' | 'big' = 'small') => {
+              const plate = size === 'big' ? 'w-48 h-48' : size === 'marquee' ? 'w-[72px] h-[72px]' : 'w-9 h-9';
+              const inner = size === 'big' ? 'w-[182px] h-[182px]' : size === 'marquee' ? 'w-14 h-14' : 'w-6 h-6';
+              const letter = size === 'big' ? 'text-5xl' : size === 'marquee' ? 'text-lg' : 'text-xs';
+              return (
+                <div
+                  className={`${plate} relative rounded-full flex items-center justify-center flex-shrink-0`}
+                  style={{
+                    background: `radial-gradient(circle, ${color}2a, rgba(0,0,0,0.55) 72%)`,
+                    border: `1.5px solid ${color}99`,
+                    boxShadow: `0 0 18px ${color}40, inset 0 0 10px rgba(0,0,0,0.5)`,
+                  }}
+                >
+                  <span className={`${letter} font-black`} style={{ color }}>{tag[0]}</span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={src}
+                    alt={tag}
+                    className={`${inner} object-contain absolute drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)]`}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              );
+            };
+
+            const renderPlayerCard = (p: BuyPhasePlayer & { avatarUrl?: string | null }, teamTag: string, color: string, keyPrefix: string) => (
+              <div
+                key={`${keyPrefix}-${p.id}`}
+                className="flex-shrink-0 w-[160px] h-[90px] rounded-lg p-2.5 flex flex-col justify-between"
+                style={{
+                  border: `1.5px solid ${color}70`,
+                  background: `linear-gradient(155deg, ${color}14, rgba(0,0,0,0.55))`,
+                  boxShadow: `0 4px 14px rgba(0,0,0,0.4)`,
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  {p.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.avatarUrl} alt={p.name} className="w-9 h-9 rounded-md object-cover ring-1" style={{ boxShadow: `0 0 0 1px ${color}60` }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  ) : (
+                    <div className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${color}20` }}>
+                      <Users className="w-4 h-4" style={{ color }} />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] font-black font-mono text-white truncate uppercase">{p.name}</div>
+                    <div className="text-[9px] font-mono uppercase tracking-wide" style={{ color }}>{teamTag}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-[9px] font-mono text-neutral-400">
+                  {p.agent && <span className="truncate">{p.agent}</span>}
+                  {(p.kills !== undefined && p.kills > 0) && <span>K:{p.kills}</span>}
+                  {(p.deaths !== undefined && p.deaths > 0) && <span>D:{p.deaths}</span>}
+                </div>
+              </div>
+            );
+
+            const gameCardRow = (
+              label: string,
+              left: { tag: string; logo: string; color: string },
+              right: { tag: string; logo: string; color: string }
+            ) => (
+              <div className="px-6 py-6">
+                <div className="flex items-center justify-center gap-3 mb-5">
+                  <div className="w-6 h-px bg-white/20" />
+                  <span className="text-[11px] font-bold tracking-[4px] text-white/50 uppercase">{label}</span>
+                  <div className="w-6 h-px bg-white/20" />
+                </div>
+                <div className="flex items-center justify-center gap-4">
+                  <div className="flex flex-col items-center gap-2.5">
+                    {renderTeamLogo(left.logo, left.tag, left.color, 'big')}
+                    <span className="text-sm font-bold text-neutral-200 uppercase tracking-[0.15em]">{left.tag}</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-5 h-px bg-neutral-600" />
+                    <span className="text-xl font-black italic text-neutral-400">VS</span>
+                    <div className="w-5 h-px bg-neutral-600" />
+                  </div>
+                  <div className="flex flex-col items-center gap-2.5">
+                    {renderTeamLogo(right.logo, right.tag, right.color, 'big')}
+                    <span className="text-sm font-bold text-neutral-200 uppercase tracking-[0.15em]">{right.tag}</span>
+                  </div>
+                </div>
+              </div>
+            );
+
+            const marqueeTrack = (suffix: string) => (
+              <React.Fragment>
+                <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: `${teamAColor}12`, border: `1px solid ${teamAColor}40` }}>
+                  {renderTeamLogo(teamALogo, teamA.tag, teamAColor, 'marquee')}
+                  <span className="text-xs font-black font-mono uppercase tracking-wide" style={{ color: teamAColor }}>{teamA.tag}</span>
+                </div>
+                {rosterA.map(p => renderPlayerCard(p, teamA.tag, teamAColor, `a${suffix}`))}
+
+                <div className="flex-shrink-0 w-[40px] flex items-center justify-center">
+                  <div className="w-[2px] h-[70px] bg-gradient-to-b from-transparent via-red-500/50 to-transparent" />
+                </div>
+
+                <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: `${teamBColor}12`, border: `1px solid ${teamBColor}40` }}>
+                  {renderTeamLogo(teamBLogo, teamB.tag, teamBColor, 'marquee')}
+                  <span className="text-xs font-black font-mono uppercase tracking-wide" style={{ color: teamBColor }}>{teamB.tag}</span>
+                </div>
+                {rosterB.map(p => renderPlayerCard(p, teamB.tag, teamBColor, `b${suffix}`))}
+                <div className="flex-shrink-0 w-[40px]" />
+              </React.Fragment>
+            );
+
             return (
             <div className="relative w-full h-full bg-black overflow-hidden">
-              {/* Red/dark background with particle effect */}
+              {/* Background layers */}
               <div className="absolute inset-0 bg-gradient-to-br from-red-900/60 via-black to-red-950/40" />
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(220,38,38,0.3)_0%,_transparent_50%)]" />
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_rgba(220,38,38,0.15)_0%,_transparent_60%)]" />
-              {/* Red accent lines top & bottom */}
-              <div className="absolute top-[140px] left-0 right-0 h-[3px] bg-gradient-to-r from-red-600 via-red-500/80 to-transparent" />
-              <div className="absolute bottom-[60px] left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-red-500/80 to-red-600" />
+              {/* Cinematic vignette for depth */}
+              <div className="absolute inset-0 shadow-[inset_0_0_180px_rgba(0,0,0,0.55)] pointer-events-none z-[5]" />
+              {/* Accent lines */}
+              <div className="absolute top-[160px] left-0 right-0 h-[3px] bg-gradient-to-r from-red-600 via-red-500/80 to-transparent" />
+              <div className="absolute bottom-[120px] left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-red-500/80 to-red-600" />
 
-              {/* === TOP LEFT: Countdown === */}
-              <div className="absolute top-6 left-8 z-10">
-                <div className="font-black font-mono tracking-wider text-white drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]" style={{ fontSize: '4.5rem', lineHeight: 1 }}>
-                  {countdownStr}
+              {/* === TOP CENTER: Zodiac League emblem === */}
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/images/logo/logo2.png"
+                  alt="Zodiac League"
+                  className="w-auto object-contain"
+                  style={{ height: '288px', filter: 'drop-shadow(0 0 24px rgba(232,180,41,0.35))' }}
+                />
+              </div>
+
+              {/* === TOP LEFT: Zodiac Arena neon logo + Countdown === */}
+              <div className="absolute top-5 left-8 z-10">
+                <div>
+                  <div className="text-xs font-mono tracking-[0.3em] text-[#94A3B8] uppercase">12 SIGNS • 4 SEASONS • 1 DESTINY</div>
+                  <h1 className="font-black tracking-tight text-white leading-none mt-1" style={{ fontSize: '3.75rem', textShadow: '0 0 20px rgba(232,180,41,0.4), 0 0 40px rgba(232,180,41,0.2)' }}>
+                    ZODIAC <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E8B429] via-[#FCE49C] to-[#E8B429]" style={{ filter: 'drop-shadow(0 0 12px rgba(232,180,41,0.6))' }}>ARENA</span>
+                  </h1>
                 </div>
-                <div className="text-sm font-bold text-neutral-300 mt-2 tracking-wide">
-                  {activeMatchData?.tournament_name || 'Zodiac League tournament'}
+                <div
+                  className="font-black tracking-wider text-white mt-3"
+                  style={{
+                    fontSize: '4rem',
+                    lineHeight: 1,
+                    fontStyle: 'italic',
+                    fontVariantNumeric: 'tabular-nums',
+                    fontFamily: 'var(--font-mono), ui-monospace, monospace',
+                    textShadow: '0 0 40px rgba(255,255,255,0.25), 0 0 80px rgba(220,38,38,0.2), 0 4px 12px rgba(0,0,0,0.6)',
+                  }}
+                >
+                  {countdownStr}
                 </div>
               </div>
 
-              {/* === RIGHT SIDE: Game Cards === */}
-              <div className="absolute top-[160px] right-8 z-10 flex flex-col gap-4 w-[420px]">
-                {/* Game 1 */}
-                <div className="bg-black/80 border border-neutral-700/50 rounded-lg p-5">
-                  <div className="text-center text-xs font-bold font-mono text-neutral-400 tracking-[3px] mb-4">GAME 1</div>
-                  <div className="flex items-center justify-center gap-6">
-                    <div className="flex flex-col items-center gap-2">
-                      {teamALogo ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={teamALogo} alt={teamA.tag} className="w-16 h-16 object-contain" />
-                      ) : (
-                        <div className="w-16 h-16 rounded-full bg-cyan-500/20 flex items-center justify-center text-xl font-black text-cyan-400">{teamA.tag[0]}</div>
-                      )}
-                      <span className="text-sm font-black font-mono text-white uppercase">{teamA.tag}</span>
-                    </div>
-                    <span className="text-2xl font-black font-mono text-neutral-400">VS</span>
-                    <div className="flex flex-col items-center gap-2">
-                      {teamBLogo ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={teamBLogo} alt={teamB.tag} className="w-16 h-16 object-contain" />
-                      ) : (
-                        <div className="w-16 h-16 rounded-full bg-rose-500/20 flex items-center justify-center text-xl font-black text-rose-400">{teamB.tag[0]}</div>
-                      )}
-                      <span className="text-sm font-black font-mono text-white uppercase">{teamB.tag}</span>
-                    </div>
-                  </div>
+              {/* === RIGHT SIDE: unified Game Card (Game 1 / Game 2 divided by a hairline) === */}
+              <div className="absolute top-[180px] right-8 z-10 w-[640px]">
+                <div
+                  className="rounded-xl overflow-hidden"
+                  style={{
+                    background: 'linear-gradient(155deg, rgba(24,24,24,0.94), rgba(8,8,8,0.97))',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    boxShadow: '0 24px 60px rgba(0,0,0,0.65), 0 0 0 1px rgba(0,0,0,0.4)',
+                  }}
+                >
+                  <div className="h-[2px] bg-gradient-to-r from-transparent via-[#E8B429]/70 to-transparent" />
+                  {gameCardRow(
+                    'Game 1',
+                    { tag: teamA.tag, logo: teamALogo, color: teamAColor },
+                    { tag: teamB.tag, logo: teamBLogo, color: teamBColor }
+                  )}
+                  <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                  {/* Mockup placeholder — no second real match wired up yet, shown per ref layout */}
+                  {gameCardRow(
+                    'Game 2',
+                    { tag: 'TEAM C', logo: '/images/Team_Logo/TEAM_C.png', color: '#a78bfa' },
+                    { tag: 'TEAM D', logo: '/images/Team_Logo/TEAM_D.png', color: '#34d399' }
+                  )}
                 </div>
-
-                {/* Game 2 placeholder (if BO3+) */}
-                {bestOf >= 3 && (
-                  <div className="bg-black/80 border border-neutral-700/50 rounded-lg p-5">
-                    <div className="text-center text-xs font-bold font-mono text-neutral-400 tracking-[3px] mb-4">GAME 2</div>
-                    <div className="flex items-center justify-center gap-6">
-                      <div className="flex flex-col items-center gap-2">
-                        {teamALogo ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={teamALogo} alt={teamA.tag} className="w-16 h-16 object-contain" />
-                        ) : (
-                          <div className="w-16 h-16 rounded-full bg-cyan-500/20 flex items-center justify-center text-xl font-black text-cyan-400">{teamA.tag[0]}</div>
-                        )}
-                        <span className="text-sm font-black font-mono text-white uppercase">{teamA.tag}</span>
-                      </div>
-                      <span className="text-2xl font-black font-mono text-neutral-400">VS</span>
-                      <div className="flex flex-col items-center gap-2">
-                        {teamBLogo ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={teamBLogo} alt={teamB.tag} className="w-16 h-16 object-contain" />
-                        ) : (
-                          <div className="w-16 h-16 rounded-full bg-rose-500/20 flex items-center justify-center text-xl font-black text-rose-400">{teamB.tag[0]}</div>
-                        )}
-                        <span className="text-sm font-black font-mono text-white uppercase">{teamB.tag}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* === BOTTOM: Team Lineup Marquee === */}
-              <div className="absolute bottom-0 left-0 right-0 h-[56px] bg-gradient-to-r from-black via-neutral-950 to-black border-t border-red-600/40 flex items-center overflow-hidden z-10">
-                <div className="flex-shrink-0 bg-red-700 px-4 h-full flex items-center z-20">
-                  <span className="text-xs font-black font-mono text-white uppercase leading-tight">TEAM<br/>LINEUP</span>
+              <div className="absolute bottom-0 left-0 right-0 h-[115px] bg-gradient-to-r from-black via-neutral-950 to-black border-t border-red-600/40 flex items-center overflow-hidden z-10">
+                <div
+                  className="flex-shrink-0 h-full flex flex-col items-center justify-center gap-1 px-5 z-20"
+                  style={{ background: 'linear-gradient(180deg, #dc2626, #7f1d1d)', boxShadow: '4px 0 24px rgba(220,38,38,0.45)' }}
+                >
+                  <Users className="w-4 h-4 text-white/90" />
+                  <span className="text-[10px] font-black font-mono text-white uppercase leading-tight tracking-wide text-center">Team<br/>Lineup</span>
                 </div>
-                <div className="flex-1 overflow-hidden relative">
-                  <div className="flex items-center gap-6 animate-[marquee_20s_linear_infinite] whitespace-nowrap">
-                    {[...allPlayers, ...allPlayers].map((p, i) => (
-                      <div key={`${p.id}-${i}`} className="flex items-center gap-2 flex-shrink-0">
-                        <div className="w-9 h-9 bg-white/90 rounded flex items-center justify-center">
-                          <Users className="w-5 h-5 text-neutral-700" />
-                        </div>
-                        <span className="text-xs font-bold font-mono text-neutral-300 uppercase">{p.name}</span>
-                      </div>
-                    ))}
+                <div
+                  className="flex-1 overflow-hidden relative"
+                  style={{
+                    maskImage: 'linear-gradient(to right, transparent, black 32px, black calc(100% - 24px), transparent)',
+                    WebkitMaskImage: 'linear-gradient(to right, transparent, black 32px, black calc(100% - 24px), transparent)',
+                  }}
+                >
+                  <div className="flex items-center gap-3 animate-[marquee_30s_linear_infinite] whitespace-nowrap">
+                    {marqueeTrack('')}
+                    {marqueeTrack('-2')}
                   </div>
                 </div>
-                {/* Team logo divider in marquee */}
-                {teamBLogo && (
-                  <div className="flex-shrink-0 px-3 z-20">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={teamBLogo} alt={teamB.tag} className="w-10 h-10 object-contain" />
-                  </div>
-                )}
               </div>
             </div>
             );
@@ -1008,22 +1180,6 @@ export default function StreamHubMainPage({
                 className="absolute inset-0 w-full h-full border-0"
                 style={{ colorScheme: 'normal' }}
               />
-              {activeScene === 6 && !showBuyPhase && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-                  <div className="text-center space-y-2">
-                    <p className="font-mono text-xs text-amber-300 uppercase tracking-widest">Buy Phase ยังไม่เปิด</p>
-                    <button
-                      onClick={() => {
-                        setShowBuyPhase(true);
-                        sendToggleBuyPhase(true);
-                      }}
-                      className="px-4 py-2 rounded-lg bg-amber-500 text-black font-mono text-xs font-black"
-                    >
-                      กดเปิด Buy Phase HUD (Alt+C)
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -1166,113 +1322,173 @@ export default function StreamHubMainPage({
           )}
 
           {/* ========================================================================= */}
-          {/* SCENE 9: SPECTATOR CAMERA CONTROL ROOM (Observer Desk) */}
+          {/* SCENE 9: INGAME MAP VETO STRIP (live veto history + played-map results) */}
           {/* ========================================================================= */}
-          {activeScene === 9 && (
+          {activeScene === 9 && (() => {
+            const teamAColor = '#06b6d4';
+            const teamBColor = '#f43f5e';
+            const teamLogo = (tag: string) => `/images/Team_Logo/${tag}.png`;
+
+            const renderTeamLogoScene9 = (src: string, tag: string, color: string) => (
+              <div
+                className="w-6 h-6 relative rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ background: `radial-gradient(circle, ${color}2a, rgba(0,0,0,0.55) 72%)`, border: `1px solid ${color}99` }}
+              >
+                <span className="text-[9px] font-black" style={{ color }}>{tag[0]}</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt={tag}
+                  className="w-[18px] h-[18px] object-contain absolute"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              </div>
+            );
+
+            const findGame = (mapName: string | null) =>
+              mapName ? realMapGames.find(g => (g.map_name || '').toLowerCase() === mapName.toLowerCase()) : undefined;
+
+            const sideIcon = (side: string | null) => {
+              const s = (side || '').toUpperCase();
+              if (s === 'ATTACK' || s === 'ATK') return <Swords className="w-3.5 h-3.5" />;
+              if (s === 'DEFENSE' || s === 'DEF') return <Shield className="w-3.5 h-3.5" />;
+              return null;
+            };
+
+            return (
             <div className="relative w-full h-full p-6 bg-[#080a14] overflow-y-auto text-white">
-              <div className="max-w-6xl mx-auto space-y-6">
+              <div className="max-w-[1600px] mx-auto space-y-6">
 
                 <div className="flex items-center justify-between border-b border-white/10 pb-4">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
                       <span className="font-mono text-xs font-black text-amber-400 uppercase tracking-wider">
-                        OBSERVER CAMERA CONTROL ROOM (SPECTATOR DESK)
+                        INGAME MAP VETO STRIP
                       </span>
                     </div>
                     <h2 className="text-2xl font-black font-mono tracking-tight mt-1">
-                      {teamA.name} vs {teamB.name} — Observer Telemetry Bridge
+                      <span className={TEAM_A_TEXT}>{teamA.name}</span> vs <span className={TEAM_B_TEXT}>{teamB.name}</span>
                     </h2>
                   </div>
-
-                  <div className="flex items-center gap-4 text-xs font-mono bg-black/60 px-4 py-2 rounded-xl border border-white/10">
-                    <div>Status: <span className="text-emerald-400 font-bold">HEALTHY</span></div>
-                    <div>FPS: <span className="text-white font-bold">60.0</span></div>
-                    <div>Bitrate: <span className="text-amber-300 font-bold">6,500 kbps</span></div>
+                  <div className="text-right font-mono">
+                    <p className="text-xs text-neutral-500">BO{bestOf} SERIES</p>
+                    <p className="text-lg font-black text-[#C9A84C]">{winsA} - {winsB}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Team A Control */}
-                  <div className="p-5 rounded-2xl bg-neutral-900/90 border border-cyan-500/30 space-y-4">
-                    <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                      <span className="font-mono font-black text-cyan-400 text-sm">{teamA.name} (DEFENSE)</span>
-                      <span className="font-mono text-xs bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded">Score: {scoreA}</span>
-                    </div>
+                {realVetoes.length === 0 ? (
+                  <div className="text-center py-20 font-mono text-neutral-500 text-sm">
+                    กำลังรอข้อมูล Veto จากฐานข้อมูล...
+                  </div>
+                ) : (
+                  <div className="flex gap-3 overflow-x-auto pb-2 justify-center">
+                    {realVetoes.map((v, idx) => {
+                      const game = findGame(v.map_name);
+                      const played = isGameDone(game) || !!game?.winner_team_id;
+                      const isDecider = v.action === 'DECIDER';
+                      const actingTeam = v.team_id === teamA.id ? teamA : v.team_id === teamB.id ? teamB : null;
+                      const actingColor = actingTeam ? (actingTeam.id === teamA.id ? teamAColor : teamBColor) : '#94a3b8';
+                      const grayscale = v.action === 'BAN' || played;
+                      const winnerTag = played
+                        ? (game?.winner_team_id === teamA.id ? teamA.tag : game?.winner_team_id === teamB.id ? teamB.tag : null)
+                        : null;
 
-                    <div className="space-y-3">
-                      {rosterA.map((p, idx) => (
-                        <div key={p.id} className="flex items-center justify-between text-xs font-mono bg-black/40 p-2 rounded-lg border border-white/5">
-                          <div className="truncate max-w-[180px]">
-                            <span className="font-bold text-white block truncate">{p.name}</span>
-                            <span className="text-cyan-400 text-[10px]">{p.agent || 'ยังไม่เลือกฮีโร่'}{p.weapon ? ` • ${p.weapon}` : ''}</span>
+                      return (
+                        <div
+                          key={idx}
+                          className="flex-shrink-0 w-[260px] rounded-xl overflow-hidden border"
+                          style={{
+                            borderColor: `${actingColor}55`,
+                            filter: grayscale ? 'grayscale(0.85) brightness(0.7)' : 'none',
+                            boxShadow: !grayscale ? `0 0 20px ${actingColor}30` : 'none',
+                          }}
+                        >
+                          {/* Header bar: BAN / PICK / DECIDER */}
+                          <div className="text-center py-2.5 text-base font-black font-mono uppercase tracking-widest text-black" style={{ background: actingColor }}>
+                            {v.action}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-neutral-400">HP: {p.hp}</span>
-                            <input
-                              type="range"
-                              min={0}
-                              max={100}
-                              value={p.hp}
-                              onChange={(e) => {
-                                const newHp = parseInt(e.target.value);
-                                setRosterA(prev => prev.map((pl, i) => i === idx ? { ...pl, hp: newHp } : pl));
-                                sendTelemetry([{ name: p.name, hp: newHp }]);
-                              }}
-                              className="w-20 accent-cyan-400"
-                            />
+
+                          {/* Side icons (only meaningful for maps not yet decided as banned) */}
+                          <div className="flex items-center justify-between px-3 py-2.5 bg-black/70">
+                            {isDecider ? (
+                              <>
+                                <span className="flex items-center gap-1 text-cyan-300">{sideIcon(game?.team_a_side_start ?? null)}</span>
+                                <span className="flex items-center gap-1 text-rose-300">{sideIcon(game?.team_b_side_start ?? null)}</span>
+                              </>
+                            ) : v.action !== 'BAN' ? (
+                              <span className="flex items-center gap-1 mx-auto" style={{ color: actingColor }}>
+                                {sideIcon(actingTeam?.id === teamA.id ? (game?.team_a_side_start ?? null) : (game?.team_b_side_start ?? null))}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-mono text-neutral-600 mx-auto">BANNED</span>
+                            )}
+                          </div>
+
+                          {/* Map name plate */}
+                          <div className="h-[260px] bg-gradient-to-b from-neutral-800 to-black flex items-end justify-center px-3 pb-4">
+                            <span className="text-lg font-black font-mono text-white text-center uppercase tracking-wide">{v.map_name}</span>
+                          </div>
+
+                          {/* Result / score footer */}
+                          <div className="bg-[#0b0f1a] px-3 py-3 space-y-2">
+                            {played && game ? (
+                              <>
+                                <div className="text-center font-mono font-black text-lg" style={{ color: game.winner_team_id === teamA.id ? teamAColor : game.winner_team_id === teamB.id ? teamBColor : '#e5e7eb' }}>
+                                  {game.score_a} - {game.score_b}
+                                </div>
+                                {winnerTag && (
+                                  <div className="text-center text-[10px] font-mono font-bold text-amber-300 uppercase tracking-wide">
+                                    🏆 {winnerTag} ชนะ
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="text-center text-[10px] font-mono text-neutral-500 uppercase">
+                                {v.action === 'BAN' ? 'ไม่ได้ลง' : 'รอแข่ง'}
+                              </div>
+                            )}
+                            <div className="flex items-center justify-center gap-1.5 pt-1 border-t border-white/5">
+                              {isDecider ? (
+                                <>
+                                  {renderTeamLogoScene9(teamLogo(teamA.tag), teamA.tag, teamAColor)}
+                                  {renderTeamLogoScene9(teamLogo(teamB.tag), teamB.tag, teamBColor)}
+                                </>
+                              ) : actingTeam ? (
+                                <>
+                                  {renderTeamLogoScene9(teamLogo(actingTeam.tag), actingTeam.tag, actingColor)}
+                                  <span className="text-[10px] font-mono font-bold" style={{ color: actingColor }}>{actingTeam.tag}</span>
+                                </>
+                              ) : (
+                                <span className="text-[10px] font-mono text-neutral-600">DECIDER</span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
+                )}
 
-                  {/* Team B Control */}
-                  <div className="p-5 rounded-2xl bg-neutral-900/90 border border-rose-500/30 space-y-4">
-                    <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                      <span className="font-mono font-black text-rose-400 text-sm">{teamB.name} (ATTACK)</span>
-                      <span className="font-mono text-xs bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded">Score: {scoreB}</span>
-                    </div>
-
-                    <div className="space-y-3">
-                      {rosterB.map((p, idx) => (
-                        <div key={p.id} className="flex items-center justify-between text-xs font-mono bg-black/40 p-2 rounded-lg border border-white/5">
-                          <div className="truncate max-w-[180px]">
-                            <span className="font-bold text-white block truncate">{p.name}</span>
-                            <span className="text-rose-400 text-[10px]">{p.agent || 'ยังไม่เลือกฮีโร่'}{p.weapon ? ` • ${p.weapon}` : ''}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-neutral-400">HP: {p.hp}</span>
-                            <input
-                              type="range"
-                              min={0}
-                              max={100}
-                              value={p.hp}
-                              onChange={(e) => {
-                                const newHp = parseInt(e.target.value);
-                                setRosterB(prev => prev.map((pl, i) => i === idx ? { ...pl, hp: newHp } : pl));
-                                sendTelemetry([{ name: p.name, hp: newHp }]);
-                              }}
-                              className="w-20 accent-rose-400"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                {/* Tournament lockup — centered under the veto strip, matching the Ref layout */}
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/images/logo/logo2.png" alt="Zodiac League Tournament" className="h-14 w-auto object-contain" />
+                  <span className="text-sm font-black font-mono tracking-[0.2em] text-amber-300 uppercase">{tournamentName || 'Zodiac League Tournament'}</span>
                 </div>
 
                 <div className="flex items-center justify-center gap-4 pt-2">
                   <button onClick={() => setActiveScene(5)} className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-black font-mono text-xs shadow-lg">
                     Switch to Live Observer View &rarr;
                   </button>
-                  <button onClick={() => setActiveScene(6)} className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black font-mono text-xs shadow-lg">
-                    Open BuyPhase Table &rarr;
+                  <button onClick={() => setActiveScene(7)} className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black font-mono text-xs shadow-lg">
+                    Open Clean Map Veto &rarr;
                   </button>
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* ========================================================================= */}
           {/* SCENE 10: CAPTAIN INTERACTIVE VETO ROOM */}

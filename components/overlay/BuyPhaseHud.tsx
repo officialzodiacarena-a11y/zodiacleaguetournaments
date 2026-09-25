@@ -3,6 +3,7 @@
 import React from "react";
 import { TEAM_A_HEX, TEAM_B_HEX } from "@/components/overlay/series";
 import { AgentPortrait } from "@/components/overlay/AgentPortrait";
+import { RoundTimeline, type RoundResult } from "@/components/overlay/RoundTimeline";
 import { Shield } from "lucide-react";
 
 export interface BuyPhasePlayer {
@@ -105,6 +106,11 @@ export function BuyPhaseHud({
   rosterA,
   rosterB,
   roundNumber,
+  roundsWonA,
+  roundsWonB,
+  roundHistory,
+  teamAId,
+  teamBId,
 }: {
   visible: boolean;
   teamA: HudTeam | undefined;
@@ -113,6 +119,13 @@ export function BuyPhaseHud({
   rosterB: BuyPhasePlayer[];
   /** เลขรอบปัจจุบัน (rounds_won_a + rounds_won_b + 1) — โชว์ไว้เหนือ Buy Phase ให้รู้ว่ากำลังซื้อของก่อนรอบไหน */
   roundNumber?: number;
+  /** สกอร์รอบสะสมจริงของแมพนี้ (rounds_won_a / rounds_won_b จาก matches) โชว์คู่กับ Buy Phase */
+  roundsWonA?: number;
+  roundsWonB?: number;
+  /** ผลรายรอบจริงจากตาราง match_rounds (ไม่มี fallback ปลอม — รอบที่ยังไม่มีผลจะเว้นว่าง) */
+  roundHistory?: RoundResult[];
+  teamAId?: string | null;
+  teamBId?: string | null;
 }) {
   return (
     <section
@@ -121,10 +134,28 @@ export function BuyPhaseHud({
       }`}
     >
       {typeof roundNumber === "number" && (
-        <div className="flex justify-center mb-1.5">
+        <div className="flex items-center justify-center gap-3 mb-1.5">
+          {typeof roundsWonA === "number" && typeof roundsWonB === "number" && (
+            <span className="px-3 py-1 rounded-full bg-[#1a1e26]/95 border border-white/15 font-mono text-[11px] font-black shadow-lg">
+              <span style={{ color: TEAM_A_HEX }}>{teamA?.tag ?? "A"} {roundsWonA}</span>
+              <span className="text-white/40 mx-1.5">-</span>
+              <span style={{ color: TEAM_B_HEX }}>{roundsWonB} {teamB?.tag ?? "B"}</span>
+            </span>
+          )}
           <span className="px-4 py-1 rounded-full bg-[#1a1e26]/95 border border-white/15 font-mono text-[11px] font-black text-white/80 uppercase tracking-[3px] shadow-lg">
             Round {roundNumber} — Buy Phase
           </span>
+        </div>
+      )}
+
+      {roundHistory && teamA && teamB && (
+        <div className="flex justify-center mb-2">
+          <RoundTimeline
+            rounds={roundHistory}
+            teamA={{ id: teamAId, tag: teamA.tag }}
+            teamB={{ id: teamBId, tag: teamB.tag }}
+            currentRound={roundNumber}
+          />
         </div>
       )}
       <div className="flex bg-[#0f121a]/90 backdrop-blur-md border-t border-white/20 shadow-2xl overflow-hidden rounded-xl">
