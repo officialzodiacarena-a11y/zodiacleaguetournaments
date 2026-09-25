@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { ImagePlus, Trash2, Eye, EyeOff, GripVertical } from 'lucide-react';
@@ -37,7 +37,7 @@ const SHOW_OPTIONS: { value: ShowOn; label: string }[] = [
   { value: 'starting-soon', label: 'หน้ารอ (Starting Soon)' },
 ];
 
-export default function SponsorOverlayPage() {
+function SponsorOverlayInner() {
   const searchParams = useSearchParams();
   const matchId = useMemo(() => searchParams.get('matchId') || '', [searchParams]);
   const [logos, setLogos] = useState<SponsorLogo[]>([]);
@@ -200,5 +200,13 @@ export default function SponsorOverlayPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SponsorOverlayPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0B0E1E] text-white flex items-center justify-center"><p className="text-neutral-500 font-mono text-sm">Loading...</p></div>}>
+      <SponsorOverlayInner />
+    </Suspense>
   );
 }
