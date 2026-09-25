@@ -4,7 +4,7 @@
 **ผู้จัดทำ:** โคลท์ (Kolt / Claude Code)
 **ส่งมอบให้:** โคลท์ session ถัดไป / แอนดี้ / อลิส (QA)
 **ผู้สั่งงาน:** 👑 พี่หยัด (CEO) — งาน ad-hoc นอก Master Spec (ต้องอธิบายให้อลิสทีหลัง)
-**Branch:** `feat/stream-hub-toolbar-hotkeys` (แตกจาก `main` หลัง merge PR #50)
+**Branch:** `feat/stream-hub-toolbar-hotkeys` (แตกจาก `main` หลัง merge PR #50) — **PR #51**
 **สถานะ:** ✅ พี่หยัดเทสบน localhost แล้ว — รอ QA อลิส ก่อน merge (โคลท์ห้าม merge main)
 
 > อ่านเอกสารนี้ก่อนแตะ `app/stream-hub/*`, `app/spectator/control/*`, `components/stream-hub/*`, `lib/stream-hub/*`
@@ -123,3 +123,4 @@
 | วันที่ | ผู้แก้ | สิ่งที่แก้ | เหตุผลที่แก้ |
 |---|---|---|---|
 | 2026-09-26 | โคลท์ | สร้างเอกสาร | ส่งต่องาน Stream Hub / Broadcast Control / Live Source ให้ session ถัดไปทำต่อได้ทันที |
+| 2026-09-26 | โคลท์ | ใส่เลข PR #51 ที่หัวเอกสาร | เปิด PR หลังเขียนเอกสารฉบับแรก — กันหัวข้อ PR ไม่ตรงแบบที่เคยเกิดกับ handover ของ Spectra |
