@@ -116,31 +116,6 @@ export default function StreamHubMainPage({
   const [teamB, setTeamB] = useState<OverlayTeam>({ id: 'team-b', name: 'DEFENDERS', tag: 'DEF' });
   const [scoreA, setScoreA] = useState<number>(0);
   const [scoreB, setScoreB] = useState<number>(0);
-  const [roundRecording, setRoundRecording] = useState<boolean>(false);
-  const [roundRecordMsg, setRoundRecordMsg] = useState<string | null>(null);
-  const recordRound = async (method: 'POST' | 'DELETE', winnerTeamId?: string) => {
-    setRoundRecording(true);
-    setRoundRecordMsg(null);
-    try {
-      const res = await fetch(`/api/v1/matches/${currentMatchId}/rounds/record`, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: method === 'POST' ? JSON.stringify({ winner_team_id: winnerTeamId }) : undefined,
-      });
-      const json = await res.json().catch(() => null);
-      if (!res.ok) {
-        setRoundRecordMsg(json?.error?.message || `บันทึกไม่สำเร็จ (${res.status})`);
-        return;
-      }
-      setScoreA(json.rounds_won_a);
-      setScoreB(json.rounds_won_b);
-      setRoundRecordMsg(method === 'POST' ? `บันทึกรอบ ${json.round_number} แล้ว` : `ย้อนรอบ ${json.removed_round} แล้ว`);
-    } catch {
-      setRoundRecordMsg('บันทึกไม่สำเร็จ (เครือข่าย)');
-    } finally {
-      setRoundRecording(false);
-    }
-  };
   const [winsA, setWinsA] = useState<number>(0);
   const [winsB, setWinsB] = useState<number>(0);
   const [bestOf, setBestOf] = useState<number>(1);
@@ -742,30 +717,6 @@ export default function StreamHubMainPage({
                   <input type="number" min={0} max={99} value={scoreB} onChange={(e) => setScoreB(Math.max(0, parseInt(e.target.value) || 0))} className="w-7 text-center bg-transparent text-white font-mono font-black text-sm outline-none" />
                   <button onClick={() => setScoreB(prev => prev + 1)} className="w-5 h-5 rounded bg-rose-500/20 hover:bg-rose-500/40 text-rose-400 font-black flex items-center justify-center text-xs">+</button>
                   <span className="text-rose-400 font-black text-xs">{teamB.tag}</span>
-                </div>
-
-                {/* บันทึกผู้ชนะรอบลง match_rounds ผ่าน RPC ตัวเดียวกับ Spectra/OCR — เซิร์ฟเวอร์คำนวณเลขแมพ/รอบเอง */}
-                <div className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded border border-white/10">
-                  <span className="text-neutral-500 font-bold text-[10px]">รอบชนะ:</span>
-                  {[teamA, teamB].map((team, i) => (
-                    <button
-                      key={team.id || i}
-                      disabled={roundRecording || !team.id}
-                      onClick={() => recordRound('POST', team.id)}
-                      className={`px-1.5 py-0.2 rounded font-bold disabled:opacity-40 ${i === 0 ? 'bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30' : 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30'}`}
-                    >
-                      {team.tag}
-                    </button>
-                  ))}
-                  <button
-                    disabled={roundRecording}
-                    onClick={() => recordRound('DELETE')}
-                    title="ย้อนรอบล่าสุดของแมพนี้"
-                    className="px-1.5 py-0.2 rounded font-bold bg-white/10 text-neutral-300 hover:bg-white/20 disabled:opacity-40"
-                  >
-                    ↶
-                  </button>
-                  {roundRecordMsg && <span className="text-[10px] text-amber-300 max-w-[220px] truncate" title={roundRecordMsg}>{roundRecordMsg}</span>}
                 </div>
 
                 {/* Buy Phase Alt+C — ยิงสัญญาณจริงไปเปิด/ปิด Buy Phase HUD บน Overlay ที่ OBS ใช้ */}

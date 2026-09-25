@@ -75,3 +75,42 @@ npx tsx scripts/spectra-adapter.ts --match "<MATCH_ID>" --token "<OBSERVER_TOKEN
 
 ---
 *เอกสารนี้จัดทำขึ้นตามกรอบ 4 เสา (ถูกต้อง, ข้อมูลครบ, มีเหตุผล, สอดคล้องกับ OKR) เพื่อส่งมอบงานที่มีคุณภาพสูงสุดให้ทีม*
+
+---
+
+## 🔁 6. อัปเดตจากโคลท์ — 25 ก.ย. 2026 (session ต่อจากแอนดี้) — PR #49 `feat/round-tracker-veto-strip`
+
+> ส่วนนี้เพิ่มต่อท้าย ไม่ได้แก้ส่วนที่ 1-5 ของแอนดี้ อ่านส่วนนี้ก่อนแตะโค้ด Spectra / OCR / Round Tracker
+
+### 6.1 กติกา "ใครเป็นเจ้าของข้อมูลอะไร" (พี่หยัดกำหนด — ห้ามทำงานทับกัน)
+| ข้อมูล | เจ้าของหลัก | สำรอง | ห้าม |
+|---|---|---|---|
+| ผลแพ้ชนะรายรอบ (`match_rounds`) | **Spectra** (บันทึกก่อนเสมอ) | **OCR** เขียนเฉพาะรอบที่ Spectra ไม่ได้บันทึก/ช่องว่าง | ห้ามลบ OCR round logic — พี่หยัด revert แล้ว (commit `c064120`) |
+| HP ระหว่างรอบ (คนยังรอด) | **OCR** (อ่านหลอดเลือดจริง) | — | Spectra ห้ามส่ง HP ตอนผู้เล่นยังรอดกลางรอบ |
+| HP = 0 (ตาย) / HP = 100 (buy phase) | **Spectra** | — | — |
+| ชื่อผู้เล่นในแต่ละช่อง (OCR) | ล็อกตอนเริ่มเกม/เริ่มรอบ ไม่เปลี่ยนจนจบรอบ | — | — |
+
+### 6.2 สิ่งที่ทำใน session นี้ (commit ตามลำดับ)
+- `bd22ebd` Buy Phase Round Tracker แบบ VCT (`components/overlay/RoundTimeline.tsx`), HP sidebar หลบอัตโนมัติตอน Buy Phase, Scene 9 = Ingame Map Veto strip, types ของ `match_rounds` / `win_condition_enum` / RPC ให้ตรง DB จริง
+- `50bbe76` ตัดปุ่มกรอกผลรอบมือใน Stream Hub + API `rounds/record` (พี่หยัดสั่ง — กัน human error)
+- `57c7b6e` → `c064120` ลบ OCR round logic แล้ว **revert กลับ** (การลบเป็นการเปลี่ยนสเปค ไม่ใช่ hotfix — ผิดช่องทาง)
+- `2cb78f7` **Hotfix HP กระพริบ**: Spectra เคยส่ง `hp: isAlive ? 100 : 0` ทับค่าเลือดจริงของ OCR (Overlay ใช้ค่าล่าสุด `app/overlay/match/[id]/page.tsx` ~บรรทัด 473) → แก้ `lib/spectra/translate.ts` ให้ส่ง HP เฉพาะตาย=0 / buy phase=100 + เทสใหม่ (76/76 ผ่าน)
+
+### 6.3 ยังไม่ได้ทำ — ตรงกับที่พี่หยัดวางไว้ แต่โค้ดยังไม่เป็นแบบนั้น (ต้องขออนุมัติก่อนแก้)
+1. **OCR ต้องรอ Spectra ก่อนบันทึกผลรอบ** — ตอนนี้ RPC `record_match_round_event` เป็น "ใครถึงก่อนได้บันทึก" และ OCR บันทึก 10 วิหลังเห็นป้ายจบรอบ ซึ่ง**มักถึงก่อน Spectra** (Spectra บันทึกตอน phase เปลี่ยนเป็น `shopping`) → ต้องให้ OCR รอแล้วเช็คว่ารอบนั้นมีแถวแล้วหรือยังก่อนเขียน (`components/observer/OcrObserverBridgePanel.tsx` `commitRound`)
+2. **OCR อ่านชื่อทุก 1 วินาที** (`runCaptureCycle`) — ควรล็อกตอนเริ่มรอบครั้งเดียว: HP นิ่งขึ้น + เครื่องนักพากย์เบาลงมาก (Tesseract 10 ครั้ง/วินาทีหายไป)
+3. OCR เดาผู้ชนะด้วย "นับชื่อที่อ่านได้" (บรรทัด ~311-313) — ต่อให้อ่านชื่อได้ 100% รอบที่จบด้วยระเบิด/หมดเวลาจะผิดเมื่อทีมชนะรอดน้อยกว่า (ผลเทสในแชท) → ยอมรับได้เพราะ OCR เป็นแค่สำรอง
+
+### 6.4 ช่องโหว่ Spectra ที่พบจากการอ่านโค้ด (ยังไม่ได้ verify กับเกมจริง)
+1. ผู้เล่นไม่ได้ผูก Riot ID → `resolveWinner` คืน null → **รอบนั้นหายเงียบ** (translate.ts ~123, ~194)
+2. รอบสุดท้ายของแมพ (`game_end`) — adapter ส่ง `roundNum - 1` อาจชนกับรอบที่ส่งไปแล้ว → รอบสุดท้ายอาจหาย (adapter ~157-164) *น่าจะเกิด ยังไม่ยืนยัน*
+3. หลุดแล้วต่อใหม่ → baseline ใหม่ → รอบที่จบระหว่างหลุดหาย (adapter ~127)
+4. เปลี่ยนแมพต้องรันใหม่พร้อม `--game` เลขใหม่เอง (human error)
+5. Spectra ไม่บวก `rounds_won_a/b` บน scoreboard — ยังต้องกรอกใน Spectator Control
+6. แยก `time_expire` กับ `elimination` ไม่ได้ (known limitation เดิม)
+
+### 6.5 สถานะเครื่องมือ
+- พี่หยัด**ติดตั้ง Docker Desktop ไว้แล้ว** (25 ก.ย.) — พร้อมรัน `spectra-vps/docker-compose.yml` / mock server
+- ต้องลองติดตั้ง Spectra-Client (.exe จาก GitHub) บนเครื่อง Observer เพื่อตอบว่าต้องลงแอป Overwolf แยกหรือไม่
+- `observer-bridge/` = แอป Overwolf ของเราที่โดนปฏิเสธ (เมล 23 ก.ย.) ไม่มีใครเรียกใช้แล้ว ยังไม่ลบ (รอพี่หยัดสั่ง)
+- ไม่ต้องอ้างเอกสาร Vault เก่าอีก — ใช้โค้ดจริง + git + GitHub PR เป็นหลัก

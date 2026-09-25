@@ -148,7 +148,7 @@ async function main() {
     if (!matchData.teams || matchData.teams.length < 2) return;
 
     // Build telemetry frames from nested teams[].players[]
-    const players = buildTelemetryPlayersFromMatchData(matchData.teams, rosterByRiotId);
+    const players = buildTelemetryPlayersFromMatchData(matchData.teams, rosterByRiotId, matchData.roundPhase);
 
     // Check for round end
     const outcome = tracker.processMatchData(matchData, rosterByRiotId);
