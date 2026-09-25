@@ -35,7 +35,7 @@
 ## 🧪 3. เครื่องมือทดสอบสำหรับพัฒนา (Local Mock Testing)
 
 เพื่อแก้ปัญหาการทดสอบที่ต้องพึ่งพาตัวเกม Valorant ขนาด 24GB แอนดี้ได้สร้าง **Mock Server** ขึ้นมา:
-* **ไฟล์:** `spectra-vps/mock-server.js`
+* **ไฟล์:** `spectra-vps/mock-server.mjs`
 * **พอร์ต:** `5200` (Socket.io)
 * **ความสามารถ:**
   - จำลองการรับส่ง WebSocket handshake (`logon` / `logon_success`) ตามโปรโตคอลของ Spectra-Server
@@ -45,7 +45,7 @@
 **วิธีรันเพื่อทดสอบ:**
 ```bash
 # Terminal 1 (Mock Server):
-node spectra-vps/mock-server.js
+node spectra-vps/mock-server.mjs
 
 # Terminal 2 (Adapter):
 npx tsx scripts/spectra-adapter.ts --match "<MATCH_ID>" --token "<OBSERVER_TOKEN>" --group-code 1234
@@ -58,7 +58,7 @@ npx tsx scripts/spectra-adapter.ts --match "<MATCH_ID>" --token "<OBSERVER_TOKEN
 | ไฟล์ | การเปลี่ยนแปลง | สถานะ |
 |---|---|---|
 | `scripts/spectra-adapter.ts` | แก้ไข RLS Key, เอา `puuid` ออก, เพิ่ม Debounce + 401 Kill-switch, คลีน log เรียบร้อย | ✅ พร้อมใช้งาน |
-| `spectra-vps/mock-server.js` | เครื่องมือ Mock Spectra-Server สำหรับทดสอบ offline | ✅ พร้อมใช้งาน |
+| `spectra-vps/mock-server.mjs` | เครื่องมือ Mock Spectra-Server สำหรับทดสอบ offline | ✅ พร้อมใช้งาน |
 | `spectra-vps/docker-compose.yml` | ไฟล์ Docker Compose สำหรับรัน Spectra-Server + Adapter บน VPS | ✅ พร้อมใช้งาน |
 | `spectra-vps/Dockerfile.adapter` | Dockerfile สำหรับ Build Adapter บน VPS | ✅ พร้อมใช้งาน |
 | `scripts/debug-db*.ts`, `test-*.ts` | สคริปต์ขยะชั่วคราว | 🗑️ ลบออกหมดแล้ว (Clean) |
