@@ -1911,6 +1911,54 @@ export type Database = {
           },
         ]
       }
+      match_rounds: {
+        Row: {
+          created_at: string
+          game_number: number
+          id: string
+          idempotency_key: string | null
+          match_id: string
+          round_number: number
+          win_condition: Database["public"]["Enums"]["win_condition_enum"]
+          winner_team_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          game_number?: number
+          id?: string
+          idempotency_key?: string | null
+          match_id: string
+          round_number: number
+          win_condition?: Database["public"]["Enums"]["win_condition_enum"]
+          winner_team_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          game_number?: number
+          id?: string
+          idempotency_key?: string | null
+          match_id?: string
+          round_number?: number
+          win_condition?: Database["public"]["Enums"]["win_condition_enum"]
+          winner_team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_rounds_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_rounds_winner_team_id_fkey"
+            columns: ["winner_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_participants: {
         Row: {
           acs: number | null
@@ -5027,6 +5075,17 @@ export type Database = {
       }
     }
     Functions: {
+      record_match_round_event: {
+        Args: {
+          p_game_number: number
+          p_idempotency_key: string
+          p_match_id: string
+          p_round_number: number
+          p_win_condition: Database["public"]["Enums"]["win_condition_enum"]
+          p_winner_team_id: string | null
+        }
+        Returns: Json
+      }
       get_athlete_telemetry_dashboard: {
         Args: {
           p_player_id: string
@@ -5336,6 +5395,11 @@ export type Database = {
       }
     }
     Enums: {
+      win_condition_enum:
+        | "elimination"
+        | "spike_detonate"
+        | "spike_defuse"
+        | "time_expire"
       account_status_type:
         | "PENDING"
         | "ACTIVE"

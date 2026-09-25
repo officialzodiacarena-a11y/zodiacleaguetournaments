@@ -6,6 +6,7 @@ import { VetoScene } from "@/components/overlay/VetoScene";
 import { PreMatchScene } from "@/components/overlay/PreMatchScene";
 import { IntermissionScene } from "@/components/overlay/IntermissionScene";
 import { BuyPhaseHud, type BuyPhasePlayer } from "@/components/overlay/BuyPhaseHud";
+import type { RoundResult } from "@/components/overlay/RoundTimeline";
 import { LiveRosterSidebar } from "@/components/overlay/LiveRosterSidebar";
 import { LiveScoreboard } from "@/components/overlay/LiveScoreboard";
 import { LastManStandingScene } from "@/components/overlay/LastManStandingScene";
@@ -132,6 +133,7 @@ export default function MatchBroadcastOverlay({
   const [stageName, setStageName] = useState<string | null>(null);
   const [vetoConfig, setVetoConfig] = useState<VetoConfig>(() => parseVetoFormat(null));
   const [seriesStats, setSeriesStats] = useState<OverlayGameStats[]>([]);
+  const [roundHistory, setRoundHistory] = useState<RoundResult[]>([]);
   const statusRef = useRef<MatchStatus | null>(null);
   const matchRef = useRef<MatchData | null>(null);
   useEffect(() => {
@@ -195,6 +197,26 @@ export default function MatchBroadcastOverlay({
       }
     }
   }, [rosterA, rosterB, match?.rounds_won_a, match?.rounds_won_b]);
+
+  // Round-by-round timeline for the Buy Phase HUD (match_rounds; written by Spectra/OCR/manual via one RPC).
+  // Reloads on score change (already realtime via matches) and when Buy Phase opens, instead of relying
+  // on match_rounds being in the realtime publication.
+  const roundsPlayed = (match?.rounds_won_a ?? 0) + (match?.rounds_won_b ?? 0);
+  useEffect(() => {
+    if (!matchId) return;
+    let isMounted = true;
+    supabase
+      .from("match_rounds")
+      .select("round_number, winner_team_id, game_number, win_condition")
+      .eq("match_id", matchId)
+      .order("round_number", { ascending: true })
+      .then(({ data }) => {
+        if (isMounted && data) setRoundHistory(data);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [matchId, roundsPlayed, showBuyPhase]);
 
   useEffect(() => {
     let isMounted = true;
@@ -632,8 +654,9 @@ export default function MatchBroadcastOverlay({
       )}
 
       {/* PLAYER SIDEBARS: ชื่อผู้เล่นจริงจาก team_members / participants (ไม่มีข้อมูล HP จริง จึงไม่แสดง) */}
-      {showScoreboard && <LiveRosterSidebar roster={rosterA} side="left" team="A" />}
-      {showScoreboard && <LiveRosterSidebar roster={rosterB} side="right" team="B" />}
+      {/* ซ่อนอัตโนมัติตอน Buy Phase เปิด — กันทับกับตาราง Buy Phase ที่กินพื้นที่กลางจอเกือบเต็มความกว้าง */}
+      {showScoreboard && !showBuyPhase && <LiveRosterSidebar roster={rosterA} side="left" team="A" />}
+      {showScoreboard && !showBuyPhase && <LiveRosterSidebar roster={rosterB} side="right" team="B" />}
 
       {/* 2.5 PRE-MATCH (SCHEDULED นับถอยหลัง / READY_CHECK สถานะ Ready แต่ละทีม) — เดิมไม่มีฉากเลย */}
       {(displayStatus === "SCHEDULED" || displayStatus === "READY_CHECK") && team_a && team_b && (
@@ -693,7 +716,19 @@ export default function MatchBroadcastOverlay({
       )}
 
       {/* 5. BUY PHASE HUD (TOGGLED VIA ALT+C OR REALTIME BROADCAST) — แสดงเฉพาะข้อมูลที่มีจริง */}
-      <BuyPhaseHud visible={showBuyPhase} teamA={team_a} teamB={team_b} rosterA={rosterA} rosterB={rosterB} roundNumber={rounds_won_a + rounds_won_b + 1} />
+      <BuyPhaseHud
+        visible={showBuyPhase}
+        teamA={team_a}
+        teamB={team_b}
+        rosterA={rosterA}
+        rosterB={rosterB}
+        roundNumber={rounds_won_a + rounds_won_b + 1}
+        roundsWonA={rounds_won_a}
+        roundsWonB={rounds_won_b}
+        roundHistory={roundHistory.filter((r) => r.game_number === (liveGame?.gameNumber ?? 1))}
+        teamAId={match?.team_a_id}
+        teamBId={match?.team_b_id}
+      />
 
       {/* 6. CLUTCH / LAST MAN STANDING (เต็มจอชั่วคราวเมื่อทีมใดเหลือผู้เล่นรอดคนเดียว) */}
       {clutchScene && team_a && team_b && (
