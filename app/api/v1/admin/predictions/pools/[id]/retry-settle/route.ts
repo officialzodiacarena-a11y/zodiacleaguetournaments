@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdminRole } from '@/lib/admin/requireAdminRole';
 import { SettlePoolSchema } from '@/types/predictions';
 
@@ -54,7 +55,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Reset to LOCKED so settle_prediction_pool()'s guard accepts it, then retry.
     await supabase.from('prediction_pools').update({ status: 'LOCKED' }).eq('id', poolId).eq('status', 'SETTLEMENT_ERROR');
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('settle_prediction_pool', {
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('settle_prediction_pool', {
       p_pool_id: poolId,
       p_winning_team_id: parsed.data.winning_team_id,
     });
