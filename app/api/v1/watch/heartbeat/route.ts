@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { WatchHeartbeatSchema } from '@/types/watch-v2';
 import { computeNextResetAtBangkok } from '@/lib/watch/nextResetAt';
 
@@ -72,7 +73,8 @@ export async function POST(req: Request) {
       });
     }
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('credit_watch_v2_heartbeat', {
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('credit_watch_v2_heartbeat', {
       p_session_id: session_id,
       p_player_id: player.id,
     });

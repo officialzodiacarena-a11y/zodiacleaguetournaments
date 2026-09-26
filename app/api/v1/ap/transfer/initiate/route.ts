@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { InitiateTransferSchema } from '@/types/p2p-transfer';
 import { verifyTransferToken } from '@/lib/p2p/transferToken';
 
@@ -64,7 +65,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code: 'SELF_TRANSFER_FORBIDDEN', message: 'โอนหาตัวเองไม่ได้' } }, { status: 400 });
     }
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('transfer_ap_to_escrow', {
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('transfer_ap_to_escrow', {
       p_sender_id: player.id,
       p_receiver_id: receiver_id,
       p_amount_ap: amount_ap,

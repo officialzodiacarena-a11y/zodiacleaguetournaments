@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { DisputeEscrowSchema } from '@/types/p2p-transfer';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> | { id: string } }) {
@@ -34,7 +35,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: { code: 'VALIDATION_ERROR', message: 'ต้องระบุเหตุผลอย่างน้อย 3 ตัวอักษร' } }, { status: 400 });
     }
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('dispute_escrow_and_refund', {
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('dispute_escrow_and_refund', {
       p_escrow_id: escrowId,
       p_sender_id: player.id,
     });
