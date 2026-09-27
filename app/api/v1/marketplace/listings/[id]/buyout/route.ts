@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
 
 // Not in the abbreviated API_Stage2_Phase6.md contract (which only lists a
@@ -41,7 +42,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: { code: 'VALIDATION_ERROR', message: 'ข้อมูลขาเข้าไม่ถูกต้อง' } }, { status: 400 });
     }
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('buyout_marketplace_item', {
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('buyout_marketplace_item', {
       p_listing_id: listingId,
       p_buyer_id: player.id,
       p_idempotency_key: parsed.data.idempotency_key,

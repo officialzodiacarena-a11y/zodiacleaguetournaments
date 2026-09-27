@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { BuyTicketSchema } from '@/types/predictions';
 
 export async function POST(req: Request) {
@@ -38,7 +39,8 @@ export async function POST(req: Request) {
 
     const { pool_id, predicted_team_id, tier, ap_amount, idempotency_key } = parsed.data;
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('buy_prediction_ticket', {
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('buy_prediction_ticket', {
       p_pool_id: pool_id,
       p_player_id: player.id,
       p_predicted_team_id: predicted_team_id,

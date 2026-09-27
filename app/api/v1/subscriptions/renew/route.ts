@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { RenewSubscriptionSchema } from '@/types/subscriptions';
 import { callWithLockRetry } from '@/lib/billing/retryOnLockTimeout';
 
@@ -67,8 +68,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code: 'FORBIDDEN', message: 'ไม่ใช่เจ้าของ subscription นี้' } }, { status: 403 });
     }
 
+    const adminClient = createAdminClient();
     const { data: rpcResult, error: rpcError, lockTimedOut } = await callWithLockRetry(async () => {
-      const result = await supabase.rpc('renew_subscription_with_ap', {
+      const result = await adminClient.rpc('renew_subscription_with_ap', {
         p_subscription_id: subscription_id,
         p_player_id: player.id,
         p_idempotency_key: idempotency_key,
