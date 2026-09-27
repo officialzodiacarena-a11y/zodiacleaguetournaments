@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { CreateListingSchema, LISTING_CURRENCIES, type ListingCurrency } from '@/types/marketplace';
 
 // Zero-Leak: this GET handler's SELECT explicitly lists columns and never
@@ -110,7 +111,8 @@ export async function POST(req: Request) {
       p_auction_ends_at: auction_ends_at ?? null,
     };
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc(
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc(
       'create_marketplace_listing' as never,
       rpcPayload as never
     );

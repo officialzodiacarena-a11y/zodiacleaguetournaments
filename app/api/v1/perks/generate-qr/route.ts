@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { GenerateQrSchema } from '@/types/perks';
 import { issuePerkToken } from '@/lib/perks/perkToken';
 import { checkAccessGate } from '@/lib/billing/checkAccessGate';
@@ -12,6 +13,16 @@ export async function POST(req: Request) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: { code: 'UNAUTHORIZED', message: 'กรุณาเข้าสู่ระบบก่อนทำรายการ' } }, { status: 401 });
+    }
+
+    const { data: player, error: playerError } = await supabase
+      .from('players')
+      .select('id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (playerError || !player) {
+      return NextResponse.json({ error: { code: 'PROFILE_NOT_FOUND', message: 'ไม่พบประวัติโปรไฟล์ของคุณในระบบลีก' } }, { status: 404 });
     }
 
     let body: unknown;
@@ -57,6 +68,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code, message: 'ไม่สามารถออก QR ได้ในสถานะสัญญาปัจจุบัน' } }, { status: 403 });
     }
 
+    const adminClient = createAdminClient();
+
+    if (redeemed_by_player_id !== player.id) {
+      const { data: member, error: memberError } = await adminClient
+        .from('team_members')
+        .select('id')
+        .eq('team_id', perk.team_id)
+        .eq('player_id', redeemed_by_player_id)
+        .eq('status', 'ACTIVE')
+        .maybeSingle();
+
+      if (memberError || !member) {
+        return NextResponse.json({ error: { code: 'FORBIDDEN', message: 'ผู้รับสิทธิ์ต้องเป็นสมาชิกทีมที่ยังทำงานอยู่เท่านั้น' } }, { status: 403 });
+      }
+    }
+
     // Reserve the redemption row first (atomic quota headroom check happens
     // again for real at redeem time — this call only blocks obviously-over-quota
     // requests early so the partner never receives a QR that can't possibly redeem).
@@ -68,7 +95,7 @@ export async function POST(req: Request) {
       redeemed_by_player_id,
     });
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('request_perk_redemption', {
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('request_perk_redemption', {
       p_perk_id: perk_id,
       p_redeemed_by_player_id: redeemed_by_player_id,
       p_amount: redeem_amount,
