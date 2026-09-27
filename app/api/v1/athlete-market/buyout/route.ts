@@ -1,6 +1,7 @@
 //app/api/v1/athlete-market/buyout/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
 
 const BuyoutSchema = z.object({
@@ -57,7 +58,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: rawResult, error: rpcError } = await supabase.rpc('buyout_athlete_listing', {
+    const { data: isLeader } = await supabase.rpc('is_team_leader', { p_team_id: payload.destination_team_id });
+    if (!isLeader) {
+      return NextResponse.json(
+        { error: { code: 'FORBIDDEN', message: 'ต้องเป็นหัวหน้าทีมปลายทางเท่านั้น' } },
+        { status: 403 }
+      );
+    }
+
+    const adminClient = createAdminClient();
+    const { data: rawResult, error: rpcError } = await adminClient.rpc('buyout_athlete_listing', {
       p_listing_id: payload.listing_id,
       p_buyer_player_id: buyer.id,
       p_destination_team_id: payload.destination_team_id,
