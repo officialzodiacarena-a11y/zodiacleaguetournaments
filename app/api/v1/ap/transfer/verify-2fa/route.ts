@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { VerifyOtpSchema } from '@/types/p2p-transfer';
 import { hashOtpCode, issueTransferToken } from '@/lib/p2p/transferToken';
 
@@ -34,7 +35,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code: 'VALIDATION_ERROR', message: 'รหัส OTP ต้องเป็นตัวเลข 6 หลัก' } }, { status: 400 });
     }
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('verify_p2p_otp_challenge', {
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('verify_p2p_otp_challenge', {
       p_sender_id: player.id,
       p_otp_code_hash: hashOtpCode(parsed.data.otp_code),
     });

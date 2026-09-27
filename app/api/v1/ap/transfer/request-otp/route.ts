@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { hashOtpCode } from '@/lib/p2p/transferToken';
 
 // Not in the abbreviated API contract (which only lists verify-2fa taking an
@@ -28,7 +29,8 @@ export async function POST() {
 
     const code = String(Math.floor(100000 + Math.random() * 900000));
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('issue_p2p_otp_challenge', {
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('issue_p2p_otp_challenge', {
       p_sender_id: player.id,
       p_otp_code_hash: hashOtpCode(code),
     });

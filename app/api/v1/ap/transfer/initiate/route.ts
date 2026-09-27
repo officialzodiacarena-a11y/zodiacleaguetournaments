@@ -45,9 +45,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code: 'TRANSFER_TOKEN_INVALID', message: 'ต้องผ่าน 2FA ก่อน' } }, { status: 401 });
     }
 
+    const adminClient = createAdminClient();
+
     // Single-use enforcement — this insert fails with TOKEN_ALREADY_USED if
     // the jti was ever consumed before (unique constraint on jti).
-    const { data: consumeResult, error: consumeError } = await supabase.rpc('consume_p2p_transfer_token', {
+    const { data: consumeResult, error: consumeError } = await adminClient.rpc('consume_p2p_transfer_token', {
       p_jti: verification.payload.jti,
       p_sender_id: player.id,
     });
@@ -65,7 +67,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code: 'SELF_TRANSFER_FORBIDDEN', message: 'โอนหาตัวเองไม่ได้' } }, { status: 400 });
     }
 
-    const adminClient = createAdminClient();
     const { data: rpcResult, error: rpcError } = await adminClient.rpc('transfer_ap_to_escrow', {
       p_sender_id: player.id,
       p_receiver_id: receiver_id,
