@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { CheckoutSubscriptionSchema } from '@/types/subscriptions';
 
 export async function POST(req: Request) {
@@ -47,7 +48,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code: 'FORBIDDEN', message: 'ไม่สามารถสมัคร Athlete Pass แทนผู้อื่นได้' } }, { status: 403 });
     }
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('create_subscription_invoice', {
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('create_subscription_invoice', {
       p_plan_code: plan_code,
       p_subscriber_type: subscriber_type,
       p_subscriber_id: subscriber_id,

@@ -2,6 +2,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { AthleteProfile, CoreKpiMetrics, RadarPerformanceData } from '@/types/dashboard';
 
 export interface RecentMatchItem {
@@ -67,12 +68,24 @@ export async function getAthleteDashboardData(): Promise<DashboardDataPayload> {
   }
 
   try {
+    const { data: player, error: playerError } = await supabase
+      .from('players')
+      .select('id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (playerError || !player) {
+      console.warn('RPC Fallback triggered: player profile not found for user.id', user.id);
+      return defaultPayload;
+    }
+
     // 2. เรียกใช้ RPC แบบ Explicit Generics Parameter
-    const { data, error } = await supabase.rpc<
+    const adminClient = createAdminClient();
+    const { data, error } = await adminClient.rpc<
       'get_athlete_telemetry_dashboard',
       AthleteTelemetryRpcArgs
     >('get_athlete_telemetry_dashboard', {
-      p_player_id: user.id,
+      p_player_id: player.id,
     });
 
     if (error || !data) {

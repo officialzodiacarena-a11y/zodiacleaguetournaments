@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
 
 const BidSchema = z.object({
@@ -44,9 +45,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code: 'PLAYER_NOT_FOUND', message: 'ไม่พบข้อมูลโปรไฟล์ผู้ใช้' } }, { status: 404 });
     }
 
+    const { data: isLeader } = await supabase.rpc('is_team_leader', { p_team_id: payload.destination_team_id });
+    if (!isLeader) {
+      return NextResponse.json({ error: { code: 'FORBIDDEN', message: 'ต้องเป็นหัวหน้าทีมปลายทางเท่านั้น' } }, { status: 403 });
+    }
+
+    const adminClient = createAdminClient();
+
     // Anti-Sybil Check: Unverified KYC จำกัด 500 AP/วัน
     if (!bidder.kyc_verified_at) {
-      const { data: dailyBidsSum } = await supabase.rpc('get_daily_unverified_bid_total' as never, { p_player_id: bidder.id } as never);
+      const { data: dailyBidsSum } = await adminClient.rpc('get_daily_unverified_bid_total' as never, { p_player_id: bidder.id } as never);
       if (Number(dailyBidsSum || 0) + payload.bid_amount_ap > 500) {
         return NextResponse.json({
           error: {
@@ -57,7 +65,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const { data: rawRpcResult, error: rpcError } = await supabase.rpc('match_ffxi_athlete_bid' as never, {
+    const { data: rawRpcResult, error: rpcError } = await adminClient.rpc('match_ffxi_athlete_bid' as never, {
       p_listing_id: payload.listing_id,
       p_bidder_player_id: bidder.id,
       p_destination_team_id: payload.destination_team_id,
