@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
@@ -35,7 +36,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: { code: 'FORBIDDEN', message: 'เฉพาะผู้รับเท่านั้นที่กดรับได้' } }, { status: 403 });
     }
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('release_escrow_to_receiver', {
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('release_escrow_to_receiver', {
       p_escrow_id: escrowId,
       p_auto: false,
     });

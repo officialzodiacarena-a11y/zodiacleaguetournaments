@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdminRole } from '@/lib/admin/requireAdminRole';
 import { VoidMatchSchema } from '@/types/predictions';
 
@@ -32,7 +33,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: { code: 'VALIDATION_ERROR', message: 'ต้องระบุเหตุผลอย่างน้อย 3 ตัวอักษร' } }, { status: 400 });
     }
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('admin_void_match_and_refund', {
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('admin_void_match_and_refund', {
       p_match_id: matchId,
       p_admin_id: guard.playerId,
       p_reason: parsed.data.reason,

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdminRole } from '@/lib/admin/requireAdminRole';
 
 // admin_revert_prediction_pool() — VOID after settle (post-settlement fraud).
@@ -17,7 +18,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const guard = await requireAdminRole(supabase, ['SUPER_ADMIN']);
     if ('error' in guard) return guard.error;
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('admin_revert_prediction_pool', {
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('admin_revert_prediction_pool', {
       p_pool_id: poolId,
       p_admin_id: guard.playerId,
     });

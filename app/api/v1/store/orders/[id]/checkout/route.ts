@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRateLimit } from '@/lib/rateLimit';
 import type { CheckoutOrderResult } from '@/types/store';
 import { asRpcResult } from '@/types/supabase-helpers';
@@ -82,7 +83,8 @@ export async function POST(
         .single();
 
       if (player) {
-        const { error: cashbackError } = await supabase.rpc('process_affiliate_spend_cashback', {
+        const adminClient = createAdminClient();
+        const { error: cashbackError } = await adminClient.rpc('process_affiliate_spend_cashback', {
           p_buyer_id: player.id,
           p_spend_amount_ap: result.ap_deducted,
           p_reference_tx_id: orderId,

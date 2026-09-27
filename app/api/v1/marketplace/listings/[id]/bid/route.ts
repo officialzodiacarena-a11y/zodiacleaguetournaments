@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { PlaceBidSchema } from '@/types/marketplace';
 
 // Zero-Leak: this route never returns floor_price, the price gap, or any
@@ -42,7 +43,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const { bid_amount, idempotency_key } = parsed.data;
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('match_ffxi_blind_bid', {
+    const adminClient = createAdminClient();
+    const { data: rpcResult, error: rpcError } = await adminClient.rpc('match_ffxi_blind_bid', {
       p_listing_id: listingId,
       p_bidder_id: player.id,
       p_bid_amount: bid_amount,
