@@ -10,6 +10,8 @@ import type { SponsorBannerPublic } from '@/types/sponsor';
 const FALLBACK_LOGO_SRC = '/images/logo/logo.png';
 const MAX_SPONSORS = 6;
 
+const isSafeHref = (url: string) => url.startsWith('https://') || (url.startsWith('/') && !url.startsWith('//'));
+
 export function OfficialSponsorsBar() {
   const [banners, setBanners] = useState<SponsorBannerPublic[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,7 +25,8 @@ export function OfficialSponsorsBar() {
         if (!res.ok) throw new Error('Fetch failed');
         const json = await res.json();
         if (!isCancelled && Array.isArray(json.data)) {
-          setBanners(json.data.slice(0, MAX_SPONSORS));
+          const safe = (json.data as SponsorBannerPublic[]).filter((b) => isSafeHref(b.target_url));
+          setBanners(safe.slice(0, MAX_SPONSORS));
         }
       } catch (err) {
         console.error('[OfficialSponsorsBar] Load failed:', err);
@@ -60,6 +63,8 @@ export function OfficialSponsorsBar() {
             <Link
               key={item.id}
               href={item.target_url}
+              target={item.target_url.startsWith('https://') ? '_blank' : undefined}
+              rel={item.target_url.startsWith('https://') ? 'noopener noreferrer' : undefined}
               className="group relative rounded-xl border border-white/10 bg-[#121424]/80 p-3 hover:border-[#00D4FF]/50 hover:bg-[#1A1C30] transition-all duration-300 flex flex-col items-center justify-between text-center space-y-2"
             >
               <div className="relative w-full h-24 rounded-lg overflow-hidden border border-white/5 bg-[#0D0E1A]">
