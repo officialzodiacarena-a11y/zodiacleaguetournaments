@@ -110,7 +110,17 @@ export function SponsorSlot({ className = '' }: SponsorSlotProps) {
     );
   }
 
-  if (!banner) return null;
+  if (!banner) {
+    return (
+      <div className={`w-full max-w-5xl mx-auto ${className}`}>
+        <div className="relative w-full aspect-[970/120] max-h-28 rounded-xl border border-white/5 bg-[#121424] overflow-hidden flex items-center justify-center">
+          <div className="relative h-12 w-12">
+            <Image src="/images/logo/logo.png" alt="Zodiac Arena" fill sizes="48px" className="object-contain" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} className={`w-full max-w-5xl mx-auto select-none ${className}`}>

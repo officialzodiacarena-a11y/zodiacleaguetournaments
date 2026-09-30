@@ -14,7 +14,15 @@ export interface CashoutPayload {
   idempotencyKey: string;
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
+  return NextResponse.json(
+    { success: false, error: 'ปิดปรับปรุงชั่วคราว' },
+    { status: 503 }
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function legacyCashoutDisabled_20260930(req: NextRequest) {
   try {
     const body: CashoutPayload = await req.json();
     const { userId, amountThb, promptpayNumber, accountName, idempotencyKey } = body;

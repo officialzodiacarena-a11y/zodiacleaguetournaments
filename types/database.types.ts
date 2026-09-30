@@ -25,7 +25,7 @@ export type Database = {
           impression_count: number
           is_active: boolean
           priority: number
-          slot_position: 'TOP_LEADERBOARD' | 'LEFT_TOWER' | 'RIGHT_TOWER'
+          slot_position: 'TOP_LEADERBOARD' | 'LEFT_TOWER' | 'RIGHT_TOWER' | 'OFFICIAL_SPONSORS_BAR' | 'OBS_SPONSOR_BADGE' | 'STREAM_HUB_BOX' | 'SPONSOR_LANDING_HERO'
           sponsor_id: string | null
           starts_at: string
           target_url: string
@@ -43,7 +43,7 @@ export type Database = {
           impression_count?: number
           is_active?: boolean
           priority?: number
-          slot_position: 'TOP_LEADERBOARD' | 'LEFT_TOWER' | 'RIGHT_TOWER'
+          slot_position: 'TOP_LEADERBOARD' | 'LEFT_TOWER' | 'RIGHT_TOWER' | 'OFFICIAL_SPONSORS_BAR' | 'OBS_SPONSOR_BADGE' | 'STREAM_HUB_BOX' | 'SPONSOR_LANDING_HERO'
           sponsor_id?: string | null
           starts_at?: string
           target_url: string
@@ -61,7 +61,7 @@ export type Database = {
           impression_count?: number
           is_active?: boolean
           priority?: number
-          slot_position?: 'TOP_LEADERBOARD' | 'LEFT_TOWER' | 'RIGHT_TOWER'
+          slot_position?: 'TOP_LEADERBOARD' | 'LEFT_TOWER' | 'RIGHT_TOWER' | 'OFFICIAL_SPONSORS_BAR' | 'OBS_SPONSOR_BADGE' | 'STREAM_HUB_BOX' | 'SPONSOR_LANDING_HERO'
           sponsor_id?: string | null
           starts_at?: string
           target_url?: string

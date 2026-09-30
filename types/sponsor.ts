@@ -1,7 +1,14 @@
 // types/sponsor.ts
 import { z } from 'zod';
 
-export type SponsorSlotPosition = 'TOP_LEADERBOARD' | 'LEFT_TOWER' | 'RIGHT_TOWER';
+export type SponsorSlotPosition =
+  | 'TOP_LEADERBOARD'
+  | 'LEFT_TOWER'
+  | 'RIGHT_TOWER'
+  | 'OFFICIAL_SPONSORS_BAR'
+  | 'OBS_SPONSOR_BADGE'
+  | 'STREAM_HUB_BOX'
+  | 'SPONSOR_LANDING_HERO';
 
 export interface SponsorBannerPublic {
   id: string;
@@ -11,6 +18,7 @@ export interface SponsorBannerPublic {
   target_url: string;
   brand_name: string | null;
   priority: number;
+  sponsor_id: string | null;
 }
 
 export interface AdminBannerDetail extends SponsorBannerPublic {
@@ -32,9 +40,22 @@ export const BannerIdParamSchema = z.string().uuid({ message: 'Invalid Banner UU
 
 export const CreateBannerSchema = z.object({
   title: z.string().min(2, 'ชื่อแบนเนอร์ต้องมีอย่างน้อย 2 ตัวอักษร'),
-  slot_position: z.enum(['TOP_LEADERBOARD', 'LEFT_TOWER', 'RIGHT_TOWER']),
-  image_url: z.string().url('URL รูปภาพไม่ถูกต้อง'),
-  target_url: z.string().min(1, 'ต้องระบุ URL ปลายทาง'),
+  slot_position: z.enum([
+    'TOP_LEADERBOARD',
+    'LEFT_TOWER',
+    'RIGHT_TOWER',
+    'OFFICIAL_SPONSORS_BAR',
+    'OBS_SPONSOR_BADGE',
+    'STREAM_HUB_BOX',
+    'SPONSOR_LANDING_HERO',
+  ]),
+  image_url: z.string().url('URL รูปภาพไม่ถูกต้อง').refine((v) => v.startsWith('https://'), { message: 'image_url ต้องขึ้นต้นด้วย https://' }),
+  target_url: z
+    .string()
+    .min(1, 'ต้องระบุ URL ปลายทาง')
+    .refine((v) => (v.startsWith('https://') || (v.startsWith('/') && !v.startsWith('//'))), {
+      message: 'target_url ต้องขึ้นต้นด้วย https:// หรือ / เท่านั้น',
+    }),
   brand_name: z.string().optional().nullable(),
   priority: z.coerce.number().int().default(0),
   is_active: z.boolean().default(true),

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { CreateCryptoIntentSchema } from '@/types/payments';
 import { getTokenToThbRate } from '@/lib/payments/cryptoRate';
+import { computeTopupThb } from '@/lib/payments/topup';
 
 export async function POST(req: Request) {
   try {
@@ -85,6 +86,17 @@ export async function POST(req: Request) {
 
     let finalAmountThb = amountThb;
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    if (purpose === 'TOP_UP') {
+      const topup = computeTopupThb(apAmount!);
+      if (!topup.ok) {
+        return NextResponse.json(
+          { error: { code: 'TOPUP_AP_INVALID', message: 'จำนวน AP ต้องเป็นเลขคู่ 40–20,000' } },
+          { status: 400 }
+        );
+      }
+      finalAmountThb = topup.amountThb;
+    }
 
     if (purpose === 'ORDER') {
       if (!orderId) {
