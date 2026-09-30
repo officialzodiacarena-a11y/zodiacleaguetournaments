@@ -100,33 +100,22 @@ const SEASON_CARDS = [
   },
 ];
 
+const FALLBACK_LOGO_SRC = '/images/logo/logo.png';
+
 export function SkyscraperTower({ position, className = '' }: SkyscraperTowerProps) {
   const [banner, setBanner] = useState<SponsorBannerPublic | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(position === 'LEFT_TOWER');
   const [hasTrackedImpression, setHasTrackedImpression] = useState(false);
   const [seasonIndex, setSeasonIndex] = useState(0);
+  const [imgError, setImgError] = useState(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const isLeft = position === 'LEFT_TOWER';
-  const logoSrc = '/images/sponser/luminary_global.jpg';
+  const imgSrc = imgError ? FALLBACK_LOGO_SRC : (banner?.image_url || FALLBACK_LOGO_SRC);
 
-  const defaultBanner: SponsorBannerPublic = {
-    id: isLeft ? 'default-tower-left' : 'default-tower-right',
-    title: 'Luminary Global - Official Title Sponsor',
-    slot_position: position,
-    image_url: logoSrc,
-    target_url: '/sponsor/luminary',
-    brand_name: 'LUMINARY GLOBAL',
-    priority: 100,
-  };
-
-  const activeBanner = banner || defaultBanner;
-  const [imgError, setImgError] = useState(false);
-  const imgSrc = imgError ? logoSrc : (activeBanner.image_url || logoSrc);
-
-  // Auto-rotate Right Tower every 10 seconds (5 Season Cards)
+  // Auto-rotate Right Tower every 10 seconds (5 Season Cards) — house content, no DB fetch
   useEffect(() => {
     if (isLeft) return;
     const interval = setInterval(() => {
@@ -136,7 +125,10 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
     return () => clearInterval(interval);
   }, [isLeft]);
 
+  // RIGHT_TOWER is house content (season cards) — never fetches banners or tracks stats
   useEffect(() => {
+    if (!isLeft) return;
+
     let isCancelled = false;
 
     async function fetchTower() {
@@ -145,12 +137,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
         if (!res.ok) throw new Error('Fetch failed');
         const json = await res.json();
         if (!isCancelled && json.data && json.data.length > 0) {
-          const item = json.data[0];
-          if (item.brand_name?.toUpperCase().includes('SINOPEC')) {
-            item.brand_name = 'LUMINARY GLOBAL';
-            item.image_url = logoSrc;
-          }
-          setBanner(item);
+          setBanner(json.data[0]);
         }
       } catch (err) {
         console.error(`[SkyscraperTower ${position}] Load failed:`, err);
@@ -164,7 +151,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
     return () => {
       isCancelled = true;
     };
-  }, [position, logoSrc]);
+  }, [isLeft, position]);
 
   const trackEvent = useCallback((bannerId: string, eventType: 'IMPRESSION' | 'CLICK') => {
     try {
@@ -186,8 +173,10 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
     }
   }, []);
 
+  // Impression tracking only applies to LEFT_TOWER when a real banner is loaded —
+  // RIGHT_TOWER (house content) and the empty-state logo never count.
   useEffect(() => {
-    if (!activeBanner || hasTrackedImpression || !containerRef.current) return;
+    if (!isLeft || !banner || hasTrackedImpression || !containerRef.current) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -195,7 +184,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
         if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
           if (!timerRef.current) {
             timerRef.current = setTimeout(() => {
-              trackEvent(activeBanner.id, 'IMPRESSION');
+              trackEvent(banner.id, 'IMPRESSION');
               setHasTrackedImpression(true);
             }, 1000);
           }
@@ -217,9 +206,9 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
         clearTimeout(timerRef.current);
       }
     };
-  }, [activeBanner, hasTrackedImpression, trackEvent]);
+  }, [isLeft, banner, hasTrackedImpression, trackEvent]);
 
-  if (loading && !banner) return null;
+  if (isLeft && loading && !banner) return null;
 
   const currentSeason = SEASON_CARDS[seasonIndex];
 
@@ -232,71 +221,83 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
       } ${className}`}
     >
       {isLeft ? (
-        /* ================= LEFT TOWER: SPONSOR (LUMINARY GLOBAL) ================= */
-        <Link
-          href={activeBanner.target_url}
-          onClick={() => trackEvent(activeBanner.id, 'CLICK')}
-          className="group relative flex flex-col justify-between w-full h-[390px] xl:h-[420px] rounded-2xl overflow-hidden bg-gradient-to-b from-[#151728] via-[#0E101E] to-[#0A0B14] border border-[#E8B429]/40 shadow-[0_0_25px_rgba(232,180,41,0.12)] hover:border-[#E8B429] hover:shadow-[0_0_35px_rgba(232,180,41,0.35)] transition-all duration-300 p-4"
-        >
-          {/* Subtle Background Glow */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-[#E8B429]/10 via-transparent to-transparent pointer-events-none" />
+        banner ? (
+          /* ================= LEFT TOWER: SPONSOR BANNER (FROM DB) ================= */
+          <Link
+            href={banner.target_url}
+            onClick={() => trackEvent(banner.id, 'CLICK')}
+            className="group relative flex flex-col justify-between w-full h-[390px] xl:h-[420px] rounded-2xl overflow-hidden bg-gradient-to-b from-[#151728] via-[#0E101E] to-[#0A0B14] border border-[#E8B429]/40 shadow-[0_0_25px_rgba(232,180,41,0.12)] hover:border-[#E8B429] hover:shadow-[0_0_35px_rgba(232,180,41,0.35)] transition-all duration-300 p-4"
+          >
+            {/* Subtle Background Glow */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-[#E8B429]/10 via-transparent to-transparent pointer-events-none" />
 
-          {/* 1. Header Badge */}
-          <div className="relative z-10 flex flex-col items-center gap-1 text-center">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#E8B429]/15 border border-[#E8B429]/50 text-[9px] xl:text-[10px] font-mono font-bold text-[#E8B429] tracking-wider uppercase shadow-sm">
-              <Crown className="w-3.5 h-3.5 text-[#E8B429]" />
-              <span>TITLE SPONSOR</span>
+            {/* 1. Header Badge */}
+            <div className="relative z-10 flex flex-col items-center gap-1 text-center">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#E8B429]/15 border border-[#E8B429]/50 text-[9px] xl:text-[10px] font-mono font-bold text-[#E8B429] tracking-wider uppercase shadow-sm">
+                <Crown className="w-3.5 h-3.5 text-[#E8B429]" />
+                <span>TITLE SPONSOR</span>
+              </div>
+              <span className="text-[8px] xl:text-[9px] font-mono text-zinc-400 uppercase tracking-widest">
+                ZODIAC ARENA S2
+              </span>
             </div>
-            <span className="text-[8px] xl:text-[9px] font-mono text-zinc-400 uppercase tracking-widest">
-              ZODIAC ARENA S2
-            </span>
-          </div>
 
-          {/* 2. Center Logo Frame */}
-          <div className="relative z-10 my-auto flex flex-col items-center gap-3">
-            <div className="relative w-[104px] h-[104px] xl:w-[116px] xl:h-[116px] rounded-2xl overflow-hidden border-2 border-[#E8B429]/60 shadow-[0_0_20px_rgba(232,180,41,0.25)] bg-white p-1.5 group-hover:scale-105 transition-transform duration-300 flex items-center justify-center">
+            {/* 2. Center Logo Frame */}
+            <div className="relative z-10 my-auto flex flex-col items-center gap-3">
+              <div className="relative w-[104px] h-[104px] xl:w-[116px] xl:h-[116px] rounded-2xl overflow-hidden border-2 border-[#E8B429]/60 shadow-[0_0_20px_rgba(232,180,41,0.25)] bg-white p-1.5 group-hover:scale-105 transition-transform duration-300 flex items-center justify-center">
+                <Image
+                  src={imgSrc}
+                  alt={banner.brand_name ?? banner.title}
+                  fill
+                  sizes="120px"
+                  className="object-contain p-1"
+                  priority
+                  onError={() => setImgError(true)}
+                />
+              </div>
+
+              <div className="text-center px-1">
+                <h4 className="text-sm xl:text-base font-black text-white tracking-wide uppercase group-hover:text-[#E8B429] transition-colors leading-tight">
+                  {banner.brand_name ?? banner.title}
+                </h4>
+              </div>
+            </div>
+
+            {/* 3. Bottom CTA Link */}
+            <div className="relative z-10 w-full pt-2 border-t border-white/10 text-center">
+              <div className="inline-flex items-center gap-1.5 text-[9px] xl:text-[10px] font-mono font-bold text-zinc-400 group-hover:text-[#E8B429] transition-colors">
+                <Sparkles className="w-3 h-3 text-[#E8B429]" />
+                <span>VISIT PARTNER</span>
+                <ExternalLink className="w-3 h-3 text-zinc-400" />
+              </div>
+            </div>
+
+            {/* Shine Sweep Overlay */}
+            <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
+          </Link>
+        ) : (
+          /* ================= LEFT TOWER: EMPTY STATE — ZODIAC ARENA LOGO ================= */
+          <Link
+            href="/"
+            className="group relative flex flex-col items-center justify-center w-full h-[390px] xl:h-[420px] rounded-2xl overflow-hidden bg-gradient-to-b from-[#151728] via-[#0E101E] to-[#0A0B14] border border-white/10 p-4"
+          >
+            <div className="relative w-[104px] h-[104px] xl:w-[116px] xl:h-[116px] rounded-2xl overflow-hidden bg-white p-1.5 flex items-center justify-center">
               <Image
-                src={imgSrc}
-                alt="Luminary Global"
+                src={FALLBACK_LOGO_SRC}
+                alt="Zodiac Arena"
                 fill
                 sizes="120px"
                 className="object-contain p-1"
                 priority
-                onError={() => setImgError(true)}
               />
             </div>
-
-            <div className="text-center px-1">
-              <h4 className="text-sm xl:text-base font-black text-white tracking-wide uppercase group-hover:text-[#E8B429] transition-colors leading-tight">
-                LUMINARY
-              </h4>
-              <h4 className="text-sm xl:text-base font-black text-[#E8B429] tracking-wider uppercase leading-tight">
-                GLOBAL
-              </h4>
-              <p className="text-[9px] font-sans text-zinc-400 mt-1 line-clamp-2 leading-tight">
-                Clean Spaces • Better Life
-              </p>
-            </div>
-          </div>
-
-          {/* 3. Bottom CTA Link */}
-          <div className="relative z-10 w-full pt-2 border-t border-white/10 text-center">
-            <div className="inline-flex items-center gap-1.5 text-[9px] xl:text-[10px] font-mono font-bold text-zinc-400 group-hover:text-[#E8B429] transition-colors">
-              <Sparkles className="w-3 h-3 text-[#E8B429]" />
-              <span>VISIT PARTNER</span>
-              <ExternalLink className="w-3 h-3 text-zinc-400" />
-            </div>
-          </div>
-
-          {/* Shine Sweep Overlay */}
-          <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
-        </Link>
+          </Link>
+        )
       ) : (
-        /* ================= RIGHT TOWER: 5-SEASON ROTATING CARDS (10s CYCLE) ================= */
+        /* ================= RIGHT TOWER: 5-SEASON ROTATING CARDS (10s CYCLE, HOUSE CONTENT) ================= */
         <Link
           key={currentSeason.id}
           href="/tournament"
-          onClick={() => trackEvent(activeBanner.id, 'CLICK')}
           style={{ borderColor: currentSeason.borderColor }}
           className="group relative flex flex-col justify-between w-full h-[390px] xl:h-[420px] rounded-2xl overflow-hidden bg-zinc-950/25 transition-all duration-700 hover:-translate-y-1 shadow-[0_4px_25px_rgba(0,0,0,0.7)] p-3.5 animate-fadeIn"
         >
