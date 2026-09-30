@@ -5,6 +5,9 @@ import { requireLeagueAdminPage } from '@/lib/admin/requireLeagueAdminPage';
 import { AwardButton } from '@/components/admin/league/AwardButton';
 import { RecalculateButton } from '@/components/admin/league/RecalculateButton';
 import { ReverseButton } from '@/components/admin/league/ReverseButton';
+import { PlacementsForm } from '@/components/admin/league/PlacementsForm';
+import { AdjustForm } from '@/components/admin/league/AdjustForm';
+import { TierMovesPanel } from '@/components/admin/league/TierMovesPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +40,22 @@ interface TransactionRow {
   note: string | null;
   created_at: string;
   reverses_id: string | null;
+  teams: TeamRef[] | TeamRef | null;
+}
+
+interface SeasonStandingTeamRow {
+  team_id: string;
+  division_tier: string | null;
+  teams: TeamRef[] | TeamRef | null;
+}
+
+interface TierMoveRawRow {
+  id: string;
+  season_id: string;
+  from_tier: string;
+  to_tier: string;
+  status: string;
+  reason: string | null;
   teams: TeamRef[] | TeamRef | null;
 }
 
@@ -95,6 +114,53 @@ export default async function AdminLeaguePage({ searchParams }: PageProps) {
 
   const transactions = txRows ?? [];
   const reversedIds = new Set(transactions.map((t) => t.reverses_id).filter((id): id is string => !!id));
+
+  const seasonList = seasons ?? [];
+
+  const { data: seasonStandingRows } = seasonIds.length
+    ? ((await supabase
+        .from('season_standings')
+        .select('team_id, division_tier, season_id, teams(name, tag)')
+        .in('season_id', seasonIds)) as unknown as {
+        data: (SeasonStandingTeamRow & { season_id: string })[] | null;
+      })
+    : { data: [] };
+
+  const standingsBySeasonId: Record<string, { teamId: string; teamName: string; divisionTier: string | null }[]> = {};
+  for (const row of seasonStandingRows ?? []) {
+    const team = one<TeamRef>(row.teams);
+    const list = standingsBySeasonId[row.season_id] ?? [];
+    list.push({ teamId: row.team_id, teamName: team?.name ?? 'UNKNOWN', divisionTier: row.division_tier });
+    standingsBySeasonId[row.season_id] = list;
+  }
+
+  const { data: allVlpCircuits } = (await supabase
+    .from('circuits')
+    .select('id')
+    .eq('point_unit', 'VLP')) as unknown as { data: { id: string }[] | null };
+  const allVlpCircuitIds = (allVlpCircuits ?? []).map((c) => c.id);
+
+  const { data: nextSeasonRows } = allVlpCircuitIds.length
+    ? await supabase.from('seasons').select('id, name').in('circuit_id', allVlpCircuitIds)
+    : { data: [] };
+
+  const { data: tierMoveRows } = (await supabase
+    .from('league_tier_moves')
+    .select('id, season_id, from_tier, to_tier, status, reason, teams(name, tag)')
+    .eq('circuit_id', selectedCircuit.id)) as unknown as { data: TierMoveRawRow[] | null };
+
+  const tierMoves = (tierMoveRows ?? []).map((m) => {
+    const team = one<TeamRef>(m.teams);
+    return {
+      id: m.id,
+      seasonId: m.season_id,
+      teamName: team?.name ?? 'UNKNOWN',
+      fromTier: m.from_tier,
+      toTier: m.to_tier,
+      reason: m.reason,
+      status: m.status,
+    };
+  });
 
   return (
     <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans p-6 md:p-8">
@@ -221,6 +287,19 @@ export default async function AdminLeaguePage({ searchParams }: PageProps) {
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section className="mt-8 flex flex-col gap-5">
+          <h2 className="text-sm font-extrabold tracking-wider text-[#E8B429] uppercase">
+            อันดับจบซีซั่น · โบนัส/โทษ · เลื่อน/ตกชั้น
+          </h2>
+          <PlacementsForm seasons={seasonList} standingsBySeasonId={standingsBySeasonId} />
+          <AdjustForm seasons={seasonList} standingsBySeasonId={standingsBySeasonId} />
+          <TierMovesPanel
+            seasons={seasonList}
+            nextSeasonOptions={nextSeasonRows ?? []}
+            moves={tierMoves}
+          />
         </section>
       </div>
     </div>
