@@ -4876,6 +4876,7 @@ export type Database = {
           prize_zp: number
           registration_closes_at: string | null
           registration_opens_at: string | null
+          roster_check: string
           season_id: string
           starts_at: string | null
           status: string
@@ -4891,6 +4892,7 @@ export type Database = {
           prize_zp?: number
           registration_closes_at?: string | null
           registration_opens_at?: string | null
+          roster_check?: string
           season_id: string
           starts_at?: string | null
           status?: string
@@ -4906,6 +4908,7 @@ export type Database = {
           prize_zp?: number
           registration_closes_at?: string | null
           registration_opens_at?: string | null
+          roster_check?: string
           season_id?: string
           starts_at?: string | null
           status?: string

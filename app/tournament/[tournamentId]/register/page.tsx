@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import type { TeamRoleType } from '@/types/team';
 import { submitRegistrationAction } from '@/actions/registration';
 import { registrationErrorMessage } from '@/lib/tournament/registrationErrors';
@@ -18,6 +19,7 @@ interface TournamentRow {
   status: string;
   entry_fee_ap?: number | null;
   entry_fee_thb?: number | null;
+  roster_check?: string | null;
   start_at?: string | null;
   starts_at?: string | null;
   registration_closes_at?: string | null;
@@ -73,14 +75,17 @@ function one<T>(rel: T[] | T | null | undefined): T | null {
   return rel ?? null;
 }
 
-function renderEligibility(isVerified: boolean) {
+function renderEligibility(isVerified: boolean, rosterMode: 'VERIFIED' | 'LINKED') {
+  const passLabel = rosterMode === 'LINKED' ? 'LINKED' : 'ELIGIBLE';
+  const failLabel = rosterMode === 'LINKED' ? 'NOT LINKED' : 'UNVERIFIED';
+
   if (isVerified) {
     return (
       <div className="flex items-center gap-1 text-[10px] font-bold tracking-wider text-[#22c55e]">
         <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#22c55e]/15 border border-[#22c55e] text-[9px]">
           ✓
         </span>
-        <span>ELIGIBLE</span>
+        <span>{passLabel}</span>
       </div>
     );
   }
@@ -89,7 +94,7 @@ function renderEligibility(isVerified: boolean) {
       <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#fbbf24]/15 border border-[#fbbf24] text-[9px] font-black">
         !
       </span>
-      <span>UNVERIFIED</span>
+      <span>{failLabel}</span>
     </div>
   );
 }
@@ -119,6 +124,8 @@ export default async function TournamentRegistrationPage({ params, searchParams 
     .maybeSingle()) as unknown as { data: TournamentRow | null };
 
   if (!tournament) notFound();
+
+  const rosterMode: 'VERIFIED' | 'LINKED' = tournament.roster_check === 'LINKED' ? 'LINKED' : 'VERIFIED';
 
   const { data: season } = tournament.season_id
     ? await supabase.from('seasons').select('circuit_id').eq('id', tournament.season_id).maybeSingle()
@@ -151,7 +158,29 @@ export default async function TournamentRegistrationPage({ params, searchParams 
         .eq('status', 'ACTIVE')
     : { data: [] as never[] };
 
-  const roster: RosterEntry[] = ((members ?? []) as unknown as MemberRow[])
+  const memberRows = (members ?? []) as unknown as MemberRow[];
+
+  let linkedPlayerIds: Set<string> = new Set();
+  if (rosterMode === 'LINKED' && gameId) {
+    const rosterPlayerIds = memberRows
+      .map((m) => one<PlayerJoinRow>(m.players)?.id)
+      .filter((id): id is string => !!id);
+
+    if (rosterPlayerIds.length > 0) {
+      const admin = createAdminClient();
+      const { data: linkedAccounts } = await admin
+        .from('game_accounts')
+        .select('player_id')
+        .eq('game_id', gameId)
+        .is('deleted_at', null)
+        .not('verification_status', 'in', '(REJECTED,REVOKED)')
+        .in('player_id', rosterPlayerIds);
+
+      linkedPlayerIds = new Set((linkedAccounts ?? []).map((a: { player_id: string }) => a.player_id));
+    }
+  }
+
+  const roster: RosterEntry[] = memberRows
     .map((m) => {
       const player = one<PlayerJoinRow>(m.players);
       if (!player) return null;
@@ -160,9 +189,10 @@ export default async function TournamentRegistrationPage({ params, searchParams 
         : player.game_accounts
         ? [player.game_accounts]
         : [];
-      const isVerified = gameAccounts.some(
-        (ga) => ga.game_id === gameId && ga.verification_status === 'VERIFIED'
-      );
+      const isVerified =
+        rosterMode === 'LINKED'
+          ? linkedPlayerIds.has(player.id)
+          : gameAccounts.some((ga) => ga.game_id === gameId && ga.verification_status === 'VERIFIED');
       const entry: RosterEntry = {
         id: m.id,
         handle: player.display_name,
@@ -203,9 +233,15 @@ export default async function TournamentRegistrationPage({ params, searchParams 
     { id: 'c1', label: `ทีมมีสมาชิกครบ ${requiredCount} คน (ปัจจุบัน ${starters.length + substitutes.length} คน)`, isPassed: isMemberCountOk },
     {
       id: 'c2',
-      label: 'ผู้เล่นทุกคนยืนยันตัวตนแล้ว (Manual Athlete Verification)',
+      label:
+        rosterMode === 'LINKED'
+          ? 'ผู้เล่นทุกคนเชื่อมบัญชี Riot แล้ว'
+          : 'ผู้เล่นทุกคนยืนยันตัวตนแล้ว (Manual Athlete Verification)',
       isPassed: unverified.length === 0,
-      warningNote: unverified.length > 0 ? `รอตรวจสอบ: ${unverified.map((p) => p.handle).join(', ')}` : undefined,
+      warningNote:
+        unverified.length > 0
+          ? `${rosterMode === 'LINKED' ? 'ยังไม่เชื่อม' : 'รอตรวจสอบ'}: ${unverified.map((p) => p.handle).join(', ')}`
+          : undefined,
     },
     entryFeeThb > 0
       ? {
@@ -338,7 +374,7 @@ export default async function TournamentRegistrationPage({ params, searchParams 
                           <span className={`rounded border px-2 py-0.5 text-[9px] font-bold tracking-wider ${badge.bg} ${badge.border} ${badge.text}`}>
                             {player.role}
                           </span>
-                          {renderEligibility(player.isVerified)}
+                          {renderEligibility(player.isVerified, rosterMode)}
                         </div>
                       </div>
                     );
@@ -370,7 +406,7 @@ export default async function TournamentRegistrationPage({ params, searchParams 
                               <span className={`rounded border px-1.5 py-0.5 text-[9px] font-bold ${badge.bg} ${badge.border} ${badge.text}`}>
                                 {sub.role}
                               </span>
-                              {renderEligibility(sub.isVerified)}
+                              {renderEligibility(sub.isVerified, rosterMode)}
                             </div>
                           </div>
                         );

@@ -62,7 +62,7 @@ export async function submitRegistrationAction(
 
   const { data: tournament } = await supabase
     .from('tournaments')
-    .select('id, status, entry_fee_ap, entry_fee_thb')
+    .select('id, status, entry_fee_ap, entry_fee_thb, roster_check')
     .eq('id', tournamentId)
     .single();
 
@@ -84,7 +84,12 @@ export async function submitRegistrationAction(
   }
 
   // Auto-check: ผ่านคุณสมบัติทีมครบ (5 คน + verified) หรือไม่ ก่อนตั้ง status เริ่มต้น
-  const eligibility = await checkRosterEligibility(supabase, teamId, team.game_id);
+  const eligibility = await checkRosterEligibility(
+    supabase,
+    teamId,
+    team.game_id,
+    tournament.roster_check === 'LINKED' ? 'LINKED' : 'VERIFIED'
+  );
 
   const admin = createAdminClient();
   const { data, error } = await admin.rpc('create_tournament_registration', {
