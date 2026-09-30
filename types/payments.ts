@@ -15,9 +15,13 @@ export const CreateFiatIntentSchema = z
     message: 'orderId จำเป็นเมื่อ purpose = ORDER',
     path: ['orderId'],
   })
-  .refine((data) => data.purpose !== 'TOP_UP' || (!!data.amountThb && !!data.apAmount), {
-    message: 'amountThb และ apAmount จำเป็นเมื่อ purpose = TOP_UP',
+  .refine((data) => data.purpose !== 'TOP_UP' || !!data.apAmount, {
+    message: 'apAmount จำเป็นเมื่อ purpose = TOP_UP',
     path: ['apAmount'],
+  })
+  .refine((data) => data.purpose !== 'TOP_UP' || !data.amountThb, {
+    message: 'ห้ามส่ง amountThb เมื่อ purpose = TOP_UP (server คำนวณเอง)',
+    path: ['amountThb'],
   });
 
 export const CreateCryptoIntentSchema = z
@@ -32,9 +36,13 @@ export const CreateCryptoIntentSchema = z
     message: 'orderId จำเป็นเมื่อ purpose = ORDER',
     path: ['orderId'],
   })
-  .refine((data) => data.purpose !== 'TOP_UP' || (!!data.amountThb && !!data.apAmount), {
-    message: 'amountThb และ apAmount จำเป็นเมื่อ purpose = TOP_UP',
+  .refine((data) => data.purpose !== 'TOP_UP' || !!data.apAmount, {
+    message: 'apAmount จำเป็นเมื่อ purpose = TOP_UP',
     path: ['apAmount'],
+  })
+  .refine((data) => data.purpose !== 'TOP_UP' || !data.amountThb, {
+    message: 'ห้ามส่ง amountThb เมื่อ purpose = TOP_UP (server คำนวณเอง)',
+    path: ['amountThb'],
   });
 
 export const CreatePrizePayoutSchema = z
