@@ -89,7 +89,7 @@ export async function POST(req: Request) {
       }
     }
 
-    if (intent.status !== 'SUCCEEDED') {
+    if (intent.status !== 'SUCCEEDED' && intent.status !== 'SUCCEEDED_UNFULFILLED') {
       return NextResponse.json(
         { error: { code: 'INTENT_NOT_SUCCEEDED', message: 'คืนเงินได้เฉพาะรายการที่ชำระเงินสำเร็จแล้วเท่านั้น' } },
         { status: 422 }
