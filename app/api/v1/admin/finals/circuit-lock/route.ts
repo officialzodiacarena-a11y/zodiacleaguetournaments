@@ -76,6 +76,23 @@ export async function POST(req: Request) {
 
     const adminSupabase = createAdminClient();
 
+    const { data: circuitRow, error: circuitError } = await adminSupabase
+      .from('circuits')
+      .select('point_unit')
+      .eq('id', circuit_id)
+      .single();
+
+    if (circuitError || !circuitRow) {
+      return NextResponse.json({ error: { code: 'CIRCUIT_NOT_FOUND', message: 'ไม่พบข้อมูล Circuit ที่ระบุ' } }, { status: 404 });
+    }
+
+    if (circuitRow.point_unit === 'VLP') {
+      return NextResponse.json(
+        { error: { code: 'VLP_CIRCUIT', message: 'ลีก VLP คิดแต้มและคำนวณตารางผ่านหน้า /admin/league เท่านั้น' } },
+        { status: 409 }
+      );
+    }
+
     // 1. ดึง TOP 12 ของ circuit นี้ ตาม counted_zp (ใช้ตัดสิน qualification/ranking จริง)
     const { data: candidateRows, error: candidatesError } = await adminSupabase
       .from('circuit_standings')

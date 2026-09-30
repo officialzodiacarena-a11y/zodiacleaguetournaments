@@ -164,7 +164,7 @@ export async function POST(
 
     const { data: rawCircuit, error: circuitError } = await adminSupabase
       .from('circuits' as never)
-      .select('id, best_n_seasons, finals_slots, tiebreaker_rules')
+      .select('id, best_n_seasons, finals_slots, tiebreaker_rules, point_unit')
       .eq('id' as never, circuitId)
       .single();
 
@@ -179,7 +179,15 @@ export async function POST(
       best_n_seasons: number | null;
       finals_slots: number | null;
       tiebreaker_rules: string[] | null;
+      point_unit: string | null;
     };
+
+    if (circuit.point_unit === 'VLP') {
+      return NextResponse.json(
+        { error: { code: 'VLP_CIRCUIT', message: 'ลีก VLP คิดแต้มและคำนวณตารางผ่านหน้า /admin/league เท่านั้น' } },
+        { status: 409 }
+      );
+    }
 
     const bestN = circuit.best_n_seasons;
     const finalsSlots = circuit.finals_slots ?? 12;
