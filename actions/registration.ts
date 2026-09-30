@@ -3,14 +3,27 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { randomUUID } from 'crypto';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRosterEligibility } from '@/lib/team/rosterEligibility';
+import { registrationErrorMessage } from '@/lib/tournament/registrationErrors';
 
 export type RegistrationActionResult = { error: { code: string; message: string } };
 
-// entry fee ไม่รับจาก client — ยึด tournaments.entry_fee_ap จาก DB เสมอกันฝั่ง client ปลอมค่า
+interface CreateRegistrationResult {
+  ok: boolean;
+  code?: string;
+  existing: boolean;
+  registration_id: string;
+  registration_status: string;
+  payment_id: string | null;
+  payment_status: string | null;
+  amount_thb: number | null;
+  expires_at: string | null;
+  entry_fee_ap: number;
+}
+
+// entry fee ไม่รับจาก client — ยึด tournaments.entry_fee_ap/entry_fee_thb จาก DB เสมอกันฝั่ง client ปลอมค่า
 export async function submitRegistrationAction(
   tournamentId: string,
   teamId: string
@@ -21,7 +34,7 @@ export async function submitRegistrationAction(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return { error: { code: 'UNAUTHENTICATED', message: 'กรุณาเข้าสู่ระบบก่อน' } };
+    return { error: { code: 'UNAUTHENTICATED', message: registrationErrorMessage('UNAUTHENTICATED') } };
   }
 
   const { data: actor } = await supabase
@@ -31,7 +44,7 @@ export async function submitRegistrationAction(
     .single();
 
   if (!actor) {
-    return { error: { code: 'PLAYER_NOT_FOUND', message: 'ไม่พบโปรไฟล์นักกีฬาของคุณ' } };
+    return { error: { code: 'PLAYER_NOT_FOUND', message: registrationErrorMessage('PLAYER_NOT_FOUND') } };
   }
 
   const { data: team } = await supabase
@@ -41,38 +54,27 @@ export async function submitRegistrationAction(
     .single();
 
   if (!team) {
-    return { error: { code: 'TEAM_NOT_FOUND', message: 'ไม่พบทีมนี้' } };
+    return { error: { code: 'TEAM_NOT_FOUND', message: registrationErrorMessage('TEAM_NOT_FOUND') } };
   }
   if (team.captain_id !== actor.id) {
-    return { error: { code: 'FORBIDDEN', message: 'เฉพาะ Captain เท่านั้นที่สมัครแข่งขันแทนทีมได้' } };
+    return { error: { code: 'FORBIDDEN', message: registrationErrorMessage('FORBIDDEN') } };
   }
 
   const { data: tournament } = await supabase
     .from('tournaments')
-    .select('id, status, entry_fee_ap')
+    .select('id, status, entry_fee_ap, entry_fee_thb')
     .eq('id', tournamentId)
     .single();
 
   if (!tournament) {
-    return { error: { code: 'TOURNAMENT_NOT_FOUND', message: 'ไม่พบทัวร์นาเมนต์นี้' } };
+    return { error: { code: 'TOURNAMENT_NOT_FOUND', message: registrationErrorMessage('TOURNAMENT_NOT_FOUND') } };
   }
   if (tournament.status !== 'OPEN') {
-    return { error: { code: 'REGISTRATION_CLOSED', message: 'ทัวร์นาเมนต์นี้ปิดรับสมัครแล้ว' } };
-  }
-
-  const { data: existingRegistration } = await supabase
-    .from('tournament_registrations')
-    .select('id')
-    .eq('tournament_id', tournamentId)
-    .eq('team_id', teamId)
-    .maybeSingle();
-
-  if (existingRegistration) {
-    return { error: { code: 'ALREADY_REGISTERED', message: 'ทีมนี้สมัครทัวร์นาเมนต์นี้ไปแล้ว' } };
+    return { error: { code: 'REGISTRATION_CLOSED', message: registrationErrorMessage('REGISTRATION_CLOSED') } };
   }
 
   const entryFeeAp: number = tournament.entry_fee_ap;
-  if (actor.ap_balance < entryFeeAp) {
+  if (entryFeeAp > 0 && actor.ap_balance < entryFeeAp) {
     return {
       error: {
         code: 'INSUFFICIENT_AP',
@@ -83,73 +85,76 @@ export async function submitRegistrationAction(
 
   // Auto-check: ผ่านคุณสมบัติทีมครบ (5 คน + verified) หรือไม่ ก่อนตั้ง status เริ่มต้น
   const eligibility = await checkRosterEligibility(supabase, teamId, team.game_id);
-  const initialStatus = eligibility.isComplete ? 'ELIGIBLE' : 'PENDING';
 
-  const { data: registration, error: insertError } = await supabase
-    .from('tournament_registrations')
-    .insert({
-      tournament_id: tournamentId,
-      team_id: teamId,
-      status: initialStatus,
-      ap_deducted: entryFeeAp,
-      idempotency_key: randomUUID(),
-    })
-    .select('id')
-    .single();
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc('create_tournament_registration', {
+    p_tournament_id: tournamentId,
+    p_team_id: teamId,
+    p_actor_player_id: actor.id,
+    p_roster_complete: eligibility.isComplete,
+  });
 
-  if (insertError || !registration) {
-    if (insertError?.code === '23505') {
-      return { error: { code: 'ALREADY_REGISTERED', message: 'ทีมนี้สมัครทัวร์นาเมนต์นี้ไปแล้ว' } };
-    }
-    return { error: { code: 'REGISTRATION_FAILED', message: insertError?.message ?? 'สมัครไม่สำเร็จ' } };
+  if (error || !data) {
+    return { error: { code: 'REGISTRATION_FAILED', message: registrationErrorMessage('REGISTRATION_FAILED') } };
   }
 
-  if (entryFeeAp > 0) {
-    const admin = createAdminClient();
+  const result = data as unknown as CreateRegistrationResult;
+
+  if (result.ok === false) {
+    return { error: { code: result.code ?? 'REGISTRATION_FAILED', message: registrationErrorMessage(result.code) } };
+  }
+
+  if (result.existing === false && entryFeeAp > 0) {
     const { data: moveResult, error: moveError } = await admin.rpc('move_ap', {
       p_player_id: actor.id,
       p_amount: -entryFeeAp,
       p_reason: 'TOURNAMENT_ENTRY_FEE',
-      p_idempotency_key: `reg-fee-${registration.id}`,
+      p_idempotency_key: `reg-fee-${result.registration_id}`,
       p_reference_type: 'tournament_registrations',
-      p_reference_id: registration.id,
+      p_reference_id: result.registration_id,
     });
 
-    const result = moveResult as { success?: boolean; error?: string; balance_after?: number } | null;
+    const moveData = moveResult as { success?: boolean; error?: string; balance_after?: number } | null;
 
-    if (moveError || !result?.success) {
+    if (moveError || !moveData?.success) {
       // AP ไม่พอ ณ จังหวะหักจริง หรือ transaction error — ย้อนกลับการสมัคร
-      await admin.from('tournament_registrations').delete().eq('id', registration.id);
+      await admin.from('tournament_registrations').delete().eq('id', result.registration_id);
       const errorMsg =
-        result?.error === 'INSUFFICIENT_AP_BALANCE'
+        moveData?.error === 'INSUFFICIENT_AP_BALANCE'
           ? 'AP ไม่พอในจังหวะที่ทำรายการ กรุณาลองใหม่'
-          : `หักแต้ม AP ไม่สำเร็จ: ${moveError?.message ?? result?.error ?? 'UNKNOWN_ERROR'}`;
-      return { error: { code: result?.error ?? 'AP_DEDUCTION_FAILED', message: errorMsg } };
+          : `หักแต้ม AP ไม่สำเร็จ: ${moveError?.message ?? moveData?.error ?? 'UNKNOWN_ERROR'}`;
+      return { error: { code: moveData?.error ?? 'AP_DEDUCTION_FAILED', message: errorMsg } };
     }
   }
 
-  await supabase.from('audit_logs').insert([
-    ...(entryFeeAp > 0
-      ? [
-          {
-            actor_id: actor.id,
-            action: 'DEBIT' as const,
-            entity_type: 'players',
-            entity_id: actor.id,
-            before_data: { ap_balance: actor.ap_balance },
-            after_data: { ap_balance: actor.ap_balance - entryFeeAp },
-          },
-        ]
-      : []),
-    {
-      actor_id: actor.id,
-      action: 'CREATE' as const,
-      entity_type: 'tournament_registrations',
-      entity_id: registration.id,
-      after_data: { tournament_id: tournamentId, team_id: teamId, status: initialStatus },
-    },
-  ]);
+  if (result.existing === false) {
+    await supabase.from('audit_logs').insert([
+      ...(entryFeeAp > 0
+        ? [
+            {
+              actor_id: actor.id,
+              action: 'DEBIT' as const,
+              entity_type: 'players',
+              entity_id: actor.id,
+              before_data: { ap_balance: actor.ap_balance },
+              after_data: { ap_balance: actor.ap_balance - entryFeeAp },
+            },
+          ]
+        : []),
+      {
+        actor_id: actor.id,
+        action: 'CREATE' as const,
+        entity_type: 'tournament_registrations',
+        entity_id: result.registration_id,
+        after_data: { tournament_id: tournamentId, team_id: teamId, status: result.registration_status },
+      },
+    ]);
+  }
 
   revalidatePath(`/tournament/${tournamentId}`);
-  redirect(`/tournaments/${tournamentId}/confirmation`);
+
+  if (result.registration_status === 'AWAITING_PAYMENT') {
+    redirect(`/tournament/${tournamentId}/pay`);
+  }
+  redirect(`/tournament/${tournamentId}/register`);
 }

@@ -4,9 +4,11 @@ import { redirect, notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import type { TeamRoleType } from '@/types/team';
 import { submitRegistrationAction } from '@/actions/registration';
+import { registrationErrorMessage } from '@/lib/tournament/registrationErrors';
 
 interface PageProps {
   params: Promise<{ tournamentId: string }>;
+  searchParams: Promise<{ error?: string }>;
 }
 
 interface TournamentRow {
@@ -15,6 +17,7 @@ interface TournamentRow {
   type?: string | null;
   status: string;
   entry_fee_ap?: number | null;
+  entry_fee_thb?: number | null;
   start_at?: string | null;
   starts_at?: string | null;
   registration_closes_at?: string | null;
@@ -91,8 +94,9 @@ function renderEligibility(isVerified: boolean) {
   );
 }
 
-export default async function TournamentRegistrationPage({ params }: PageProps) {
+export default async function TournamentRegistrationPage({ params, searchParams }: PageProps) {
   const { tournamentId } = await params;
+  const { error: errorCode } = await searchParams;
   const supabase = await createClient();
 
   const {
@@ -187,6 +191,7 @@ export default async function TournamentRegistrationPage({ params }: PageProps) 
     : { data: null };
 
   const entryFeeAp: number = tournament.entry_fee_ap ?? 0;
+  const entryFeeThb = Number(tournament.entry_fee_thb ?? 0);
   const remainingAp = actor.ap_balance - entryFeeAp;
   const startDate = tournament.start_at || tournament.starts_at;
   const startDateText = startDate
@@ -202,17 +207,26 @@ export default async function TournamentRegistrationPage({ params }: PageProps) 
       isPassed: unverified.length === 0,
       warningNote: unverified.length > 0 ? `รอตรวจสอบ: ${unverified.map((p) => p.handle).join(', ')}` : undefined,
     },
-    {
-      id: 'c3',
-      label: `ยอด AP เพียงพอสำหรับค่าสมัคร ${entryFeeAp} AP`,
-      isPassed: actor.ap_balance >= entryFeeAp,
-    },
+    entryFeeThb > 0
+      ? {
+          id: 'c3',
+          label: `ค่าสมัคร ${entryFeeThb.toFixed(2)} บาท · โอนเข้าบัญชีบริษัทหลังกดสมัคร`,
+          isPassed: true,
+        }
+      : {
+          id: 'c3',
+          label: `ยอด AP เพียงพอสำหรับค่าสมัคร ${entryFeeAp} AP`,
+          isPassed: actor.ap_balance >= entryFeeAp,
+        },
   ];
 
   async function handleSubmit() {
     'use server';
     if (!team) return;
-    await submitRegistrationAction(tournamentId, team.id);
+    const result = await submitRegistrationAction(tournamentId, team.id);
+    if (result?.error) {
+      redirect(`/tournament/${tournamentId}/register?error=${encodeURIComponent(result.error.code)}`);
+    }
   }
 
   const noTeamState = !team;
@@ -236,13 +250,31 @@ export default async function TournamentRegistrationPage({ params }: PageProps) 
           </div>
         </div>
 
+        {errorCode && (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-6 text-center text-sm text-rose-300 mb-6">
+            {registrationErrorMessage(errorCode)}
+          </div>
+        )}
+
         {noTeamState && (
           <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-6 text-center text-sm text-rose-300 mb-6">
             คุณไม่ได้เป็นกัปตันของทีมที่แข่งในเกมนี้ — เฉพาะกัปตันเท่านั้นที่สมัครแข่งขันแทนทีมได้
           </div>
         )}
 
-        {alreadyRegistered && (
+        {alreadyRegistered && existingRegistration?.status === 'AWAITING_PAYMENT' && (
+          <div className="rounded-xl border border-[#eab308]/30 bg-[#eab308]/5 p-6 text-center text-sm text-[#fbbf24] mb-6">
+            <div className="mb-3">สมัครแล้ว · รอชำระค่าสมัคร</div>
+            <Link
+              href={`/tournament/${tournamentId}/pay`}
+              className="inline-block rounded-lg bg-gradient-to-r from-[#E8B429] to-[#d97706] px-5 py-2 text-xs font-black tracking-wider text-[#0D0E1A]"
+            >
+              ไปหน้าชำระค่าสมัคร
+            </Link>
+          </div>
+        )}
+
+        {alreadyRegistered && existingRegistration?.status !== 'AWAITING_PAYMENT' && (
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-6 text-center text-sm text-emerald-300 mb-6">
             ทีมของคุณสมัครทัวร์นาเมนต์นี้แล้ว (สถานะ: {existingRegistration?.status})
           </div>
@@ -394,31 +426,45 @@ export default async function TournamentRegistrationPage({ params }: PageProps) 
                 </div>
 
                 {/* AP Balance */}
-                <div className="rounded-xl border border-[#E8B429]/20 bg-[#1A1C2E] p-4">
-                  <div className="text-[10px] font-bold tracking-widest text-[#75798c] uppercase mb-2">AP BALANCE</div>
-                  <div className="flex items-baseline gap-1.5 mb-1.5">
-                    <span className="text-3xl font-black text-[#E8B429] leading-none">{actor.ap_balance}</span>
-                    <span className="text-xs font-bold text-[#E8B429]/70">AP</span>
+                {entryFeeAp > 0 && (
+                  <div className="rounded-xl border border-[#E8B429]/20 bg-[#1A1C2E] p-4">
+                    <div className="text-[10px] font-bold tracking-widest text-[#75798c] uppercase mb-2">AP BALANCE</div>
+                    <div className="flex items-baseline gap-1.5 mb-1.5">
+                      <span className="text-3xl font-black text-[#E8B429] leading-none">{actor.ap_balance}</span>
+                      <span className="text-xs font-bold text-[#E8B429]/70">AP</span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded bg-white/10 mb-2">
+                      <div
+                        className="h-full bg-gradient-to-r from-[#E8B429] to-[#f59e0b]"
+                        style={{ width: `${Math.min(100, (actor.ap_balance / Math.max(entryFeeAp * 2, 1)) * 100)}%` }}
+                      />
+                    </div>
+                    <div className="text-[11px] text-[#75798c]">
+                      หลังชำระ: <span className="font-bold text-white">{remainingAp} AP เหลือ</span>
+                    </div>
                   </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded bg-white/10 mb-2">
-                    <div
-                      className="h-full bg-gradient-to-r from-[#E8B429] to-[#f59e0b]"
-                      style={{ width: `${Math.min(100, (actor.ap_balance / Math.max(entryFeeAp * 2, 1)) * 100)}%` }}
-                    />
-                  </div>
-                  <div className="text-[11px] text-[#75798c]">
-                    หลังชำระ: <span className="font-bold text-white">{remainingAp} AP เหลือ</span>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
             {/* 5. ACTION BAR */}
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#1A1C2E] p-4 md:p-5 mt-6">
               <div className="text-xs text-[#75798c]">
-                <span className="font-bold text-[#cfd3e5]">{entryFeeAp} AP</span>
-                <span className="mx-2 text-white/20">·</span>
-                <span>หักจากยอด AP สโมสรทันทีเมื่อยืนยัน</span>
+                {entryFeeThb > 0 ? (
+                  <span>
+                    <span className="font-bold text-[#cfd3e5]">ค่าสมัคร {entryFeeThb.toFixed(2)} บาท</span>
+                    <span className="mx-2 text-white/20">·</span>
+                    <span>ชำระหลังกดสมัคร</span>
+                  </span>
+                ) : entryFeeAp > 0 ? (
+                  <span>
+                    <span className="font-bold text-[#cfd3e5]">{entryFeeAp} AP</span>
+                    <span className="mx-2 text-white/20">·</span>
+                    <span>หักจากยอด AP สโมสรทันทีเมื่อยืนยัน</span>
+                  </span>
+                ) : (
+                  <span>ไม่มีค่าสมัคร</span>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <Link
@@ -433,7 +479,11 @@ export default async function TournamentRegistrationPage({ params }: PageProps) 
                     disabled={!canSubmit}
                     className="rounded-lg bg-gradient-to-r from-[#E8B429] to-[#d97706] px-6 py-2.5 text-xs font-black tracking-wider text-[#0D0E1A] shadow-[0_4px_20px_rgba(232,180,41,0.35)] hover:shadow-[0_6px_28px_rgba(232,180,41,0.55)] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
                   >
-                    ชำระค่าสมัครและยืนยัน / PAY {entryFeeAp} AP & CONFIRM
+                    {entryFeeThb > 0
+                      ? 'สมัครและไปหน้าชำระเงิน / REGISTER & PAY'
+                      : entryFeeAp > 0
+                      ? `ชำระค่าสมัครและยืนยัน / PAY ${entryFeeAp} AP & CONFIRM`
+                      : 'ยืนยันการสมัคร / CONFIRM'}
                   </button>
                 </form>
               </div>
