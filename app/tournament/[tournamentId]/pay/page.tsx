@@ -6,6 +6,7 @@ import { readEntryFeeEnv } from '@/lib/payments/slipok';
 import { CopyAccountButton } from '@/components/tournament/CopyAccountButton';
 import { PaymentCountdown } from '@/components/tournament/PaymentCountdown';
 import { EntrySlipUploader } from '@/components/tournament/EntrySlipUploader';
+import { PaymentTransferArtwork } from '@/components/entry-fee/PaymentTransferArtwork';
 
 interface PageProps {
   params: Promise<{ tournamentId: string }>;
@@ -123,17 +124,20 @@ export default async function TournamentPayPage({ params }: PageProps) {
         </div>
 
         {bank ? (
-          <div className="rounded-xl border border-[#9184d9]/25 bg-[#1A1C2E] p-4 mb-6">
-            <div className="text-[11px] font-bold tracking-widest text-[#75798c] uppercase mb-2">บัญชีรับโอน</div>
-            <div className="text-sm text-[#cfd3e5] mb-1">ธนาคาร {bank.name}</div>
-            <div className="text-sm text-[#cfd3e5] mb-1">ชื่อบัญชี {bank.accountName}</div>
-            <div className="flex items-center gap-3 mt-2">
-              <span className="text-lg font-black tracking-wider text-white">
-                {formatAccountNo(bank.accountNo)}
-              </span>
-              <CopyAccountButton digits={bank.accountNo} />
+          <>
+            <PaymentTransferArtwork />
+            <div className="rounded-xl border border-[#9184d9]/25 bg-[#1A1C2E] p-4 mb-6">
+              <div className="text-[11px] font-bold tracking-widest text-[#75798c] uppercase mb-2">บัญชีรับโอน</div>
+              <div className="text-sm text-[#cfd3e5] mb-1">ธนาคาร {bank.name}</div>
+              <div className="text-sm text-[#cfd3e5] mb-1">ชื่อบัญชี {bank.accountName}</div>
+              <div className="flex items-center gap-3 mt-2">
+                <span className="text-lg font-black tracking-wider text-white">
+                  {formatAccountNo(bank.accountNo)}
+                </span>
+                <CopyAccountButton digits={bank.accountNo} />
+              </div>
             </div>
-          </div>
+          </>
         ) : (
           <div className="rounded-xl border border-[#eab308]/30 bg-[#eab308]/5 p-4 mb-6 text-sm text-[#fbbf24] text-center">
             ยังไม่เปิดรับชำระออนไลน์ กรุณาติดต่อแอดมิน
