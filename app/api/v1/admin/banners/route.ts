@@ -36,6 +36,7 @@ export async function GET() {
         image_url: row.image_url,
         target_url: row.target_url,
         brand_name: row.brand_name,
+        sponsor_id: row.sponsor_id,
         priority: row.priority,
         is_active: row.is_active,
         starts_at: row.starts_at,
