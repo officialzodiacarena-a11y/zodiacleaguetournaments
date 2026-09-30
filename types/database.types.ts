@@ -1246,6 +1246,8 @@ export type Database = {
           game_id: string
           id: string
           name: string
+          point_config: Json
+          point_unit: string
           season_order: number
         }
         Insert: {
@@ -1253,6 +1255,8 @@ export type Database = {
           game_id: string
           id?: string
           name: string
+          point_config?: Json
+          point_unit?: string
           season_order: number
         }
         Update: {
@@ -1260,6 +1264,8 @@ export type Database = {
           game_id?: string
           id?: string
           name?: string
+          point_config?: Json
+          point_unit?: string
           season_order?: number
         }
         Relationships: [
@@ -1549,6 +1555,108 @@ export type Database = {
           publisher?: string | null
           team_size?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      league_point_transactions: {
+        Row: {
+          id: string
+          circuit_id: string
+          season_id: string
+          tournament_id: string | null
+          match_id: string | null
+          team_id: string
+          division_tier: string | null
+          reason: string
+          points: number
+          placement: number | null
+          idempotency_key: string
+          reverses_id: string | null
+          note: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          circuit_id: string
+          season_id: string
+          tournament_id?: string | null
+          match_id?: string | null
+          team_id: string
+          division_tier?: string | null
+          reason: string
+          points: number
+          placement?: number | null
+          idempotency_key: string
+          reverses_id?: string | null
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          circuit_id?: string
+          season_id?: string
+          tournament_id?: string | null
+          match_id?: string | null
+          team_id?: string
+          division_tier?: string | null
+          reason?: string
+          points?: number
+          placement?: number | null
+          idempotency_key?: string
+          reverses_id?: string | null
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      league_tier_moves: {
+        Row: {
+          id: string
+          circuit_id: string
+          season_id: string
+          next_season_id: string
+          team_id: string
+          from_tier: string
+          to_tier: string
+          status: string
+          reason: string | null
+          proposed_by: string | null
+          proposed_at: string
+          decided_by: string | null
+          decided_at: string | null
+        }
+        Insert: {
+          id?: string
+          circuit_id: string
+          season_id: string
+          next_season_id: string
+          team_id: string
+          from_tier: string
+          to_tier: string
+          status?: string
+          reason?: string | null
+          proposed_by?: string | null
+          proposed_at?: string
+          decided_by?: string | null
+          decided_at?: string | null
+        }
+        Update: {
+          id?: string
+          circuit_id?: string
+          season_id?: string
+          next_season_id?: string
+          team_id?: string
+          from_tier?: string
+          to_tier?: string
+          status?: string
+          reason?: string | null
+          proposed_by?: string | null
+          proposed_at?: string
+          decided_by?: string | null
+          decided_at?: string | null
         }
         Relationships: []
       }
@@ -3753,6 +3861,7 @@ export type Database = {
       }
       season_standings: {
         Row: {
+          division_tier: string | null
           id: string
           losses: number
           season_id: string
@@ -3762,6 +3871,7 @@ export type Database = {
           wins: number
         }
         Insert: {
+          division_tier?: string | null
           id?: string
           losses?: number
           season_id: string
@@ -3771,6 +3881,7 @@ export type Database = {
           wins?: number
         }
         Update: {
+          division_tier?: string | null
           id?: string
           losses?: number
           season_id?: string
@@ -3803,6 +3914,7 @@ export type Database = {
           ends_at: string
           id: string
           name: string
+          quarter: number | null
           starts_at: string
           status: string
         }
@@ -3812,6 +3924,7 @@ export type Database = {
           ends_at: string
           id?: string
           name: string
+          quarter?: number | null
           starts_at: string
           status?: string
         }
@@ -3821,6 +3934,7 @@ export type Database = {
           ends_at?: string
           id?: string
           name?: string
+          quarter?: number | null
           starts_at?: string
           status?: string
         }
@@ -4867,12 +4981,14 @@ export type Database = {
       tournaments: {
         Row: {
           created_at: string | null
+          division_tier: string | null
           entry_fee_ap: number
           entry_fee_thb: number
           format: string
           id: string
           max_teams: number
           name: string
+          point_config_override: Json | null
           prize_zp: number
           registration_closes_at: string | null
           registration_opens_at: string | null
@@ -4883,12 +4999,14 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          division_tier?: string | null
           entry_fee_ap?: number
           entry_fee_thb?: number
           format: string
           id?: string
           max_teams?: number
           name: string
+          point_config_override?: Json | null
           prize_zp?: number
           registration_closes_at?: string | null
           registration_opens_at?: string | null
@@ -4899,12 +5017,14 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          division_tier?: string | null
           entry_fee_ap?: number
           entry_fee_thb?: number
           format?: string
           id?: string
           max_teams?: number
           name?: string
+          point_config_override?: Json | null
           prize_zp?: number
           registration_closes_at?: string | null
           registration_opens_at?: string | null
@@ -5201,6 +5321,77 @@ export type Database = {
       }
     }
     Functions: {
+      award_league_tournament_points: {
+        Args: {
+          p_tournament_id: string
+          p_fix_stale?: boolean
+        }
+        Returns: Json
+      }
+      set_league_placements: {
+        Args: {
+          p_season_id: string
+          p_division_tier: string
+          p_placements: Json
+        }
+        Returns: Json
+      }
+      reverse_league_point_transaction: {
+        Args: {
+          p_tx_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      adjust_league_points: {
+        Args: {
+          p_season_id: string
+          p_team_id: string
+          p_points: number
+          p_reason: string
+          p_key: string
+        }
+        Returns: Json
+      }
+      recalculate_league_standings: {
+        Args: {
+          p_circuit_id: string
+        }
+        Returns: Json
+      }
+      propose_league_tier_moves: {
+        Args: {
+          p_season_id: string
+          p_next_season_id: string
+        }
+        Returns: Json
+      }
+      decide_league_tier_move: {
+        Args: {
+          p_move_id: string
+          p_decision: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      rollover_league_season: {
+        Args: {
+          p_season_id: string
+          p_next_season_id: string
+        }
+        Returns: Json
+      }
+      league_point_config: {
+        Args: {
+          p_circuit_id: string
+          p_tournament_id?: string
+        }
+        Returns: Json
+      }
+      vlp_default_point_config: {
+        Args: never
+        Returns: Json
+      }
       create_tournament_registration: {
         Args: {
           p_tournament_id: string

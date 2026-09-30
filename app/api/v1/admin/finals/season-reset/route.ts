@@ -63,6 +63,23 @@ export async function POST(req: Request) {
 
     const adminSupabase = createAdminClient();
 
+    const { data: circuitRow, error: circuitError } = await adminSupabase
+      .from('circuits')
+      .select('point_unit')
+      .eq('id', circuit_id)
+      .single();
+
+    if (circuitError || !circuitRow) {
+      return NextResponse.json({ error: { code: 'CIRCUIT_NOT_FOUND', message: 'ไม่พบข้อมูล Circuit ที่ระบุ' } }, { status: 404 });
+    }
+
+    if (circuitRow.point_unit === 'VLP') {
+      return NextResponse.json(
+        { error: { code: 'VLP_CIRCUIT', message: 'ลีก VLP คิดแต้มและคำนวณตารางผ่านหน้า /admin/league เท่านั้น' } },
+        { status: 409 }
+      );
+    }
+
     // ต้องรันหลัง season-archive เท่านั้น — เช็คว่าฤดูกาลล่าสุดของ circuit นี้ถูก Freeze แล้ว
     const { data: latestSeason, error: latestSeasonError } = await adminSupabase
       .from('seasons')

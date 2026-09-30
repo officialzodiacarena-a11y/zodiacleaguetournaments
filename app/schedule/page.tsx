@@ -15,6 +15,12 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { pickRelevantSeason, SeasonLike } from '@/lib/season/pickRelevantSeason';
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
+import { pointUnitLabel, type PointUnit } from '@/lib/league/pointUnit';
+
+interface MatchSchedulePageDataWithUnit extends MatchSchedulePageData {
+  pointUnit: PointUnit;
+  circuitId: string | null;
+}
 
 // ด้านใน return:
 <main className="min-h-screen bg-[#0D0E1A] relative">
@@ -57,7 +63,7 @@ function toMatchStatus(status: string): ScheduleMatchDisplayStatus {
   return 'UPCOMING';
 }
 
-async function getScheduleData(): Promise<MatchSchedulePageData> {
+async function getScheduleData(): Promise<MatchSchedulePageDataWithUnit> {
   const supabase = await createClient();
 
   const { data: game } = await supabase
@@ -66,7 +72,7 @@ async function getScheduleData(): Promise<MatchSchedulePageData> {
     .eq('code', 'VAL')
     .maybeSingle();
 
-  const fallback: MatchSchedulePageData = {
+  const fallback: MatchSchedulePageDataWithUnit = {
     seasonTitle: 'ยังไม่มี Season Active',
     todayMatches: [],
     standings: [],
@@ -74,12 +80,14 @@ async function getScheduleData(): Promise<MatchSchedulePageData> {
       hour: '2-digit',
       minute: '2-digit',
     }),
+    pointUnit: 'ZP',
+    circuitId: null,
   };
   if (!game) return fallback;
 
   const { data: circuits } = await supabase
     .from('circuits')
-    .select('id, name')
+    .select('id, name, point_unit')
     .eq('game_id', game.id);
   const circuitIds = (circuits ?? []).map((c) => c.id);
   if (circuitIds.length === 0) return fallback;
@@ -204,6 +212,8 @@ async function getScheduleData(): Promise<MatchSchedulePageData> {
       hour: '2-digit',
       minute: '2-digit',
     }),
+    pointUnit: pointUnitLabel(circuit?.point_unit),
+    circuitId: circuit?.id ?? null,
   };
 }
 
@@ -419,7 +429,7 @@ export default async function MatchSchedulePage() {
                     <th className="py-2.5 px-4 text-center w-14">W</th>
                     <th className="py-2.5 px-4 text-center w-14">L</th>
                     <th className="py-2.5 px-4 text-center w-16">WR%</th>
-                    <th className="py-2.5 pr-6 pl-4 text-right w-28">ZP</th>
+                    <th className="py-2.5 pr-6 pl-4 text-right w-28">{data.pointUnit}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -478,12 +488,22 @@ export default async function MatchSchedulePage() {
                           team.isHighlight ? 'text-[#E8B429]' : 'text-[#cfd3e5]'
                         }`}
                       >
-                        {team.zpTotal.toLocaleString()} ZP
+                        {team.zpTotal.toLocaleString()} {data.pointUnit}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          {data.pointUnit === 'VLP' && data.circuitId && (
+            <div className="border-t border-white/5 px-6 py-3 text-right">
+              <a
+                href={`/league/${data.circuitId}`}
+                className="text-xs font-bold text-[#E8B429] hover:underline"
+              >
+                ดูตารางลีกเต็ม
+              </a>
             </div>
           )}
         </div>
