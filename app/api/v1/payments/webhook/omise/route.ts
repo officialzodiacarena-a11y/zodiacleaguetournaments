@@ -62,7 +62,16 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: { code: 'SETTLE_FAILED', message: rpcError.message } }, { status: 500 });
       }
 
-      return NextResponse.json({ received: true, settled: settleResult });
+      const settle = settleResult as unknown as { success?: boolean; error?: string; needs_refund_review?: boolean } | null;
+      if (!settle?.success) {
+        if (settle?.needs_refund_review) {
+          console.error(`[ALERT][webhook/omise] paid but unfulfilled — intent=${intent.id} error=${settle.error}`);
+        } else {
+          console.error(`[webhook/omise] settle not successful — intent=${intent.id} error=${settle?.error}`);
+        }
+        return NextResponse.json({ received: true, settled: false, error: settle?.error ?? 'SETTLE_NOT_SUCCESSFUL' });
+      }
+      return NextResponse.json({ received: true, settled: true });
     }
 
     if (chargeStatus === 'failed' || chargeStatus === 'expired') {

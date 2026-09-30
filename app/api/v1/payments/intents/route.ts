@@ -77,46 +77,29 @@ export async function POST(req: Request) {
     }
 
     let finalAmountThb = amountThb;
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
     if (purpose === 'ORDER') {
       if (!orderId) {
-        return NextResponse.json(
-          { error: { code: 'ORDER_NOT_FOUND', message: 'ไม่พบคำสั่งซื้อนี้' } },
-          { status: 404 }
-        );
+        return NextResponse.json({ error: { code: 'ORDER_NOT_FOUND', message: 'ไม่พบคำสั่งซื้อนี้' } }, { status: 404 });
       }
-      const { data: order, error: orderError } = await adminSupabase
-        .from('orders')
-        .select('id, player_id, status, total_price_thb')
-        .eq('id', orderId)
-        .single();
-
-      if (orderError || !order) {
-        return NextResponse.json(
-          { error: { code: 'ORDER_NOT_FOUND', message: 'ไม่พบคำสั่งซื้อนี้' } },
-          { status: 404 }
-        );
+      const { data: prep, error: prepError } = await adminSupabase.rpc('prepare_order_fiat_intent' as never, {
+        p_order_id: orderId, p_player_id: player.id, p_intent_expires_at: expiresAt,
+      } as never);
+      if (prepError) {
+        return NextResponse.json({ error: { code: 'PREPARE_FAILED', message: prepError.message } }, { status: 500 });
       }
-
-      if (order.player_id !== player.id) {
-        return NextResponse.json(
-          { error: { code: 'FORBIDDEN', message: 'ไม่มีสิทธิ์ชำระเงินสำหรับคำสั่งซื้อนี้' } },
-          { status: 403 }
-        );
+      const p = prep as unknown as { success: boolean; error?: string; total_price_thb?: number };
+      if (!p.success) {
+        const e = p.error ?? 'PREPARE_FAILED';
+        const status = e === 'ORDER_NOT_FOUND' ? 404 : e === 'FORBIDDEN' ? 403
+          : ['ORDER_NOT_PENDING', 'ORDER_EXPIRED', 'PAYMENT_METHOD_MISMATCH'].includes(e) ? 409 : 422;
+        return NextResponse.json({ error: { code: e, message: 'ไม่สามารถชำระเงินคำสั่งซื้อนี้ได้' } }, { status });
       }
-
-      if (order.status !== 'PENDING') {
-        return NextResponse.json(
-          { error: { code: 'ORDER_NOT_PENDING', message: 'คำสั่งซื้อนี้ไม่ได้อยู่ในสถานะรอชำระเงิน' } },
-          { status: 409 }
-        );
-      }
-
-      finalAmountThb = order.total_price_thb;
+      finalAmountThb = p.total_price_thb;
     }
 
     const nowISO = new Date().toISOString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
     const { data: intent, error: insertError } = await adminSupabase
       .from('payment_intents')

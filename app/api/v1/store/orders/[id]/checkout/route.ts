@@ -68,6 +68,15 @@ export async function POST(
           { status: 400 }
         );
       }
+      if (msg.includes('PAYMENT_METHOD_MISMATCH')) {
+        return NextResponse.json({ error: { code: 'PAYMENT_METHOD_MISMATCH', message: 'คำสั่งซื้อนี้เลือกชำระด้วยเงินบาท ไม่สามารถจ่ายด้วย AP ได้' } }, { status: 409 });
+      }
+      if (msg.includes('AP_NOT_ALLOWED')) {
+        return NextResponse.json({ error: { code: 'AP_NOT_ALLOWED', message: 'หน้าร้านนี้ไม่รับชำระด้วย AP' } }, { status: 409 });
+      }
+      if (msg.includes('INVALID_ORDER_TOTAL')) {
+        return NextResponse.json({ error: { code: 'INVALID_ORDER_TOTAL', message: 'ยอดคำสั่งซื้อไม่ถูกต้อง' } }, { status: 409 });
+      }
       return NextResponse.json({ error: { code: 'CHECKOUT_FAILED', message: msg } }, { status: 500 });
     }
 
