@@ -151,5 +151,5 @@ export async function submitRegistrationAction(
   ]);
 
   revalidatePath(`/tournament/${tournamentId}`);
-  redirect(`/tournaments/${tournamentId}/confirmation`);
+  redirect(`/tournament/${tournamentId}/register`);
 }
