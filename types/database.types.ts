@@ -4631,6 +4631,126 @@ export type Database = {
           },
         ]
       }
+      tournament_entry_payments: {
+        Row: {
+          id: string
+          registration_id: string
+          tournament_id: string
+          team_id: string
+          created_by: string
+          amount_thb: number
+          status: string
+          status_after_payment: string
+          expires_at: string
+          slip_path: string | null
+          slip_trans_ref: string | null
+          slip_trans_at: string | null
+          slip_amount_thb: number | null
+          verify_method: string | null
+          last_check_code: string | null
+          last_check_message: string | null
+          reviewed_by: string | null
+          reviewed_at: string | null
+          reject_reason: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          registration_id: string
+          tournament_id: string
+          team_id: string
+          created_by: string
+          amount_thb: number
+          status?: string
+          status_after_payment: string
+          expires_at: string
+          slip_path?: string | null
+          slip_trans_ref?: string | null
+          slip_trans_at?: string | null
+          slip_amount_thb?: number | null
+          verify_method?: string | null
+          last_check_code?: string | null
+          last_check_message?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          reject_reason?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          registration_id?: string
+          tournament_id?: string
+          team_id?: string
+          created_by?: string
+          amount_thb?: number
+          status?: string
+          status_after_payment?: string
+          expires_at?: string
+          slip_path?: string | null
+          slip_trans_ref?: string | null
+          slip_trans_at?: string | null
+          slip_amount_thb?: number | null
+          verify_method?: string | null
+          last_check_code?: string | null
+          last_check_message?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          reject_reason?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tournament_entry_slip_attempts: {
+        Row: {
+          id: string
+          payment_id: string
+          actor_id: string
+          slip_path: string
+          verdict: string
+          outcome: string
+          check_code: string | null
+          check_message: string | null
+          trans_ref: string | null
+          trans_at: string | null
+          amount_thb: number | null
+          provider_response: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          payment_id: string
+          actor_id: string
+          slip_path: string
+          verdict: string
+          outcome: string
+          check_code?: string | null
+          check_message?: string | null
+          trans_ref?: string | null
+          trans_at?: string | null
+          amount_thb?: number | null
+          provider_response?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          payment_id?: string
+          actor_id?: string
+          slip_path?: string
+          verdict?: string
+          outcome?: string
+          check_code?: string | null
+          check_message?: string | null
+          trans_ref?: string | null
+          trans_at?: string | null
+          amount_thb?: number | null
+          provider_response?: Json | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       tournament_registrations: {
         Row: {
           ap_deducted: number | null
@@ -4748,6 +4868,7 @@ export type Database = {
         Row: {
           created_at: string | null
           entry_fee_ap: number
+          entry_fee_thb: number
           format: string
           id: string
           max_teams: number
@@ -4755,6 +4876,7 @@ export type Database = {
           prize_zp: number
           registration_closes_at: string | null
           registration_opens_at: string | null
+          roster_check: string
           season_id: string
           starts_at: string | null
           status: string
@@ -4762,6 +4884,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           entry_fee_ap?: number
+          entry_fee_thb?: number
           format: string
           id?: string
           max_teams?: number
@@ -4769,6 +4892,7 @@ export type Database = {
           prize_zp?: number
           registration_closes_at?: string | null
           registration_opens_at?: string | null
+          roster_check?: string
           season_id: string
           starts_at?: string | null
           status?: string
@@ -4776,6 +4900,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           entry_fee_ap?: number
+          entry_fee_thb?: number
           format?: string
           id?: string
           max_teams?: number
@@ -4783,6 +4908,7 @@ export type Database = {
           prize_zp?: number
           registration_closes_at?: string | null
           registration_opens_at?: string | null
+          roster_check?: string
           season_id?: string
           starts_at?: string | null
           status?: string
@@ -5075,6 +5201,38 @@ export type Database = {
       }
     }
     Functions: {
+      create_tournament_registration: {
+        Args: {
+          p_tournament_id: string
+          p_team_id: string
+          p_actor_player_id: string
+          p_roster_complete: boolean
+        }
+        Returns: Json
+      }
+      review_entry_payment: {
+        Args: {
+          p_payment_id: string
+          p_decision: string
+          p_reason: string | null
+        }
+        Returns: Json
+      }
+      submit_entry_slip_result: {
+        Args: {
+          p_payment_id: string
+          p_actor_player_id: string
+          p_slip_path: string
+          p_verdict: string
+          p_check_code: string | null
+          p_check_message: string | null
+          p_trans_ref: string | null
+          p_trans_at: string | null
+          p_amount_thb: number | null
+          p_provider_response: Json | null
+        }
+        Returns: Json
+      }
       record_match_round_event: {
         Args: {
           p_game_number: number
