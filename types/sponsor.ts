@@ -90,9 +90,10 @@ export type SponsorApprovalInput = z.infer<typeof SponsorApprovalSchema>;
 // ── Partner Coupon & Discount Engine (PARTNER_COOP only) ───────────────────
 
 export const VerifyCouponSchema = z.object({
-  code: z.string().min(1, 'ต้องระบุโค้ดคูปอง'),
-  purchase_amount_ap: z.number().int().nonnegative('ยอดซื้อต้องไม่ติดลบ'),
-  idempotency_key: z.string().min(16, 'ต้องระบุ idempotency key ที่ถูกต้อง'),
+  code: z.string().trim().min(1).max(50),
+  storefront: z.string().trim().min(1).max(60).default('zodiac-esports'),
+  paymentMethod: z.enum(['AP', 'FIAT']).default('AP'),
+  subtotal: z.number().int().positive(),
 });
 
 export type VerifyCouponInput = z.infer<typeof VerifyCouponSchema>;

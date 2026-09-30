@@ -1,6 +1,7 @@
 // app/api/v1/store/coupons/verify/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { checkRateLimit } from '@/lib/rateLimit';
 import { VerifyCouponSchema } from '@/types/sponsor';
 
 export async function POST(req: NextRequest) {
@@ -12,14 +13,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { code: 'UNAUTHORIZED', message: 'กรุณาเข้าสู่ระบบก่อนทำรายการ' } }, { status: 401 });
     }
 
-    const { data: player, error: playerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('user_id', user.id)
-      .single();
-
-    if (playerError || !player) {
-      return NextResponse.json({ error: { code: 'PROFILE_NOT_FOUND', message: 'ไม่พบประวัติโปรไฟล์ของคุณในระบบลีก' } }, { status: 404 });
+    const rateLimit = checkRateLimit(`coupon_preview:${user.id}`, 5, 60);
+    if (!rateLimit.ok) {
+      return NextResponse.json(
+        { error: { code: 'RATE_LIMITED', message: 'ทำรายการถี่เกินไป กรุณารอสักครู่แล้วลองใหม่' } },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+      );
     }
 
     let body: unknown;
@@ -37,26 +36,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { code, purchase_amount_ap, idempotency_key } = parseResult.data;
+    const { code, storefront, paymentMethod, subtotal } = parseResult.data;
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('verify_and_redeem_partner_coupon', {
-      p_player_id: player.id,
-      p_coupon_code: code,
-      p_purchase_amount_ap: purchase_amount_ap,
-      p_idempotency_key: idempotency_key,
-    });
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('preview_store_coupon' as never, {
+      p_code: code,
+      p_storefront_slug: storefront,
+      p_payment_method: paymentMethod,
+      p_subtotal: subtotal,
+    } as never);
 
     if (rpcError) {
       return NextResponse.json({ error: { code: 'RPC_FAILED', message: rpcError.message } }, { status: 500 });
     }
 
-    const result = rpcResult as { success: boolean; error?: string; [key: string]: unknown };
+    const result = rpcResult as unknown as { success: boolean; error?: string; discount_amount?: number; discount_currency?: string; title?: string };
 
     if (!result.success) {
-      return NextResponse.json({ error: { code: result.error ?? 'COUPON_REDEEM_FAILED', message: result.error ?? 'ไม่สามารถใช้คูปองนี้ได้' } }, { status: 400 });
+      return NextResponse.json({ error: { code: result.error ?? 'COUPON_INVALID', message: 'ใช้คูปองนี้ไม่ได้' } }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true, data: result });
+    return NextResponse.json({
+      success: true,
+      data: { discount_amount: result.discount_amount, discount_currency: result.discount_currency, title: result.title },
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Internal Server Error';
     return NextResponse.json({ error: { code: 'SERVER_ERROR', message } }, { status: 500 });

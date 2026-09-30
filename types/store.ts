@@ -8,6 +8,8 @@ export const CreateOrderSchema = z.object({
     .refine((obj) => Object.keys(obj).every((k) => z.string().uuid().safeParse(k).success), {
       message: 'variant_id ในรายการสินค้าต้องเป็น UUID ที่สมบูรณ์',
     }),
+  paymentMethod: z.enum(['AP', 'FIAT']).default('AP'),
+  couponCode: z.string().trim().min(1).max(50).optional(),
 });
 
 export const CreateShippingAddressSchema = z.object({
