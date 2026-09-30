@@ -104,7 +104,7 @@ const FALLBACK_LOGO_SRC = '/images/logo/logo.png';
 
 export function SkyscraperTower({ position, className = '' }: SkyscraperTowerProps) {
   const [banner, setBanner] = useState<SponsorBannerPublic | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(position === 'LEFT_TOWER');
   const [hasTrackedImpression, setHasTrackedImpression] = useState(false);
   const [seasonIndex, setSeasonIndex] = useState(0);
   const [imgError, setImgError] = useState(false);
@@ -127,10 +127,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
 
   // RIGHT_TOWER is house content (season cards) — never fetches banners or tracks stats
   useEffect(() => {
-    if (!isLeft) {
-      setLoading(false);
-      return;
-    }
+    if (!isLeft) return;
 
     let isCancelled = false;
 
