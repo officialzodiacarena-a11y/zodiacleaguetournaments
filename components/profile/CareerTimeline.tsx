@@ -20,56 +20,7 @@ interface CareerTimelineProps {
 }
 
 export function CareerTimeline({ records }: CareerTimelineProps) {
-    const defaultRecords: TournamentRecord[] = [
-        {
-            id: 'rec-01',
-            tournamentType: 'MONTHLY_FINALS',
-            title: 'ZODIAC ARENA Season 01 Summer Championship',
-            date: '2026-08-15',
-            placement: 'CHAMPION (1st Place)',
-            medalTier: 'GOLD',
-            prizeWon: '฿ 10,000 + Hall of Fame Badge',
-            kdaRatio: '14.2 / 2.1 / 18.5',
-            performanceScore: 4.95,
-            highlightHero: 'Anti-Mage',
-        },
-        {
-            id: 'rec-02',
-            tournamentType: 'WEEKLY_SWISS',
-            title: 'Weekly Swiss Playoff #03',
-            date: '2026-08-10',
-            placement: 'RUNNER-UP (2nd Place)',
-            medalTier: 'SILVER',
-            prizeWon: '฿ 3,500 + 500 Circuit Points',
-            kdaRatio: '11.0 / 3.4 / 15.0',
-            performanceScore: 4.60,
-            highlightHero: 'Morphling',
-        },
-        {
-            id: 'rec-03',
-            tournamentType: 'WEEKLY_SWISS',
-            title: 'Weekly Swiss Playoff #02',
-            date: '2026-08-03',
-            placement: 'TOP 4 (Semi-Finalist)',
-            medalTier: 'BRONZE',
-            prizeWon: '฿ 1,500 + 300 Circuit Points',
-            kdaRatio: '9.5 / 4.0 / 12.8',
-            performanceScore: 4.25,
-            highlightHero: 'Faceless Void',
-        },
-        {
-            id: 'rec-04',
-            tournamentType: 'DAILY',
-            title: 'Daily Arena Circuit - Day 18',
-            date: '2026-07-28',
-            placement: 'RANK #1 (Best of 5 Leaderboard)',
-            medalTier: 'GOLD',
-            prizeWon: '฿ 2,250',
-            kdaRatio: '16.0 / 1.5 / 14.2',
-            performanceScore: 4.88,
-            highlightHero: 'Terrorblade',
-        },
-    ];
+    const defaultRecords: TournamentRecord[] = [];
 
     const data = records && records.length > 0 ? records : defaultRecords;
 

@@ -15,15 +15,15 @@ export const OracleReportCard: React.FC = () => {
       <div className="space-y-2.5 text-xs text-slate-300 font-sans">
         <div className="p-2.5 bg-[#080811]/60 rounded-lg border border-white/[0.08]">
           <span className="text-[10px] font-mono text-slate-400 uppercase block">OPPONENT ANALYSIS</span>
-          <strong className="text-white font-orbitron text-xs">ARIES ESPORTS ♈</strong>
+          <strong className="text-white font-orbitron text-xs">TBD</strong>
           <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-            Strong utility usage, weak in clutch 1v2 situations. Recommend focus on early map aggression.
+            - NO DATA AVAILABLE -
           </p>
         </div>
 
         <div className="flex items-center justify-between p-2.5 bg-[#10B981]/10 border border-[#10B981]/20 rounded-lg">
           <span className="text-[11px] font-mono text-[#10B981] font-bold">PREDICTED WIN CHANCE</span>
-          <span className="text-lg font-black font-rajdhani text-[#10B981]">62%</span>
+          <span className="text-lg font-black font-rajdhani text-[#10B981]">0%</span>
         </div>
       </div>
     </div>

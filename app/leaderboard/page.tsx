@@ -63,13 +63,7 @@ export default function LeaderboardPage() {
 
         if (error || !data || data.length === 0) {
           // Fallback ข้อมูลจำลองสไตล์ ZODIAC ARENA
-          setPlayers([
-            { id: '1', athlete_id: 'ZA-0001', display_name: 'SHADOW_ZX', current_elo: 1850, karma_score: 98, win_rate: 68.5, recent_form: ['W', 'W', 'W', 'L', 'W'], role: 'DUELIST', tier: 'IMMORTAL 3', status: 'ACTIVE' },
-            { id: '2', athlete_id: 'ZA-0002', display_name: 'VIPER_QUEEN', current_elo: 1790, karma_score: 100, win_rate: 65.0, recent_form: ['W', 'L', 'W', 'W', 'W'], role: 'CONTROLLER', tier: 'IMMORTAL 3', status: 'ACTIVE' },
-            { id: '3', athlete_id: 'ZA-0003', display_name: 'SOVA_GOD', current_elo: 1720, karma_score: 92, win_rate: 63.2, recent_form: ['W', 'W', 'L', 'W', 'L'], role: 'INITIATOR', tier: 'IMMORTAL 2', status: 'ACTIVE' },
-            { id: '4', athlete_id: 'ZA-0004', display_name: 'CYPHER_TRAP', current_elo: 1680, karma_score: 88, win_rate: 61.8, recent_form: ['L', 'W', 'W', 'W', 'L'], role: 'SENTINEL', tier: 'IMMORTAL 2', status: 'ACTIVE' },
-            { id: '5', athlete_id: 'ZA-0005', display_name: 'JETTDASH_99', current_elo: 1640, karma_score: 95, win_rate: 59.4, recent_form: ['W', 'L', 'L', 'W', 'W'], role: 'DUELIST', tier: 'IMMORTAL 1', status: 'ACTIVE' },
-          ]);
+          setPlayers([]);
         } else {
           const mapped: LeaderboardPlayer[] = data.map((p, idx) => ({
             id: p.id,
@@ -77,12 +71,12 @@ export default function LeaderboardPage() {
             display_name: p.display_name,
             avatar_url: p.avatar_url || undefined,
             status: p.status,
-            current_elo: 1800 - idx * 35,
-            karma_score: 95,
-            win_rate: 64.0,
-            recent_form: ['W', 'W', 'L', 'W', 'W'],
-            role: ROLES[(idx % 4) + 1],
-            tier: 'IMMORTAL',
+            current_elo: 0,
+            karma_score: 0,
+            win_rate: 0,
+            recent_form: [],
+            role: 'TBD',
+            tier: 'TBD',
           }));
           setPlayers(mapped);
         }
