@@ -1,0 +1,236 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Zodiac Arena ZODIAC ARENA ESPORTS SAAS PROTOCOL" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img "Zodiac Arena" [ref=e7]
+        - generic [ref=e8]:
+          - generic [ref=e9]:
+            - text: ZODIAC
+            - generic [ref=e10]: ARENA
+          - generic [ref=e11]: ESPORTS SAAS PROTOCOL
+      - navigation [ref=e12]:
+        - link "HOME" [ref=e13] [cursor=pointer]:
+          - /url: /
+        - link "TOURNAMENT" [ref=e14] [cursor=pointer]:
+          - /url: /tournament
+        - link "LEADERBOARD" [ref=e15] [cursor=pointer]:
+          - /url: /leaderboard
+        - link "STORE" [ref=e16] [cursor=pointer]:
+          - /url: /store
+        - link "ATHLETE MARKET" [ref=e17] [cursor=pointer]:
+          - /url: /marketplace/athletes
+        - link "AI ORACLE" [ref=e18] [cursor=pointer]:
+          - /url: /chatbot
+  - button "Open ZODIAC ORACLE" [ref=e22] [cursor=pointer]
+  - main [ref=e27]:
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e31]: LEO ♌
+        - generic [ref=e42]:
+          - generic [ref=e43]: CELESTIAL DIVISION • TIER III
+          - heading "นายหัว eSport (illiYhad)#8227" [level=1] [ref=e45]:
+            - text: นายหัว eSport (illiYhad)
+            - generic [ref=e46]: "#8227"
+          - paragraph [ref=e47]:
+            - generic [ref=e48]:
+              - text: "TEAM:"
+              - strong [ref=e49]: ARIES ESPORTS
+            - generic [ref=e50]: •
+            - generic [ref=e51]:
+              - text: "ROLE:"
+              - strong [ref=e52]: DUELIST
+      - generic [ref=e53]:
+        - generic [ref=e54]:
+          - generic [ref=e55]: ACS
+          - generic [ref=e56]: "280.1"
+          - generic [ref=e57]: Top 4%
+        - generic [ref=e58]:
+          - generic [ref=e59]: KDA
+          - generic [ref=e60]: "1.7"
+          - generic [ref=e61]: 420/290/95
+        - generic [ref=e62]:
+          - generic [ref=e63]: WIN RATE
+          - generic [ref=e64]: 68%
+          - generic [ref=e65]: 27W - 13L
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - generic [ref=e68]: 💎
+            - generic [ref=e69]:
+              - generic [ref=e70]: ZP POINTS
+              - generic [ref=e71]: 1,450 ZP
+          - generic [ref=e72]:
+            - generic [ref=e73]: 🪙
+            - generic [ref=e74]:
+              - generic [ref=e75]: AP TOKENS
+              - generic [ref=e76]: 13,850 AP
+    - generic [ref=e77]:
+      - generic [ref=e78]:
+        - generic [ref=e79]:
+          - generic [ref=e80]:
+            - generic [ref=e81]: LIVE MATCH CHECK-IN
+            - generic [ref=e83]: BO3 • SPLIT 2
+          - generic [ref=e84]:
+            - generic [ref=e85]: 00:45:30
+            - generic [ref=e86]: UNTIL CHECK-IN CLOSES
+          - button "✓ CONFIRM TEAM READY" [ref=e87]
+        - generic [ref=e88]:
+          - generic [ref=e89]: UPCOMING MATCH
+          - generic [ref=e90]:
+            - generic [ref=e91]: OPPONENT
+            - heading "VS ARIES ESPORTS ♈" [level=3] [ref=e92]
+            - text: Quarterfinals • Bracket A
+          - generic [ref=e93]:
+            - generic [ref=e94]:
+              - generic [ref=e95]: MAP VETO STATUS
+              - generic [ref=e96]: PICK PHASE
+            - generic [ref=e97]:
+              - generic [ref=e98]:
+                - generic [ref=e99]: ✕
+                - generic [ref=e100]: ASCENT
+                - text: BANNED
+              - generic [ref=e101]:
+                - generic [ref=e102]: ✓
+                - generic [ref=e103]: HAVEN
+                - text: PICKED
+              - generic [ref=e104]:
+                - generic [ref=e105]: ⏳
+                - generic [ref=e106]: ICEBOX
+                - text: DECIDER
+        - generic [ref=e108]:
+          - generic [ref=e109]:
+            - generic [ref=e110]:
+              - generic [ref=e111]:
+                - generic [ref=e112]: MERCY SCRIM POOL
+                - generic [ref=e116]: ACTIVE QUEUE
+              - generic [ref=e117]:
+                - generic [ref=e118]:
+                  - generic [ref=e119]: "ACTIVE SCRIM ROOMS:"
+                  - generic [ref=e120]: 14 ROOMS
+                - generic [ref=e121]:
+                  - generic [ref=e122]: "ON-CALL RINGERS:"
+                  - generic [ref=e123]: 38 ATHLETES
+            - generic [ref=e124]:
+              - button "FIND 5v5 SCRIM / QUICK QUEUE" [ref=e125]
+              - button "BEACON FOR SUB / ADVANCED FILTERS" [ref=e129]
+          - generic [ref=e133]:
+            - generic [ref=e134]:
+              - generic [ref=e135]:
+                - generic [ref=e136]: QUICK SCRIM SETUP
+                - button "FLIP" [ref=e140]
+              - generic [ref=e146]:
+                - generic [ref=e147]:
+                  - generic [ref=e148]: ROOM NAME
+                  - textbox [ref=e149]: TACTICAL SCRIM 5v5
+                - generic [ref=e150]:
+                  - generic [ref=e151]: PUBLIC ROOM
+                  - button "TOGGLE" [ref=e156]
+                - generic [ref=e157]:
+                  - generic [ref=e158]: PREFERRED AGENT ROLE
+                  - generic [ref=e159]:
+                    - button "DUELIST" [ref=e160]
+                    - button "INITIATOR" [ref=e161]
+                    - button "CONTROLLER" [ref=e162]
+                    - button "SENTINEL" [ref=e163]
+                    - button "FLEX" [ref=e164]
+                - generic [ref=e165]:
+                  - generic [ref=e166]: AP STAKE PER PLAYER (100 AP)
+                  - slider [ref=e167]: "100"
+            - button "CONFIRM & CREATE ROOM" [ref=e168]
+        - generic [ref=e171]: SCANNING FOR MERCY BEACONS...
+      - generic [ref=e174]:
+        - generic [ref=e175]:
+          - generic [ref=e176]:
+            - generic [ref=e177]:
+              - heading "PERFORMANCE ANALYTICS (5-AXIS RADAR)" [level=2] [ref=e178]
+              - paragraph [ref=e180]: Tactical telemetry benchmark vs Celestial Division average
+            - generic [ref=e181]:
+              - generic [ref=e182]: Current
+              - generic [ref=e184]: League Avg
+          - img [ref=e187]:
+            - generic [ref=e220]: AIM (34% HS)
+            - generic [ref=e221]: ACS (92)
+            - generic [ref=e222]: FIRST KILLS
+            - generic [ref=e223]: CLUTCH %
+            - generic [ref=e224]: UTILITY USAGE
+          - generic [ref=e225]:
+            - generic [ref=e226]:
+              - generic [ref=e227]: Highest Attribute
+              - generic [ref=e228]: AIM PRECISION (92)
+            - generic [ref=e229]:
+              - generic [ref=e230]: Recent Form
+              - generic [ref=e231]: +12.4% vs SPLIT 1
+            - generic [ref=e232]:
+              - generic [ref=e233]: Playstyle Profile
+              - generic [ref=e234]: LETHAL OPENER
+        - generic [ref=e235]:
+          - generic [ref=e236]:
+            - generic [ref=e237]:
+              - generic [ref=e238]: 🕒
+              - text: RECENT MATCH HISTORY (LAST 3 MATCHES)
+            - link "VIEW ALL MATCHES →" [ref=e239] [cursor=pointer]:
+              - /url: "#"
+          - generic [ref=e240]:
+            - generic [ref=e241]:
+              - generic [ref=e242]:
+                - generic [ref=e243]: "MATCH 1: WIN"
+                - generic [ref=e244]: 13 - 7
+              - paragraph [ref=e245]: vs SCORPIO ESPORTS
+              - generic [ref=e246]:
+                - generic [ref=e247]:
+                  - text: "ACS:"
+                  - strong [ref=e248]: "295"
+                - generic [ref=e249]:
+                  - text: "KDA:"
+                  - strong [ref=e250]: "1.6"
+            - generic [ref=e251]:
+              - generic [ref=e252]:
+                - generic [ref=e253]: "MATCH 2: LOSS"
+                - generic [ref=e254]: 11 - 13
+              - paragraph [ref=e255]: vs LIBRA GAMING
+              - generic [ref=e256]:
+                - generic [ref=e257]:
+                  - text: "ACS:"
+                  - strong [ref=e258]: "240"
+                - generic [ref=e259]:
+                  - text: "KDA:"
+                  - strong [ref=e260]: "1.1"
+            - generic [ref=e261]:
+              - generic [ref=e262]:
+                - generic [ref=e263]: "MATCH 3: WIN"
+                - generic [ref=e264]: 13 - 5
+              - paragraph [ref=e265]: vs AQUARIUS CLAN
+              - generic [ref=e266]:
+                - generic [ref=e267]:
+                  - text: "ACS:"
+                  - strong [ref=e268]: "310"
+                - generic [ref=e269]:
+                  - text: "KDA:"
+                  - strong [ref=e270]: "2.1"
+      - generic [ref=e271]:
+        - generic [ref=e272]:
+          - generic [ref=e273]:
+            - generic [ref=e274]:
+              - generic [ref=e275]: 🧠
+              - text: ZODIAC ORACLE AI REPORT
+            - generic [ref=e276]: AI V5.0
+          - generic [ref=e277]:
+            - generic [ref=e278]:
+              - generic [ref=e279]: OPPONENT ANALYSIS
+              - strong [ref=e280]: ARIES ESPORTS ♈
+              - paragraph [ref=e281]: Strong utility usage, weak in clutch 1v2 situations. Recommend focus on early map aggression.
+            - generic [ref=e282]:
+              - generic [ref=e283]: PREDICTED WIN CHANCE
+              - generic [ref=e284]: 62%
+        - generic [ref=e285]:
+          - generic [ref=e286]:
+            - generic [ref=e287]:
+              - generic [ref=e288]: ☀️
+              - text: ACTIVE ZODIAC BUFF
+            - generic [ref=e289]: ACTIVE
+          - generic [ref=e291]:
+            - generic [ref=e292]: +5% ACS BONUS IN SPLIT 2
+            - generic [ref=e293]: LEO CONSTELLATION ALIGNMENT
+            - paragraph [ref=e294]:
+              - text: "Active title applied:"
+              - strong [ref=e295]: Solar Vanguard
