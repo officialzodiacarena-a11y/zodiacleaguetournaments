@@ -20,6 +20,7 @@ interface ItemRow {
   category_id: string | null;
   item_type: string | null;
   partner_brand: string | null;
+  image_url: string | null;
   store_item_variants: VariantRow[];
 }
 
@@ -35,7 +36,7 @@ export async function GET(req: Request) {
     let query = supabase
       .from('store_items')
       .select(
-        'id, name, type, description, max_per_player, category_id, item_type, partner_brand, store_item_variants(id, name, price_ap, price_thb, stock, reserved_stock, available_until)'
+        'id, name, type, description, max_per_player, category_id, item_type, partner_brand, image_url, store_item_variants(id, name, price_ap, price_thb, stock, reserved_stock, available_until)'
       )
       .eq('is_active', true)
       .order('created_at', { ascending: false });
@@ -79,6 +80,7 @@ export async function GET(req: Request) {
         category_id: item.category_id,
         item_type: item.item_type,
         partner_brand: item.partner_brand,
+        image_url: item.image_url,
         variants: (item.store_item_variants ?? [])
           .filter((v) => !v.available_until || new Date(v.available_until).getTime() > now)
           .map((v) => ({
