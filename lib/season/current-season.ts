@@ -32,6 +32,33 @@ export function getBangkokQuarter(now: Date = new Date()): SeasonQuarter {
   return Math.ceil(month / 3) as SeasonQuarter;
 }
 
+export function getBangkokYear(now: Date = new Date()): number {
+  return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Bangkok', year: 'numeric' }).format(now));
+}
+
+const SEASON_START_MONTH: Record<SeasonQuarter, string> = {
+  1: 'JANUARY',
+  2: 'APRIL',
+  3: 'JULY',
+  4: 'OCTOBER',
+};
+
+// ไตรมาสก่อนหน้า (วนข้ามปี): ม.ค. (Q1) → Winter (Q4) ของปีก่อน
+export function getPreviousQuarter(currentQuarter: SeasonQuarter): SeasonQuarter {
+  return ((currentQuarter + 2) % 4 + 1) as SeasonQuarter;
+}
+
+// ข้อความ "เดือน ปี" ที่ฤดูกาลเริ่ม เช่น "JULY 2026" — ปีคำนวณจากวันที่ ไม่เขียนตายตัว
+// ฤดูกาลที่เป็น "ช่องก่อนหน้า" ข้ามปี (ม.ค. → Winter) เริ่มเมื่อปีก่อน
+export function getSeasonStartLabel(
+  cardQuarter: SeasonQuarter,
+  currentQuarter: SeasonQuarter,
+  currentYear: number,
+): string {
+  const wrapsToLastYear = cardQuarter > currentQuarter && cardQuarter === getPreviousQuarter(currentQuarter);
+  return `${SEASON_START_MONTH[cardQuarter]} ${wrapsToLastYear ? currentYear - 1 : currentYear}`;
+}
+
 // ลำดับแสดงการ์ดฤดูกาล (วนตามไตรมาส): [ก่อนหน้า, ปัจจุบัน(ช่องกลาง), ถัดไป, ถัดจากนั้น]
 // ต.ค. (Q4) = Fall, Winter, Spring, Summer · ม.ค. (Q1) = Winter, Spring, Summer, Fall
 export function getSeasonDisplayOrder(currentQuarter: SeasonQuarter): SeasonQuarter[] {
@@ -43,7 +70,8 @@ export function getSeasonCardState(
   currentQuarter: SeasonQuarter,
   hasOpenRegistration: boolean,
 ): SeasonCardState {
-  if (cardQuarter < currentQuarter) {
+  // ช่องก่อนหน้าจบฤดูกาลเสมอ รวมกรณีข้ามปี (ม.ค. → Winter เลขไตรมาสมากกว่าปัจจุบันแต่จบแล้ว)
+  if (cardQuarter < currentQuarter || cardQuarter === getPreviousQuarter(currentQuarter)) {
     return { kind: 'ended', badge: 'จบฤดูกาล', subline: null };
   }
   if (cardQuarter === currentQuarter) {

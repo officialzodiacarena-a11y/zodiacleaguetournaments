@@ -1,6 +1,6 @@
 // app/login/page.tsx
 import { createClient } from '@/lib/supabase/server';
-import { getBangkokQuarter } from '@/lib/season/current-season';
+import { getBangkokQuarter, getBangkokYear } from '@/lib/season/current-season';
 import { countOpenRegistrationTournaments } from '@/lib/season/open-registration';
 import SeasonalGateway from './SeasonalGateway';
 
@@ -14,6 +14,7 @@ export default async function SeasonalGatewayPage() {
   return (
     <SeasonalGateway
       currentQuarter={getBangkokQuarter()}
+      currentYear={getBangkokYear()}
       openTournamentsCount={openTournamentsCount}
     />
   );
