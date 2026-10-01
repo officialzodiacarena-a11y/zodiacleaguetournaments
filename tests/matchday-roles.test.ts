@@ -3,7 +3,7 @@
 // รัน: npx tsx --test tests/matchday-roles.test.ts
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasAnyRole, MATCH_STAFF_ROLES } from '@/lib/auth/hasAnyRole';
+import { hasAnyRole, playerHasAnyRole, MATCH_STAFF_ROLES } from '@/lib/auth/hasAnyRole';
 import { POST as reportResultPost } from '@/app/api/v1/tournament/bracket/report-result/route';
 
 test('F1: report-result ตอบ 410 และบอกให้ใช้ /matches/[id]/result โดยไม่ต้องล็อกอิน/ไม่แตะ DB', async () => {
@@ -38,4 +38,31 @@ test('F2: ไม่มี role เลย / null / undefined ไม่ผ่า�
   assert.equal(hasAnyRole([], MATCH_STAFF_ROLES), false);
   assert.equal(hasAnyRole(null, MATCH_STAFF_ROLES), false);
   assert.equal(hasAnyRole(undefined, MATCH_STAFF_ROLES), false);
+});
+
+// F3: จำลอง query chain ของ supabase — เส้นทางเดียวที่ helper เรียกคือ from().select().eq().is() (ไม่มี .single())
+// ถ้า helper กลับไปใช้ .single() จะ throw "single is not a function" ทำให้เทสต์พัง
+type FakeClient = Parameters<typeof playerHasAnyRole>[0];
+function fakeRolesClient(result: { data: Array<{ role: string }> | null; error: unknown }): FakeClient {
+  const chain = {
+    select: () => chain,
+    eq: () => chain,
+    is: () => Promise.resolve(result),
+  };
+  return { from: () => chain } as unknown as FakeClient;
+}
+
+test('F3: playerHasAnyRole — ATHLETE + ADMIN (หลายแถวจาก DB) → ผ่าน', async () => {
+  const c = fakeRolesClient({ data: [{ role: 'ATHLETE' }, { role: 'ADMIN' }], error: null });
+  assert.equal(await playerHasAnyRole(c, 'p1'), true);
+});
+
+test('F2: playerHasAnyRole — ผู้ใช้ทั่วไป → ไม่ผ่าน', async () => {
+  const c = fakeRolesClient({ data: [{ role: 'ATHLETE' }], error: null });
+  assert.equal(await playerHasAnyRole(c, 'p1'), false);
+});
+
+test('F2/F3: playerHasAnyRole — DB error → ไม่ผ่าน (fail closed)', async () => {
+  const c = fakeRolesClient({ data: [{ role: 'ADMIN' }], error: { message: 'boom' } });
+  assert.equal(await playerHasAnyRole(c, 'p1'), false);
 });
