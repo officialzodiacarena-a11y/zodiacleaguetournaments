@@ -266,7 +266,7 @@ export default async function LandingPage() {
               
               <p className="text-xs md:text-sm text-[#94A3B8] max-w-xl">
                 {athleteProfile
-                  ? 'เชื่อมต่อ Riot ID เรียบร้อยแล้ว พร้อมเข้าร่วมการแข่งขันและสะสมคะแนน ZP ประจำฤดูกาล'
+                  ? 'เชื่อมต่อ Riot ID เรียบร้อยแล้ว พร้อมเข้าร่วมการแข่งขันและสะสมคะแนน VLP ประจำฤดูกาล'
                   : 'ลงทะเบียนเข้าสู่ระบบเพียงครั้งเดียวเพื่อเชื่อมโยง Riot ID สะสมประวัติการแข่งขัน และสร้างสถิติลงบน Athlete Passport'}
               </p>
             </div>
@@ -362,7 +362,7 @@ export default async function LandingPage() {
                   TOURNAMENT CIRCUIT
                 </h4>
                 <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
-                  การแข่งขัน 4 ฤดูกาล (Spring, Summer, Fall, Winter) เก็บคะแนน ZP ชิงโควตาสู่ Grand Finals
+                  การแข่งขัน 4 ฤดูกาล (Spring, Summer, Fall, Winter) เก็บคะแนน VLP ชิงโควตาสู่ Grand Finals
                 </p>
               </div>
               <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-[#E8B429]">

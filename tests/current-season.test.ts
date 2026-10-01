@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   getBangkokQuarter,
   getSeasonCardState,
+  getSeasonDisplayOrder,
   getSeasonTickerText,
 } from '@/lib/season/current-season';
 
@@ -35,4 +36,15 @@ test('ข้อความแถบวิ่งตามไตรมาส + �
   assert.equal(getSeasonTickerText(4, true), 'S4 WINTER · ZODIAC LEAGUE: เปิดรับสมัคร');
   assert.equal(getSeasonTickerText(4, false), 'S4 WINTER: กำลังแข่ง');
   assert.equal(getSeasonTickerText(2, false), 'S2 SUMMER: กำลังแข่ง');
+});
+
+test('ลำดับการ์ดฤดูกาล: ปัจจุบันอยู่ช่องที่ 2 ของ 4 (ช่องกลางเมื่อมี Zodiac League นำหน้า)', () => {
+  // ต.ค. = Fall, Winter, Spring, Summer
+  assert.deepEqual(getSeasonDisplayOrder(4), [3, 4, 1, 2]);
+  // ม.ค. = Winter, Spring, Summer, Fall
+  assert.deepEqual(getSeasonDisplayOrder(1), [4, 1, 2, 3]);
+  for (const q of [1, 2, 3, 4] as const) {
+    assert.equal(getSeasonDisplayOrder(q)[1], q);
+    assert.equal(new Set(getSeasonDisplayOrder(q)).size, 4);
+  }
 });
