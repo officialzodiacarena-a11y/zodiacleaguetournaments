@@ -150,18 +150,18 @@ export default function AthleteProfilePage() {
                 {/* Match List Scaffold (Like Image 4) */}
                 <div className="space-y-1">
                   {[
-                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false },
-                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false },
-                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false },
-                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false },
-                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false },
+                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false, mvp: false },
+                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false, mvp: false },
+                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false, mvp: false },
+                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false, mvp: false },
+                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false, mvp: false },
                   ].map((m, i) => (
                     <div key={i} className="flex flex-col">
                       <div className={`grid grid-cols-12 items-center p-3 text-xs font-mono border-l-4 bg-[#1A1C2E] cursor-pointer hover:bg-white/5 transition-colors ${m.isWin ? 'border-l-[#10B981]' : 'border-l-[#EF4444]'} ${m.expanded ? 'rounded-t-lg' : 'rounded-lg mb-1'}`}>
                         {/* Agent & Map */}
                         <div className="col-span-3 flex items-center gap-3 pl-2">
                           <div className="w-10 h-10 rounded bg-[#2B2741] border border-white/10 flex items-center justify-center overflow-hidden">
-                            {m.agentImg ? {m.agentImg ? <img src={m.agentImg} alt={m.agent} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-black flex items-center justify-center text-xs text-neutral-600">?</div>} : <div className="text-xl text-neutral-600">?</div>}
+                            {m.agentImg ? <img src={m.agentImg} alt={m.agent} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-black flex items-center justify-center text-xs text-neutral-600">?</div>}
                           </div>
                           <div>
                             <div className="text-[10px] text-neutral-400">{m.date}</div>
@@ -227,11 +227,11 @@ export default function AthleteProfilePage() {
                               </thead>
                               <tbody className="divide-y divide-white/5">
                                 {[
-                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-' },
-                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-' },
-                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-' },
-                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-' },
-                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-' },
+                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-', self: false, private: false },
+                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-', self: false, private: false },
+                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-', self: false, private: false },
+                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-', self: false, private: false },
+                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-', self: false, private: false },
                                 ].map((p, j) => (
                                   <tr key={j} className={`hover:bg-white/5 ${p.self ? 'bg-[#10B981]/5' : ''}`}>
                                     <td className="p-3">

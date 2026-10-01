@@ -35,15 +35,15 @@ export async function getAthleteDashboardData(): Promise<DashboardDataPayload> {
   const defaultPayload: DashboardDataPayload = {
     profile: {
       id: 'usr_01',
-      displayName: TBD,
-      riotId: TBD,
+      displayName: 'TBD',
+      riotId: 'TBD',
       isVerified: true,
-      divisionTier: TBD,
-      zodiacSign: TBD,
-      role: TBD,
-      teamName: TBD,
+      divisionTier: 'RISING_STAR',
+      zodiacSign: 'ARIES',
+      role: 'TBD',
+      teamName: 'TBD',
       zpBalance: 0,
-      apBalance: 00,
+      apBalance: 0,
     },
     kpi: {
       acs: 0,
@@ -52,7 +52,7 @@ export async function getAthleteDashboardData(): Promise<DashboardDataPayload> {
       kastPct: 0,
       headshotPct: 0,
       adr: 0,
-      recentRecord: 0W - 0L,
+      recentRecord: '0W - 0L',
     },
     radar: {
       aim: 0,

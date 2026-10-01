@@ -440,7 +440,7 @@ export default async function TeamProfilePage({ params }: PageProps) {
                           tierTitle: 'Unranked',
                           winRate: 0,
                           avgAcs: 0,
-                          mostPlayedAgents: [],
+                          avgKd: 0, avgAdr: 0, headshotPct: 0,
                         }}
                       >
                         <div className="text-xs font-bold text-white truncate cursor-pointer hover:text-[#4AE38F] transition-colors underline decoration-dashed decoration-zinc-600 underline-offset-4">{coach.handle}</div>
