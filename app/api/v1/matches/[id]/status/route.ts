@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { playerHasAnyRole } from '@/lib/auth/hasAnyRole';
 import { asUpdate } from '@/types/supabase-helpers';
 
 // อนุญาตเฉพาะสถานะที่กรรมการ/แอดมินสั่งเปลี่ยนมือได้เอง (READY_CHECK/VETO/WALKOVER
@@ -61,15 +62,8 @@ export async function PATCH(
       );
     }
 
-    const { data: userRole, error: roleError } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('player_id', player.id)
-      .is('revoked_at', null)
-      .single();
-
-    const allowedRoles = ['REFEREE', 'ADMIN', 'SUPER_ADMIN'];
-    if (roleError || !userRole || !allowedRoles.includes(userRole.role)) {
+    // ดึงทุก role แล้วเช็ค some(...) — ผู้ใช้ที่มีหลาย role (ATHLETE + ADMIN) ต้องผ่าน
+    if (!(await playerHasAnyRole(supabase, player.id))) {
       return NextResponse.json(
         { error: { code: 'FORBIDDEN_ROLE', message: 'บัญชีของคุณไม่มีสิทธิ์ในการควบคุมหรือสลับสถานะแมตช์นี้' } },
         { status: 403 }

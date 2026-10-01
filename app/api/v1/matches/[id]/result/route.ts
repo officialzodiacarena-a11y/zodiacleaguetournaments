@@ -2,6 +2,7 @@ import { revalidateTag } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { playerHasAnyRole } from '@/lib/auth/hasAnyRole';
 import type { Database } from '@/types/database.types';
 
 type MatchUpdate = Database['public']['Tables']['matches']['Update'];
@@ -50,15 +51,8 @@ export async function POST(
   }
 
   // 2.1 ตรวจสอบสิทธิ์ผู้พิจารณาชี้ขาดคะแนน (RBAC)
-  const { data: userRole, error: roleError } = await supabase
-    .from('user_roles')
-    .select('role')
-    .eq('player_id', player.id)
-    .is('revoked_at', null)
-    .single();
-
-  const allowedRoles = ['REFEREE', 'ADMIN', 'SUPER_ADMIN'];
-  if (roleError || !userRole || !allowedRoles.includes(userRole.role)) {
+  // ดึงทุก role แล้วเช็ค some(...) — ผู้ใช้ที่มีหลาย role (ATHLETE + ADMIN) ต้องผ่าน
+  if (!(await playerHasAnyRole(supabase, player.id))) {
     return NextResponse.json(
       { error: 'FORBIDDEN_ROLE: สิทธิ์ในการตัดสินชี้ขาดคะแนนจำกัดเฉพาะกรรมการหรือแอดมินระบบเท่านั้น' },
       { status: 403 }
