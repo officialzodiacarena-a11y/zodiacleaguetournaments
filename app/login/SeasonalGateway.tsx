@@ -10,6 +10,7 @@ import {
   SEASON_ENDED_COLOR,
   getSeasonCardState,
   getSeasonDisplayOrder,
+  getSeasonStartLabel,
   getSeasonTickerText,
   type SeasonCardState,
   type SeasonQuarter,
@@ -29,6 +30,7 @@ const SPRING_CHAMPIONS = {
 
 interface SeasonalGatewayProps {
   currentQuarter: SeasonQuarter;
+  currentYear: number;
   openTournamentsCount: number;
 }
 
@@ -55,7 +57,7 @@ function SeasonBadge({ state, accentClass }: { state: SeasonCardState; accentCla
   return <span className={`font-bold bg-black/70 px-1.5 py-0.5 rounded border ${accentClass}`}>{state.badge}</span>;
 }
 
-export default function SeasonalGateway({ currentQuarter, openTournamentsCount }: SeasonalGatewayProps) {
+export default function SeasonalGateway({ currentQuarter, currentYear, openTournamentsCount }: SeasonalGatewayProps) {
   const hasOpenRegistration = openTournamentsCount > 0;
   const springState = getSeasonCardState(1, currentQuarter, hasOpenRegistration);
   const summerState = getSeasonCardState(2, currentQuarter, hasOpenRegistration);
@@ -516,7 +518,7 @@ export default function SeasonalGateway({ currentQuarter, openTournamentsCount }
             (fallState.kind === 'next' || fallState.kind === 'locked') && (
               <div className="bg-black/80 backdrop-blur-md rounded-lg p-2 border border-orange-500/40 text-center shadow-lg">
                 <span className="text-[7.5px] text-zinc-300 block font-mono">REGISTRATION OPENS</span>
-                <span className="text-[11px] font-black text-orange-400 font-mono">JULY 2026</span>
+                <span className="text-[11px] font-black text-orange-400 font-mono">{getSeasonStartLabel(3, currentQuarter, currentYear)}</span>
               </div>
             )
           )}
@@ -570,7 +572,7 @@ export default function SeasonalGateway({ currentQuarter, openTournamentsCount }
           ) : (
             <div className="bg-black/80 backdrop-blur-md rounded-lg p-2 border border-cyan-500/40 text-center shadow-lg">
               <span className="text-[7.5px] text-zinc-300 block font-mono">LAST CHANCE POINTS</span>
-              <span className="text-[11px] font-black text-cyan-300 font-mono">OCTOBER 2026</span>
+              <span className="text-[11px] font-black text-cyan-300 font-mono">{getSeasonStartLabel(4, currentQuarter, currentYear)}</span>
             </div>
           )}
         </div>

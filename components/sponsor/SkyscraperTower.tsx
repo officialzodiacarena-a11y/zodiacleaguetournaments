@@ -8,8 +8,10 @@ import { Crown, ExternalLink, Sparkles } from 'lucide-react';
 import type { SponsorBannerPublic, SponsorSlotPosition } from '@/types/sponsor';
 import {
   getBangkokQuarter,
+  getBangkokYear,
   getSeasonCardState,
   getSeasonDisplayOrder,
+  getSeasonStartLabel,
   type SeasonCardKind,
   type SeasonQuarter,
 } from '@/lib/season/current-season';
@@ -85,7 +87,7 @@ const SEASON_CARDS = [
     title: 'FALL',
     subtitle: 'UPCOMING CIRCUIT',
     footerTop: 'REGISTRATION OPENS',
-    footerBottom: 'JULY 2026',
+    footerBottom: '',
     icon: 'leaf',
   },
   {
@@ -102,7 +104,7 @@ const SEASON_CARDS = [
     title: 'WINTER',
     subtitle: 'FINAL QUALIFIER',
     footerTop: 'LAST CHANCE POINTS',
-    footerBottom: 'OCTOBER 2026',
+    footerBottom: '',
     icon: 'snowflake',
   },
 ];
@@ -126,7 +128,12 @@ const STATUS_BG: Record<SeasonCardKind, string | null> = {
   locked: null,
 };
 
-function resolveSeasonCard(card: (typeof SEASON_CARDS)[number], quarter: SeasonQuarter, currentQuarter: SeasonQuarter) {
+function resolveSeasonCard(
+  card: (typeof SEASON_CARDS)[number],
+  quarter: SeasonQuarter,
+  currentQuarter: SeasonQuarter,
+  currentYear: number,
+) {
   const state = getSeasonCardState(quarter, currentQuarter, false);
   if (state.kind === 'live') {
     return {
@@ -149,15 +156,20 @@ function resolveSeasonCard(card: (typeof SEASON_CARDS)[number], quarter: SeasonQ
     statusBg: STATUS_BG[state.kind] ?? card.statusBg,
     subtitle: keepStatic ? card.subtitle : '',
     footerTop: keepStatic ? card.footerTop : '',
-    footerBottom: keepStatic ? card.footerBottom : '',
+    // Fall/Winter: เดือน+ปีที่ฤดูกาลเริ่มคำนวณจากวันที่ (ไม่ตายตัว) · Spring คงข้อความมอคอัพเดิม
+    footerBottom: keepStatic
+      ? card.id === 'fall' || card.id === 'winter'
+        ? getSeasonStartLabel(quarter, currentQuarter, currentYear)
+        : card.footerBottom
+      : '',
   };
 }
 
 // ลำดับ: [Zodiac League, ฤดูกาลก่อนหน้า, ปัจจุบัน, ถัดไป, ถัดจากนั้น] — ปัจจุบันอยู่ช่องกลาง
-function buildSeasonCards(currentQuarter: SeasonQuarter) {
+function buildSeasonCards(currentQuarter: SeasonQuarter, currentYear: number) {
   return [
     SEASON_CARDS[0],
-    ...getSeasonDisplayOrder(currentQuarter).map((q) => resolveSeasonCard(CARD_BY_QUARTER[q], q, currentQuarter)),
+    ...getSeasonDisplayOrder(currentQuarter).map((q) => resolveSeasonCard(CARD_BY_QUARTER[q], q, currentQuarter, currentYear)),
   ];
 }
 
@@ -166,6 +178,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
   const [loading, setLoading] = useState(position === 'LEFT_TOWER');
   const [hasTrackedImpression, setHasTrackedImpression] = useState(false);
   const [currentQuarter] = useState<SeasonQuarter>(() => getBangkokQuarter());
+  const [currentYear] = useState<number>(() => getBangkokYear());
   // เริ่มที่การ์ดฤดูกาลปัจจุบัน (ช่องที่ 3 ของ 5 = index 2) แล้วหมุนต่อทุก 10 วินาที
   const [seasonIndex, setSeasonIndex] = useState(2);
   const [imgError, setImgError] = useState(false);
@@ -271,7 +284,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
 
   if (isLeft && loading && !banner) return null;
 
-  const seasonCards = buildSeasonCards(currentQuarter);
+  const seasonCards = buildSeasonCards(currentQuarter, currentYear);
   const currentSeason = seasonCards[seasonIndex];
 
   return (
