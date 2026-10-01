@@ -14,7 +14,8 @@ export async function createTeamAction(formData: FormData): Promise<ActionResult
   const name = (formData.get('name') as string | null)?.trim();
   const tag = (formData.get('tag') as string | null)?.trim().toUpperCase();
   const description = (formData.get('description') as string | null)?.trim() || null;
-  const logoUrl = (formData.get('logoUrl') as string | null)?.trim() || null;
+  let logoUrl = (formData.get('logoUrl') as string | null)?.trim() || null;
+  const logoFile = formData.get('logoFile') as File | null;
 
   if (!name || name.length < 2 || name.length > 50) {
     return { error: { code: 'INVALID_NAME', message: 'ชื่อทีมต้องมีความยาวระหว่าง 2-50 ตัวอักษร' } };
@@ -56,10 +57,32 @@ export async function createTeamAction(formData: FormData): Promise<ActionResult
   }
 
   // Generate unique slug
+  const admin = createAdminClient();
+
+  if (logoFile && logoFile.size > 0) {
+    if (logoFile.size > 2 * 1024 * 1024) {
+      return { error: { code: 'FILE_TOO_LARGE', message: 'ขนาดไฟล์โลโก้ต้องไม่เกิน 2MB' } };
+    }
+    
+    const fileExt = logoFile.name.split('.').pop() || 'png';
+    const fileName = `team_${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+    const path = `logos/${fileName}`;
+    
+    const { error: uploadError } = await admin.storage
+      .from('team-logos')
+      .upload(path, Buffer.from(await logoFile.arrayBuffer()), { contentType: logoFile.type, upsert: false });
+      
+    if (uploadError) {
+      return { error: { code: 'UPLOAD_FAILED', message: `อัปโหลดโลโก้ไม่สำเร็จ: ${uploadError.message}` } };
+    }
+    
+    const { data: publicUrlData } = admin.storage.from('team-logos').getPublicUrl(path);
+    logoUrl = publicUrlData.publicUrl;
+  }
+
   const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || tag.toLowerCase();
   const slug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
 
-  const admin = createAdminClient();
   const { data: newTeam, error: createError } = await admin
     .from('teams')
     .insert({

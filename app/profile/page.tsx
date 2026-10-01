@@ -120,9 +120,9 @@ export default function ProfilePage() {
   }
 
   // Identity Fallbacks
-  const displayAthleteId = player?.athlete_id || 'ZA-0001';
-  const displayName = player?.display_name || (gameAccount ? `${gameAccount.game_name}#${gameAccount.tag_line}` : 'SHADOW_ZX');
-  const realName = player?.real_name || 'ณัฐวุฒิ สมานใจ';
+  const displayAthleteId = player?.athlete_id || 'TBD';
+  const displayName = player?.display_name || (gameAccount ? `${gameAccount.game_name}#${gameAccount.tag_line}` : 'TBD');
+  const realName = player?.real_name || 'TBD';
   const location = player?.country_code === 'TH' ? 'ชลบุรี, ประเทศไทย' : 'ประเทศไทย';
   const isVerified = gameAccount?.verification_status === 'VERIFIED';
   const isPending = gameAccount?.verification_status === 'PENDING' || gameAccount?.verification_status === 'MANUAL_REVIEW';
@@ -130,7 +130,7 @@ export default function ProfilePage() {
   // --- SVG Radar Chart Calculations ---
   const cx = 120, cy = 120, r = 90;
   const radarLabels = ['ACS', 'K/D', 'ADR', 'HS%', 'FB Rate'];
-  const radarVals = [0.78, 0.85, 0.72, 0.80, 0.68];
+  const radarVals = [0, 0, 0, 0, 0];
   const angles = Array.from({ length: 5 }, (_, i) => i * (360 / 5));
 
   const getPoint = (angle: number, radius: number) => {
@@ -260,12 +260,12 @@ export default function ProfilePage() {
           <>
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-7">
               {[
-                { label: 'K/D', val: '1.87', sub: 'Kill / Death', gold: true },
-                { label: 'K/D/A', val: '2.31', sub: 'Kill/Death/Assist' },
-                { label: 'ACS', val: '274', sub: 'Avg Combat Score' },
-                { label: 'ADR', val: '168', sub: 'Avg Damage/Round' },
-                { label: 'HS%', val: '32%', sub: 'Headshot Rate' },
-                { label: 'FIRST BLOODS', val: '142', sub: 'เลือดแรก' },
+                { label: 'K/D', val: '0.00', sub: 'Kill / Death', gold: true },
+                { label: 'K/D/A', val: '0.00', sub: 'Kill/Death/Assist' },
+                { label: 'ACS', val: '0', sub: 'Avg Combat Score' },
+                { label: 'ADR', val: '0', sub: 'Avg Damage/Round' },
+                { label: 'HS%', val: '0%', sub: 'Headshot Rate' },
+                { label: 'FIRST BLOODS', val: '0', sub: 'เลือดแรก' },
               ].map((item, idx) => (
                 <div
                   key={idx}
@@ -328,9 +328,9 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-[11px] text-neutral-400 mt-4 border-t border-white/5 pt-3">
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E8B429]" /> ACS <span className="text-neutral-500">274</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E8B429]" /> K/D <span className="text-neutral-500">1.87</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E8B429]" /> ADR <span className="text-neutral-500">168</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E8B429]" /> ACS <span className="text-neutral-500">0</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E8B429]" /> K/D <span className="text-neutral-500">0.00</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E8B429]" /> ADR <span className="text-neutral-500">0</span></div>
                   <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E8B429]" /> HS% <span className="text-neutral-500">32%</span></div>
                   <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E8B429]" /> FB Rate <span className="text-neutral-500">68%</span></div>
                 </div>

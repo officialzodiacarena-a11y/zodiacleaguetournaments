@@ -150,18 +150,18 @@ export default function AthleteProfilePage() {
                 {/* Match List Scaffold (Like Image 4) */}
                 <div className="space-y-1">
                   {[
-                    { agent: 'Omen', agentImg: 'https://media.valorant-api.com/agents/8e253930-4c05-31dd-1b6c-968525494517/displayicon.png', map: 'Haven', date: 'May 8, 08:56', res: '9:13', kd: '15/18/11', kdr: '0.83', hs: '35%', adr: '144', acs: '217', isWin: false, expanded: true },
-                    { agent: 'Sova', agentImg: 'https://media.valorant-api.com/agents/320b2a48-4d9b-a075-30f1-1f93a9b638fa/displayicon.png', map: 'Haven', date: 'May 8, 08:12', res: '13:11', kd: '20/16/7', kdr: '1.25', hs: '29%', adr: '160', acs: '245', isWin: true },
-                    { agent: 'Viper', agentImg: 'https://media.valorant-api.com/agents/707eab51-4836-f488-046a-cda6bf494859/displayicon.png', map: 'Pearl', date: 'May 2, 02:23', res: '5:13', kd: '12/15/5', kdr: '0.80', hs: '31%', adr: '124', acs: '191', isWin: false },
-                    { agent: 'Viper', agentImg: 'https://media.valorant-api.com/agents/707eab51-4836-f488-046a-cda6bf494859/displayicon.png', map: 'Lotus', date: 'May 2, 01:46', res: '13:7', kd: '19/14/7', kdr: '1.36', hs: '32%', adr: '185', acs: '269', isWin: true },
-                    { agent: 'Cypher', agentImg: 'https://media.valorant-api.com/agents/117ed9e3-49f3-6512-3ccf-0cada7e3823b/displayicon.png', map: 'Fracture', date: 'May 2, 01:17', res: '13:4', kd: '18/8/4', kdr: '2.25', hs: '19%', adr: '180', acs: '296', isWin: true, mvp: true },
+                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false, mvp: false },
+                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false, mvp: false },
+                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false, mvp: false },
+                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false, mvp: false },
+                    { agent: 'TBD', agentImg: '', map: 'TBD', date: '-', res: '-', kd: '-', kdr: '-', hs: '-', adr: '-', acs: '-', isWin: false, expanded: false, mvp: false },
                   ].map((m, i) => (
                     <div key={i} className="flex flex-col">
                       <div className={`grid grid-cols-12 items-center p-3 text-xs font-mono border-l-4 bg-[#1A1C2E] cursor-pointer hover:bg-white/5 transition-colors ${m.isWin ? 'border-l-[#10B981]' : 'border-l-[#EF4444]'} ${m.expanded ? 'rounded-t-lg' : 'rounded-lg mb-1'}`}>
                         {/* Agent & Map */}
                         <div className="col-span-3 flex items-center gap-3 pl-2">
                           <div className="w-10 h-10 rounded bg-[#2B2741] border border-white/10 flex items-center justify-center overflow-hidden">
-                            <img src={m.agentImg} alt={m.agent} className="w-full h-full object-cover" />
+                            {m.agentImg ? <img src={m.agentImg} alt={m.agent} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-black flex items-center justify-center text-xs text-neutral-600">?</div>}
                           </div>
                           <div>
                             <div className="text-[10px] text-neutral-400">{m.date}</div>
@@ -227,16 +227,16 @@ export default function AthleteProfilePage() {
                               </thead>
                               <tbody className="divide-y divide-white/5">
                                 {[
-                                  { agent: 'Omen', img: 'https://media.valorant-api.com/agents/8e253930-4c05-31dd-1b6c-968525494517/displayicon.png', name: 'Flid', rank: 'Ascendant 3', kd: '1.10', acs: '214', kda: '21 / 15 / 8', hs: '27%', self: true },
-                                  { agent: 'Reyna', img: 'https://media.valorant-api.com/agents/a3bfb853-43b2-7238-a4f1-ad90e9e46bcc/displayicon.png', name: 'Wxtty', rank: 'Ascendant 2', kd: '0.95', acs: '192', kda: '18 / 19 / 4', hs: '16%' },
-                                  { agent: 'Jett', img: 'https://media.valorant-api.com/agents/add6443a-41bd-e414-f6ad-e58d267f4e95/displayicon.png', name: 'THRIVE Kong', rank: 'Ascendant 3', kd: '1.26', acs: '276', kda: '25 / 17 / 5', hs: '21%' },
-                                  { agent: 'Sage', img: 'https://media.valorant-api.com/agents/569fdd95-4d10-43ab-ca70-79becc718b46/displayicon.png', name: 'HiddenProfile', rank: 'Ascendant 1', kd: '0.80', acs: '150', kda: '12 / 15 / 10', hs: '18%', private: true },
-                                  { agent: 'Fade', img: 'https://media.valorant-api.com/agents/dade69b4-4f5a-8528-247b-219e5a1facd6/displayicon.png', name: 'MINIMA Demon', rank: 'Ascendant 3', kd: '1.09', acs: '239', kda: '22 / 20 / 7', hs: '27%' },
+                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-', self: false, private: false },
+                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-', self: false, private: false },
+                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-', self: false, private: false },
+                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-', self: false, private: false },
+                                  { agent: 'TBD', img: '', name: 'TBD', rank: 'TBD', kd: '-', acs: '-', kda: '-', hs: '-', self: false, private: false },
                                 ].map((p, j) => (
                                   <tr key={j} className={`hover:bg-white/5 ${p.self ? 'bg-[#10B981]/5' : ''}`}>
                                     <td className="p-3">
                                       <div className="w-8 h-8 rounded bg-[#2B2741] flex items-center justify-center overflow-hidden">
-                                        <img src={p.img} alt={p.agent} className="w-full h-full object-cover" />
+                                        {p.img ? <img src={p.img} alt={p.agent} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-black flex items-center justify-center text-[10px] text-neutral-600">?</div>}
                                       </div>
                                     </td>
                                     <td className="p-3">
@@ -288,11 +288,11 @@ export default function AthleteProfilePage() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[
-                    { map: 'Ascent', wr: '55%', matches: 20, img: 'https://media.valorant-api.com/maps/7eaecc1b-4337-bbf6-6ab9-04b8f06b3319/listviewicon.png' },
-                    { map: 'Bind', wr: '60%', matches: 15, img: 'https://media.valorant-api.com/maps/2c9d57ec-4431-9c5e-2939-8f9ef6dd5cba/listviewicon.png' },
-                    { map: 'Lotus', wr: '45%', matches: 22, img: 'https://media.valorant-api.com/maps/2fe4ed3a-450a-948b-6d6b-e89a78e680a9/listviewicon.png' },
-                    { map: 'Sunset', wr: '70%', matches: 10, img: 'https://media.valorant-api.com/maps/92584fbe-486a-b1b2-9faa-39b0f486b498/listviewicon.png' },
-                    { map: 'Haven', wr: '50%', matches: 18, img: 'https://media.valorant-api.com/maps/2bee0dc9-4ffe-519b-1cbd-7fbe763a6047/listviewicon.png' },
+                    { map: 'TBD', wr: '0%', matches: 0, img: '' },
+                    { map: 'TBD', wr: '0%', matches: 0, img: '' },
+                    { map: 'TBD', wr: '0%', matches: 0, img: '' },
+                    { map: 'TBD', wr: '0%', matches: 0, img: '' },
+                    { map: 'TBD', wr: '0%', matches: 0, img: '' },
                   ].map(m => (
                     <div key={m.map} className="relative overflow-hidden rounded-xl border border-white/10 group cursor-pointer h-24">
                       {/* Map Background Image */}
@@ -333,10 +333,10 @@ export default function AthleteProfilePage() {
                     </thead>
                     <tbody className="divide-y divide-white/5 text-neutral-300">
                       {[
-                        { w: 'Vandal', img: 'https://media.valorant-api.com/weapons/9c82e19d-4575-0200-1a81-3eacf00cf872/displayicon.png', k: 1450, h: 45, b: 50, l: 5 },
-                        { w: 'Phantom', img: 'https://media.valorant-api.com/weapons/ee8e8d15-496b-07ac-e5f6-8fae5d4c7b1a/displayicon.png', k: 890, h: 38, b: 58, l: 4 },
-                        { w: 'Sheriff', img: 'https://media.valorant-api.com/weapons/e336c6b8-418d-9340-d77f-7a9e4cfe0702/displayicon.png', k: 420, h: 55, b: 40, l: 5 },
-                        { w: 'Operator', img: 'https://media.valorant-api.com/weapons/a03b24d3-4319-996d-0f8c-94bbfba1dfc7/displayicon.png', k: 210, h: 10, b: 85, l: 5 },
+                        { w: 'TBD', img: '', k: 0, h: 0, b: 0, l: 0 },
+                        { w: 'TBD', img: '', k: 0, h: 0, b: 0, l: 0 },
+                        { w: 'TBD', img: '', k: 0, h: 0, b: 0, l: 0 },
+                        { w: 'TBD', img: '', k: 0, h: 0, b: 0, l: 0 },
                       ].map(row => (
                         <tr key={row.w} className="hover:bg-white/5">
                           <td className="p-4 font-bold text-white flex items-center gap-4">

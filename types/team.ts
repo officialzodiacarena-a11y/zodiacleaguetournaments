@@ -39,6 +39,7 @@ export interface TeamProfileData {
   };
   rosterStatus: RosterStatus; // "OPEN" | "LOCKED"
   lockDeadlineText?: string;  // จาก teams.locked_until
-  startingRoster: PlayerSlot[]; // role !== 'SUBSTITUTE'
+  startingRoster: PlayerSlot[]; // role !== 'SUBSTITUTE' && role !== 'COACH'
   substitutes: PlayerSlot[];    // role === 'SUBSTITUTE'
+  coaches: PlayerSlot[];        // role === 'COACH'
 }
