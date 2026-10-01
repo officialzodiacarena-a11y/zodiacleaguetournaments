@@ -3,19 +3,11 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { playerHasAnyRole } from '@/lib/auth/hasAnyRole';
+import { advanceBracketFromMatch } from '@/lib/bracket/advanceBracketFromMatch';
 import type { Database } from '@/types/database.types';
 
 type MatchUpdate = Database['public']['Tables']['matches']['Update'];
 type MatchOutcome = Database['public']['Tables']['matches']['Row']['outcome'];
-
-interface BracketNodeRow {
-  id: string;
-  winner_to_node_id: string | null;
-  loser_to_node_id: string | null;
-  bracket_type: string;
-  team_a_id?: string | null;
-  team_b_id?: string | null;
-}
 
 export async function POST(
   request: Request,
@@ -140,77 +132,17 @@ export async function POST(
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
 
-  // 6. อัปเดต Bracket Node และส่งต่อผู้ชนะ/ผู้แพ้
+  // 6. อัปเดต Bracket Node และส่งต่อผู้ชนะ/ผู้แพ้ (ตรรกะกลางเดียวกับ /report ที่กัปตันรายงานตรงกัน)
   if (winner_team_id) {
-    const { data: bracketNodeRaw } = await adminSupabase
-      .from('bracket_nodes' as never)
-      .select('id, winner_to_node_id, loser_to_node_id, bracket_type')
-      .eq('match_id' as never, matchId)
-      .maybeSingle();
-
-    const bracketNode = bracketNodeRaw as unknown as BracketNodeRow | null;
-
-    if (bracketNode) {
-      const loserTeamId = winner_team_id === match.team_a_id ? match.team_b_id : match.team_a_id;
-
-      await adminSupabase
-        .from('bracket_nodes' as never)
-        .update({
-          winner_team_id,
-          status: 'COMPLETED',
-          updated_at: nowIso,
-        } as never)
-        .eq('id', bracketNode.id);
-
-      if (bracketNode.winner_to_node_id) {
-        const { data: nextWinnerRaw } = await adminSupabase
-          .from('bracket_nodes' as never)
-          .select('id, team_a_id, team_b_id')
-          .eq('id', bracketNode.winner_to_node_id)
-          .single();
-
-        const nextWinnerNode = nextWinnerRaw as unknown as BracketNodeRow | null;
-        if (nextWinnerNode) {
-          const assignA = !nextWinnerNode.team_a_id;
-          const newTeamA = assignA ? winner_team_id : nextWinnerNode.team_a_id;
-          const newTeamB = !assignA ? winner_team_id : nextWinnerNode.team_b_id;
-
-          await adminSupabase
-            .from('bracket_nodes' as never)
-            .update({
-              team_a_id: newTeamA,
-              team_b_id: newTeamB,
-              status: Boolean(newTeamA && newTeamB) ? 'READY' : 'PENDING',
-              updated_at: nowIso,
-            } as never)
-            .eq('id', nextWinnerNode.id);
-        }
-      }
-
-      if (bracketNode.loser_to_node_id && loserTeamId) {
-        const { data: nextLoserRaw } = await adminSupabase
-          .from('bracket_nodes' as never)
-          .select('id, team_a_id, team_b_id')
-          .eq('id', bracketNode.loser_to_node_id)
-          .single();
-
-        const nextLoserNode = nextLoserRaw as unknown as BracketNodeRow | null;
-        if (nextLoserNode) {
-          const assignA = !nextLoserNode.team_a_id;
-          const newTeamA = assignA ? loserTeamId : nextLoserNode.team_a_id;
-          const newTeamB = !assignA ? loserTeamId : nextLoserNode.team_b_id;
-
-          await adminSupabase
-            .from('bracket_nodes' as never)
-            .update({
-              team_a_id: newTeamA,
-              team_b_id: newTeamB,
-              status: Boolean(newTeamA && newTeamB) ? 'READY' : 'PENDING',
-              updated_at: nowIso,
-            } as never)
-            .eq('id', nextLoserNode.id);
-        }
-      }
+    const advance = await advanceBracketFromMatch(adminSupabase, {
+      matchId,
+      teamAId: match.team_a_id,
+      teamBId: match.team_b_id,
+      winnerTeamId: winner_team_id,
+      nowIso,
+    });
+    if (!advance.ok) {
+      console.error('[matches/result] advance bracket failed', { matchId, error: advance.error });
     }
   }
 
