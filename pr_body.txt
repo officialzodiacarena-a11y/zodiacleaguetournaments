@@ -1,1 +1,1 @@
-﻿feat: add league report api with draw support
+﻿สาขาสำหรับรวมระบบทั้งหมด (Frontend + Backend API + Admin API) รวมถึงการแก้ไขข้อผิดพลาด TS Error ทั้งหมดตามคำสั่ง CEO เพื่อให้ระบบใช้งานได้จริงโดยไม่พัง

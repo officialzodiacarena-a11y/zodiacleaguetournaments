@@ -75,7 +75,7 @@ export function planFinishMap(state: SeriesState, nowIso: string): FinishMapPlan
   const roundsB = match.rounds_won_b ?? 0;
   
   // In BO2, a match can end in a draw map (e.g. 12-12). In other formats, it cannot.
-  const isBo2 = (match.format_config as any)?.best_of === 2 || match.best_of === 2;
+  const isBo2 = (match.format_config as Record<string, unknown>)?.best_of === 2 || match.best_of === 2;
   const isMapDraw = roundsA === roundsB;
 
   if (isMapDraw && !isBo2) {

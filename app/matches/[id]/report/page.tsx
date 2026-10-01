@@ -6,6 +6,7 @@ export default function ReportMatchPage({ params }: { params: { id: string } }) 
   const [winnerTeamId, setWinnerTeamId] = useState<string>('');
   const [scoreA, setScoreA] = useState(0);
   const [scoreB, setScoreB] = useState(0);
+  const [evidenceUrl, setEvidenceUrl] = useState<string>('');
   const router = useRouter();
 
   // Mock props based on the spec requirement
@@ -16,6 +17,11 @@ export default function ReportMatchPage({ params }: { params: { id: string } }) 
   const showDrawButton = stageType === 'ROUND_ROBIN' || stageType === 'GROUP_STAGE' || bestOf === 2;
 
   async function handleSubmit(isRefereeDraw: boolean = false) {
+    if (!evidenceUrl) {
+      alert('กรุณาแนบ URL ภาพหลักฐาน (evidenceUrl) เพื่อยืนยันผลการแข่งขัน');
+      return;
+    }
+
     const isLeague = stageType === 'ROUND_ROBIN' || stageType === 'GROUP_STAGE';
     const endpoint = isLeague ? `/api/v1/matches/${params.id}/report-league` : `/api/v1/matches/${params.id}/report`;
     
@@ -25,7 +31,12 @@ export default function ReportMatchPage({ params }: { params: { id: string } }) 
     
     // For non-draws, if winnerTeamId is empty, it will fail UUID validation, so we send the raw string unless it's a draw.
     const finalWinnerId = isDraw ? null : (winnerTeamId || null);
-    const body = { winnerTeamId: finalWinnerId, scoreA, scoreB };
+    const body = { 
+      winnerTeamId: finalWinnerId, 
+      scoreA, 
+      scoreB,
+      evidenceUrls: [evidenceUrl]
+    };
     
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -56,6 +67,10 @@ export default function ReportMatchPage({ params }: { params: { id: string } }) 
         <label>
           Score B:
           <input type="number" className="text-black ml-2" value={scoreB} onChange={e => setScoreB(Number(e.target.value))} />
+        </label>
+        <label>
+          Evidence URL (Screenshot):
+          <input type="text" className="text-black ml-2" value={evidenceUrl} onChange={e => setEvidenceUrl(e.target.value)} placeholder="https://..." />
         </label>
         
         <button onClick={() => handleSubmit(false)} className="bg-blue-500 p-2 rounded">
