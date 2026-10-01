@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRosterEligibility } from '@/lib/team/rosterEligibility';
 import { registrationErrorMessage } from '@/lib/tournament/registrationErrors';
+import { isRegistrationClosed } from '@/lib/tournament/registrationWindow';
 
 export type RegistrationActionResult = { error: { code: string; message: string } };
 
@@ -62,14 +63,15 @@ export async function submitRegistrationAction(
 
   const { data: tournament } = await supabase
     .from('tournaments')
-    .select('id, status, entry_fee_ap, entry_fee_thb, roster_check')
+    .select('id, status, entry_fee_ap, entry_fee_thb, roster_check, registration_closes_at')
     .eq('id', tournamentId)
     .single();
 
   if (!tournament) {
     return { error: { code: 'TOURNAMENT_NOT_FOUND', message: registrationErrorMessage('TOURNAMENT_NOT_FOUND') } };
   }
-  if (tournament.status !== 'OPEN') {
+  // status ต้อง OPEN และยังไม่เลยเวลาปิดรับ (เทียบด้วยเวลา server — ไม่รับเวลาจาก client)
+  if (tournament.status !== 'OPEN' || isRegistrationClosed(tournament.registration_closes_at)) {
     return { error: { code: 'REGISTRATION_CLOSED', message: registrationErrorMessage('REGISTRATION_CLOSED') } };
   }
 
