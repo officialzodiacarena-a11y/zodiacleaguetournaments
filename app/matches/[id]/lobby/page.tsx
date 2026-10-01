@@ -267,8 +267,8 @@ export default function MatchLobbyPage() {
 
       {/* PANEL A/B: TEAM ROSTERS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <TeamPanel team={lobby.team_a} accent="rose" onReady={() => handleReady('team_a')} readySubmitting={readySubmitting} />
-        <TeamPanel team={lobby.team_b} accent="emerald" onReady={() => handleReady('team_b')} readySubmitting={readySubmitting} />
+        <TeamPanel team={lobby.team_a} accent="rose" onReady={() => handleReady('team_a')} readySubmitting={readySubmitting} matchId={matchId} />
+        <TeamPanel team={lobby.team_b} accent="emerald" onReady={() => handleReady('team_b')} readySubmitting={readySubmitting} matchId={matchId} />
       </div>
 
       {/* PANEL C/D: CREDENTIALS + CHAT */}
@@ -332,11 +332,13 @@ function TeamPanel({
   accent,
   onReady,
   readySubmitting,
+  matchId,
 }: {
   team: LobbyTeam | null;
   accent: 'emerald' | 'rose';
   onReady: () => void;
   readySubmitting: boolean;
+  matchId: string;
 }) {
   const accentClasses = accent === 'emerald'
     ? { border: 'border-emerald-500/30', text: 'text-emerald-400', btn: 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/30' }
@@ -389,6 +391,15 @@ function TeamPanel({
       >
         {team.ready ? 'Confirmed' : readySubmitting ? 'Confirming...' : 'Confirm Team Ready'}
       </button>
+
+      <div className="mt-4 pt-4 border-t border-white/10">
+        <Link
+          href={`/matches/${matchId}/report`}
+          className="flex w-full items-center justify-center rounded-lg border border-[#C9A84C] bg-transparent py-2 text-xs font-black uppercase tracking-widest text-[#C9A84C] hover:bg-[#C9A84C]/10 transition-colors"
+        >
+          📝 REPORT MATCH RESULT
+        </Link>
+      </div>
     </div>
   );
 }
