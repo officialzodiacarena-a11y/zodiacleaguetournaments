@@ -16,6 +16,7 @@ export default function CreateTeamPage() {
   const [tag, setTag] = useState('');
   const [description, setDescription] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +38,7 @@ export default function CreateTeamPage() {
       formData.set('tag', tag);
       if (description) formData.set('description', description);
       if (logoUrl) formData.set('logoUrl', logoUrl);
+        if (logoFile) formData.set('logoFile', logoFile);
 
       const res = await createTeamAction(formData);
       if ('error' in res && res.error) {
@@ -150,19 +152,60 @@ export default function CreateTeamPage() {
             />
           </div>
 
-          {/* Logo URL */}
-          <div className="space-y-2">
+          {/* Logo Upload / URL */}
+          <div className="space-y-3">
             <label className="block text-xs font-mono font-bold uppercase tracking-wider text-zinc-300">
-              ลิงก์รูปโลโก้ทีม (Logo Image URL)
+              โลโก้ทีม (Team Logo)
             </label>
-            <input
-              type="url"
-              placeholder="https://example.com/logo.png"
-              value={logoUrl}
-              onChange={(e) => setLogoUrl(e.target.value)}
-              className="w-full bg-[#0D0E1A] border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E8B429] focus:ring-1 focus:ring-[#E8B429] transition-all font-sans"
-            />
-            <p className="text-[10px] text-zinc-500 font-mono">สามารถใส่ลิงก์รูปภาพโลโก้ หรือเว้นว่างไว้เพื่อใช้อักษรย่อ</p>
+            <div className="p-4 rounded-xl border border-white/10 bg-white/5 space-y-4">
+              <div className="space-y-2">
+                <label className="block text-[11px] text-zinc-400 font-mono">
+                  อัปโหลดรูปภาพจากเครื่อง (Upload File)
+                </label>
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.size > 2 * 1024 * 1024) {
+                        alert("ขนาดไฟล์ต้องไม่เกิน 2MB");
+                        e.target.value = '';
+                        return;
+                      }
+                      setLogoFile(file);
+                      setLogoUrl(''); // Clear URL if file is selected
+                    }
+                  }}
+                  className="w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-mono file:font-bold file:bg-[#E8B429]/10 file:text-[#E8B429] hover:file:bg-[#E8B429]/20 transition-all cursor-pointer"
+                />
+                <ul className="text-[10px] text-zinc-500 font-mono list-disc pl-4 space-y-0.5">
+                  <li>ขนาดไฟล์สูงสุด: <span className="text-[#E8B429]">2 MB</span></li>
+                  <li>ประเภทไฟล์: PNG, JPG, WEBP</li>
+                  <li>สัดส่วนที่แนะนำ: 1:1 (สี่เหลี่ยมจัตุรัส ขนาดประมาณ 256x256 px)</li>
+                </ul>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="h-px bg-white/10 flex-1"></div>
+                <span className="text-[10px] text-zinc-500 font-mono">หรือ (OR)</span>
+                <div className="h-px bg-white/10 flex-1"></div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[11px] text-zinc-400 font-mono">
+                  ใส่ลิงก์รูปภาพ (Image URL)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://example.com/logo.png"
+                  value={logoUrl}
+                  onChange={(e) => { setLogoUrl(e.target.value); setLogoFile(null); }}
+                  className="w-full bg-[#0D0E1A] border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E8B429] focus:ring-1 focus:ring-[#E8B429] transition-all font-sans"
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-zinc-500 font-mono">หากเว้นว่างไว้ ระบบจะใช้ตัวอักษรย่อ (Team Tag) แทน</p>
           </div>
 
           {/* Rules Checklist */}
@@ -173,7 +216,7 @@ export default function CreateTeamPage() {
             </div>
             <ul className="space-y-1 text-[11px] text-zinc-400 pl-5 list-disc">
               <li>ผู้สร้างทีมจะได้รับสถานะ <strong>กัปตันทีม (Captain)</strong> โดยอัตโนมัติ</li>
-              <li>กัปตันสามารถเชิญสมาชิกเข้าร่วมทีมได้สูงสุด 7 คน (ตัวจริง 5 + สำรอง 2)</li>
+              <li>กัปตันสามารถเชิญสมาชิกเข้าร่วมทีมได้สูงสุด 8 คน (ตัวจริง 5 + สำรอง 2 + โค้ช 1)</li>
               <li>ผู้เล่นทุกคนต้องผูกบัญชี Riot Games ในหน้าโปรไฟล์เพื่อยืนยันตัวตน</li>
             </ul>
           </div>
