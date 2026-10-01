@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { advanceBracketFromMatch } from '@/lib/bracket/advanceBracketFromMatch';
 import { cleanIds } from '@/types/supabase-helpers';
 
 const TeamResultReportSchema = z.object({
@@ -135,6 +136,7 @@ export async function POST(
       .eq('match_id', matchId);
 
     let autoConfirmTriggered = false;
+    let needsAdminResult = false;
     if (!siblingsFetchError && siblingReports && siblingReports.length === 2) {
       const [report1, report2] = siblingReports;
 
@@ -143,39 +145,63 @@ export async function POST(
         report1.score_a === report2.score_a &&
         report1.score_b === report2.score_b
       ) {
-        autoConfirmTriggered = true;
+        // เลื่อนสายก่อนปิดแมตช์ (ตรรกะกลางเดียวกับ /result) — ถ้าเลื่อนไม่สำเร็จให้ปล่อยแมตช์ไว้ที่ AWAITING_RESULT
+        // เพื่อให้แอดมินสรุปผ่าน /result ได้ ไม่ปล่อยให้แมตช์ COMPLETED แต่ผู้ชนะไม่ขึ้นรอบถัดไป
+        const advance = await advanceBracketFromMatch(adminSupabase, {
+          matchId,
+          teamAId: match.team_a_id,
+          teamBId: match.team_b_id,
+          winnerTeamId: report1.winner_team_id,
+          nowIso: nowISO,
+        });
 
-        const { error: matchCompletedError } = await adminSupabase
-          .from('matches')
-          .update({
-            status: 'COMPLETED',
-            winner_team_id: report1.winner_team_id,
-            score_a: report1.score_a,
-            score_b: report1.score_b,
-            outcome: 'NORMAL',
-            result_source: 'PLAYER_REPORT',
-            result_confirmed_at: nowISO,
-            ended_at: nowISO,
-            updated_at: nowISO,
-          })
-          .eq('id', matchId);
-
-        if (!matchCompletedError) {
-          await adminSupabase.from('match_state_transitions').insert({
-            match_id: matchId,
-            from_status: 'AWAITING_RESULT',
-            to_status: 'COMPLETED',
-            trigger_source: 'PLAYER',
-            actor_id: player.id,
-            reason: 'Auto-confirmed: both teams reported matching scores',
-            state_snapshot: { winner_team_id: report1.winner_team_id, score_a: report1.score_a, score_b: report1.score_b },
+        if (!advance.ok) {
+          console.error('[matches/report] advance bracket failed — left AWAITING_RESULT for admin', {
+            matchId,
+            error: advance.error,
           });
+          needsAdminResult = true;
+        } else {
+          const { error: matchCompletedError } = await adminSupabase
+            .from('matches')
+            .update({
+              status: 'COMPLETED',
+              winner_team_id: report1.winner_team_id,
+              score_a: report1.score_a,
+              score_b: report1.score_b,
+              outcome: 'NORMAL',
+              result_source: 'PLAYER_REPORT',
+              result_confirmed_at: nowISO,
+              ended_at: nowISO,
+              updated_at: nowISO,
+            })
+            .eq('id', matchId);
 
-          await adminSupabase.channel(`match-realtime-${matchId}`).send({
-            type: 'broadcast',
-            event: 'match_completed',
-            payload: { match_id: matchId, winner_team_id: report1.winner_team_id },
-          });
+          if (matchCompletedError) {
+            console.error('[matches/report] complete match failed — left AWAITING_RESULT for admin', {
+              matchId,
+              error: matchCompletedError.message,
+            });
+            needsAdminResult = true;
+          } else {
+            autoConfirmTriggered = true;
+
+            await adminSupabase.from('match_state_transitions').insert({
+              match_id: matchId,
+              from_status: 'AWAITING_RESULT',
+              to_status: 'COMPLETED',
+              trigger_source: 'PLAYER',
+              actor_id: player.id,
+              reason: 'Auto-confirmed: both teams reported matching scores',
+              state_snapshot: { winner_team_id: report1.winner_team_id, score_a: report1.score_a, score_b: report1.score_b },
+            });
+
+            await adminSupabase.channel(`match-realtime-${matchId}`).send({
+              type: 'broadcast',
+              event: 'match_completed',
+              payload: { match_id: matchId, winner_team_id: report1.winner_team_id },
+            });
+          }
         }
       }
     }
@@ -186,7 +212,7 @@ export async function POST(
       reported_at: nowISO,
       both_teams_reported: Boolean(siblingReports && siblingReports.length === 2),
       auto_confirmed: autoConfirmTriggered,
-      next_status: autoConfirmTriggered ? 'COMPLETED' : 'AWAITING_OPPONENT_REPORT',
+      next_status: autoConfirmTriggered ? 'COMPLETED' : needsAdminResult ? 'AWAITING_ADMIN_RESULT' : 'AWAITING_OPPONENT_REPORT',
     }, { status: 200 });
 
   } catch (error: unknown) {
