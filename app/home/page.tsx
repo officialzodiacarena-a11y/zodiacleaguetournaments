@@ -3,6 +3,7 @@ import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/server';
+import { countOpenRegistrationTournaments } from '@/lib/season/open-registration';
 import { 
   Radio, 
   Trophy, 
@@ -113,14 +114,11 @@ export default async function LandingPage() {
       `)
       .eq('status', 'LIVE')
       .limit(3),
-    supabase
-      .from('tournaments')
-      .select('id', { count: 'exact', head: true })
-      .in('status', ['REGISTRATION_OPEN', 'ACTIVE']),
+    countOpenRegistrationTournaments(supabase),
   ]);
 
   const liveMatchesRaw = results[0].status === 'fulfilled' ? results[0].value.data ?? [] : [];
-  const openTournamentsCount = results[1].status === 'fulfilled' ? results[1].value.count ?? 0 : 0;
+  const openTournamentsCount = results[1].status === 'fulfilled' ? results[1].value : 0;
 
   const liveMatches = (liveMatchesRaw as unknown as LiveMatchRow[]).map((m) => {
     const teamA = Array.isArray(m.team_a) ? m.team_a[0] : m.team_a;
@@ -228,7 +226,7 @@ export default async function LandingPage() {
           </div>
 
           <p className="max-w-2xl mx-auto text-sm md:text-base text-[#94A3B8] leading-relaxed">
-            เวทีประลองอีสปอร์ตระดับมืออาชีพ ผสานระบบพาสปอร์ตนักกีฬา การสะสมแต้ม ZP ชิงตั๋ว Grand Finals และระบบ Watch-to-Earn แลกของรางวัลพาร์ตเนอร์ SINOPEC
+            เวทีประลองอีสปอร์ตระดับมืออาชีพ ผสานระบบพาสปอร์ตนักกีฬา การสะสมแต้ม VLP ชิงตั๋ว Grand Finals และระบบ Watch-to-Earn แลกของรางวัลพาร์ตเนอร์ SINOPEC
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">

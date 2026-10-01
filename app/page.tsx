@@ -4,6 +4,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import AthletePassportCard from '@/components/landing/AthletePassportCard';
 import { createClient } from '@/lib/supabase/server';
+import { countOpenRegistrationTournaments } from '@/lib/season/open-registration';
+import { getBangkokQuarter, getSeasonTickerText } from '@/lib/season/current-season';
 import { 
   Radio, 
   Trophy, 
@@ -101,14 +103,12 @@ export default async function LandingPage() {
       `)
       .eq('status', 'LIVE')
       .limit(3),
-    supabase
-      .from('tournaments')
-      .select('id', { count: 'exact', head: true })
-      .in('status', ['REGISTRATION_OPEN', 'ACTIVE']),
+    countOpenRegistrationTournaments(supabase),
   ]);
 
   const liveMatchesRaw = results[0].status === 'fulfilled' ? results[0].value.data ?? [] : [];
-  const openTournamentsCount = results[1].status === 'fulfilled' ? results[1].value.count ?? 0 : 0;
+  const openTournamentsCount = results[1].status === 'fulfilled' ? results[1].value : 0;
+  const seasonTickerText = getSeasonTickerText(getBangkokQuarter(), openTournamentsCount > 0);
 
   const liveMatches = (liveMatchesRaw as unknown as LiveMatchRow[]).map((m) => {
     const teamA = Array.isArray(m.team_a) ? m.team_a[0] : m.team_a;
@@ -183,7 +183,7 @@ export default async function LandingPage() {
         <div className="flex items-center gap-6 shrink-0">
           <div className="flex items-center gap-2 text-amber-400/90 font-semibold">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-            <span>S2 SUMMER CIRCUIT: ACTIVE</span>
+            <span>{seasonTickerText}</span>
           </div>
 
           <div className="flex items-center gap-4 text-zinc-400 border-l border-white/10 pl-6">
@@ -218,7 +218,7 @@ export default async function LandingPage() {
           </div>
 
           <p className="max-w-2xl mx-auto text-sm md:text-base text-[#94A3B8] leading-relaxed">
-            เวทีประลองอีสปอร์ตระดับมืออาชีพ ผสานระบบพาสปอร์ตนักกีฬา การสะสมแต้ม ZP ชิงตั๋ว Grand Finals และระบบ Watch-to-Earn แลกของรางวัล ZODIAC MARKETPLACE
+            เวทีประลองอีสปอร์ตระดับมืออาชีพ ผสานระบบพาสปอร์ตนักกีฬา การสะสมแต้ม VLP ชิงตั๋ว Grand Finals และระบบ Watch-to-Earn แลกของรางวัล ZODIAC MARKETPLACE
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
