@@ -1,6 +1,7 @@
 // app/tournament/monthly/page.tsx
 import { createClient } from '@/lib/supabase/server';
 import { TournamentBracketView } from '@/components/tournament-bracket-view';
+import { pointUnitLabel, type PointUnit } from '@/lib/league/pointUnit';
 import type { TournamentBracketPageData, BracketMatchNode, BracketTeamParticipant } from '@/types/bracket';
 
 interface TeamInfo {
@@ -51,6 +52,7 @@ export default async function MonthlyTournamentPage() {
 
   let bracketData: TournamentBracketPageData | null = null;
   let standings: StandingRow[] = [];
+  let pointUnit: PointUnit = 'ZP';
 
   if (tournament) {
     const { data: stages } = await supabase
@@ -118,6 +120,8 @@ export default async function MonthlyTournamentPage() {
     if (tournament.season_id) {
       const { data: season } = await supabase.from('seasons').select('circuit_id').eq('id', tournament.season_id).maybeSingle();
       if (season?.circuit_id) {
+        const { data: circuit } = await supabase.from('circuits').select('point_unit').eq('id', season.circuit_id).maybeSingle();
+        pointUnit = pointUnitLabel(circuit?.point_unit);
         const { data: rows } = await supabase
           .from('circuit_standings')
           .select('team_id, total_zp, counted_zp, rank, is_finals_qualified, teams!team_id(name, tag)')
@@ -150,8 +154,8 @@ export default async function MonthlyTournamentPage() {
                 <tr>
                   <th className="py-3 px-4">Rank</th>
                   <th className="py-3 px-4">Team</th>
-                  <th className="py-3 px-4">Total ZP</th>
-                  <th className="py-3 px-4">Counted ZP</th>
+                  <th className="py-3 px-4">Total {pointUnit}</th>
+                  <th className="py-3 px-4">Counted {pointUnit}</th>
                   <th className="py-3 px-4 text-center">Status</th>
                 </tr>
               </thead>
@@ -164,8 +168,8 @@ export default async function MonthlyTournamentPage() {
                       <td className="py-3.5 px-4 font-bold text-gray-200">
                         {team?.name ?? 'Unknown'} <span className="text-gray-500 text-xs">[{team?.tag}]</span>
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-cyan-400">{s.total_zp} ZP</td>
-                      <td className="py-3.5 px-4 text-emerald-400">{s.counted_zp} ZP</td>
+                      <td className="py-3.5 px-4 font-bold text-cyan-400">{s.total_zp} {pointUnit}</td>
+                      <td className="py-3.5 px-4 text-emerald-400">{s.counted_zp} {pointUnit}</td>
                       <td className="py-3.5 px-4 text-center">
                         {s.is_finals_qualified ? (
                           <span className="text-[11px] px-2.5 py-1 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-500/40">

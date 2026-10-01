@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { pickRelevantSeason, type SeasonLike } from '@/lib/season/pickRelevantSeason';
 import { selectSeasonAction } from '@/actions/tournament';
+import { pointUnitLabel } from '@/lib/league/pointUnit';
 
 const SEASONS: SeasonSplit[] = ['SPRING', 'SUMMER', 'FALL', 'WINTER'];
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
@@ -69,7 +70,7 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
 
   const { data: circuits } = await supabase
     .from('circuits')
-    .select('id, name')
+    .select('id, name, point_unit')
     .eq('game_id', game.id);
 
   if (!circuits || circuits.length === 0) return empty;
@@ -204,6 +205,7 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
           const aboveZp = aboveRow ? Number(aboveRow.total_zp) || 0 : 0;
 
           userZpSummary = {
+            pointUnit: pointUnitLabel(selectedCircuit.point_unit),
             seasonName: `${selectedCircuit.name} Circuit`,
             accumulatedZp: myZp,
             rankNumber: idx + 1,
@@ -445,11 +447,11 @@ export default async function TournamentRegistryPage() {
               </div>
               <div>
                 <div className="text-[11px] text-[#e9e9ed]/45 tracking-wider mb-0.5">
-                  ZP ที่คุณสะสมใน {data.userZpSummary.seasonName}
+                  {data.userZpSummary.pointUnit} ที่คุณสะสมใน {data.userZpSummary.seasonName}
                 </div>
                 <div className="flex items-baseline gap-2.5">
                   <span className="text-2xl font-black text-[#E8B429]">
-                    {data.userZpSummary.accumulatedZp} <span className="text-sm font-semibold">ZP</span>
+                    {data.userZpSummary.accumulatedZp} <span className="text-sm font-semibold">{data.userZpSummary.pointUnit}</span>
                   </span>
                   <span className="text-[#e9e9ed]/35">·</span>
                   <span className="text-xs text-[#e9e9ed]/60">
@@ -464,7 +466,7 @@ export default async function TournamentRegistryPage() {
                 <div className="text-right">
                   <div className="text-[10px] text-[#e9e9ed]/35 tracking-wider mb-0.5">TO NEXT RANK</div>
                   <div className="text-xs font-semibold text-[#e9e9ed]/70">
-                    {data.userZpSummary.nextRankZp} ZP <span className="text-[#e9e9ed]/30 font-normal">to</span> #
+                    {data.userZpSummary.nextRankZp} {data.userZpSummary.pointUnit} <span className="text-[#e9e9ed]/30 font-normal">to</span> #
                     {data.userZpSummary.nextRankTarget}
                   </div>
                 </div>
