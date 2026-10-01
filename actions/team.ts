@@ -6,9 +6,99 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRosterEligibility } from '@/lib/team/rosterEligibility';
 
-export type ActionResult = { success: true } | { error: { code: string; message: string } };
+export type ActionResult = { success: true; teamId?: string } | { error: { code: string; message: string } };
 
 const INVITE_TTL_MS = 48 * 60 * 60 * 1000;
+
+export async function createTeamAction(formData: FormData): Promise<ActionResult> {
+  const name = (formData.get('name') as string | null)?.trim();
+  const tag = (formData.get('tag') as string | null)?.trim().toUpperCase();
+  const description = (formData.get('description') as string | null)?.trim() || null;
+  const logoUrl = (formData.get('logoUrl') as string | null)?.trim() || null;
+
+  if (!name || name.length < 2 || name.length > 50) {
+    return { error: { code: 'INVALID_NAME', message: 'ชื่อทีมต้องมีความยาวระหว่าง 2-50 ตัวอักษร' } };
+  }
+  if (!tag || tag.length < 2 || tag.length > 6) {
+    return { error: { code: 'INVALID_TAG', message: 'แท็กทีม (Team Tag) ต้องมีความยาวระหว่าง 2-6 ตัวอักษร' } };
+  }
+
+  const supabase = await createClient();
+  const actor = await getCurrentPlayer(supabase);
+  if (!actor) {
+    return { error: { code: 'UNAUTHENTICATED', message: 'กรุณาเข้าสู่ระบบก่อนสร้างทีม' } };
+  }
+
+  // Get active game
+  const { data: game } = await supabase
+    .from('games')
+    .select('id')
+    .eq('is_active', true)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .single();
+
+  if (!game) {
+    return { error: { code: 'GAME_NOT_FOUND', message: 'ไม่พบเกมที่เปิดใช้งานในระบบ' } };
+  }
+
+  // Check if player is already captain of an active team in this game
+  const { data: existingCaptainTeam } = await supabase
+    .from('teams')
+    .select('id')
+    .eq('captain_id', actor.id)
+    .eq('game_id', game.id)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (existingCaptainTeam) {
+    return { error: { code: 'ALREADY_CAPTAIN', message: 'คุณเป็นกัปตันของทีมในเกมนี้อยู่แล้ว (1 คนสร้างได้ 1 ทีมต่อเกม)' } };
+  }
+
+  // Generate unique slug
+  const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || tag.toLowerCase();
+  const slug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
+
+  const admin = createAdminClient();
+  const { data: newTeam, error: createError } = await admin
+    .from('teams')
+    .insert({
+      name,
+      tag,
+      slug,
+      description,
+      logo_url: logoUrl,
+      game_id: game.id,
+      captain_id: actor.id,
+      is_active: true,
+      is_locked: false,
+      wins: 0,
+      losses: 0,
+      total_zp: 0,
+    })
+    .select('id')
+    .single();
+
+  if (createError || !newTeam) {
+    return { error: { code: 'CREATE_FAILED', message: createError?.message ?? 'สร้างทีมไม่สำเร็จ' } };
+  }
+
+  // Add captain as ACTIVE team member
+  const { error: memberError } = await admin.from('team_members').insert({
+    team_id: newTeam.id,
+    player_id: actor.id,
+    role: 'CAPTAIN',
+    status: 'ACTIVE',
+  });
+
+  if (memberError) {
+    return { error: { code: 'MEMBER_ADD_FAILED', message: memberError.message } };
+  }
+
+  revalidatePath('/profile');
+  revalidatePath(`/teams/${newTeam.id}`);
+  return { success: true, teamId: newTeam.id };
+}
 
 async function getCurrentPlayer(supabase: Awaited<ReturnType<typeof createClient>>) {
   const {

@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { CareerTimeline } from '@/components/profile/CareerTimeline';
 import { GameAccountModal } from '@/components/profile/GameAccountModal';
@@ -455,26 +456,53 @@ export default function ProfilePage() {
         {/* TAB 3: TEAM INFO */}
         {activeTab === 'TEAM' && (
           <div className="bg-[#1A1C2E] border border-white/10 rounded-xl p-6">
-            <div className="font-bold text-white text-base mb-4">⚔️ Current Roster & Affiliation</div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="font-bold text-white text-base">⚔️ Current Roster & Affiliation</div>
+              <Link
+                href="/team/create"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#E8B429]/15 border border-[#E8B429]/40 text-xs font-bold text-[#E8B429] hover:bg-[#E8B429] hover:text-[#0D0E1A] transition-all"
+              >
+                <span>➕ สร้างทีมใหม่</span>
+              </Link>
+            </div>
             {teamMembership?.team ? (
-              <div className="flex items-center gap-4 bg-black/20 p-4 rounded-lg border border-white/5">
-                <div className="w-14 h-14 rounded-lg bg-[#E8B429]/10 border border-[#E8B429]/30 flex items-center justify-center font-bold text-[#E8B429] text-xl overflow-hidden">
-                  {teamMembership.team.logo_url ? (
-                    <img src={teamMembership.team.logo_url} alt="Team Logo" className="w-full h-full object-cover" />
-                  ) : (
-                    teamMembership.team.tag || 'TEAM'
-                  )}
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white uppercase">{teamMembership.team.name}</h3>
-                  <div className="text-xs text-neutral-400">
-                    Role: <span className="text-[#E8B429] font-semibold">{teamMembership.role}</span>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-black/20 p-4 rounded-lg border border-white/5">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-lg bg-[#E8B429]/10 border border-[#E8B429]/30 flex items-center justify-center font-bold text-[#E8B429] text-xl overflow-hidden">
+                    {teamMembership.team.logo_url ? (
+                      <img src={teamMembership.team.logo_url} alt="Team Logo" className="w-full h-full object-cover" />
+                    ) : (
+                      teamMembership.team.tag || 'TEAM'
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white uppercase">{teamMembership.team.name}</h3>
+                    <div className="text-xs text-neutral-400">
+                      Role: <span className="text-[#E8B429] font-semibold">{teamMembership.role}</span>
+                    </div>
                   </div>
                 </div>
+
+                <Link
+                  href={`/teams/${teamMembership.team.id}`}
+                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors"
+                >
+                  ดูหน้ารายละเอียดทีม →
+                </Link>
               </div>
             ) : (
-              <div className="text-center py-8 text-neutral-500 text-xs font-mono">
-                NO ACTIVE TEAM AFFILIATION FOUND (FREE AGENT)
+              <div className="text-center py-10 space-y-4">
+                <p className="text-neutral-400 text-xs font-mono">
+                  NO ACTIVE TEAM AFFILIATION FOUND (FREE AGENT)
+                </p>
+                <div>
+                  <Link
+                    href="/team/create"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-[#E8B429] via-[#f5c84c] to-[#E8B429] text-[#0D0E1A] font-black text-xs uppercase tracking-wider hover:shadow-[0_0_20px_rgba(232,180,41,0.4)] transition-all cursor-pointer"
+                  >
+                    <span>➕ สร้างทีมใหม่ (Create Team)</span>
+                  </Link>
+                </div>
               </div>
             )}
           </div>
