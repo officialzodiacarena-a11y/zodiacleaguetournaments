@@ -23,6 +23,7 @@ export interface TournamentItem {
 }
 
 export interface UserZpSummary {
+  pointUnit: 'ZP' | 'VLP';       // หน่วยแต้มตาม circuit.point_unit (ใช้แสดงผลเท่านั้น)
   seasonName: string;            // "Summer Circuit 2026"
   accumulatedZp: number;         // แต้มรวม ZP ปัจจุบัน
   rankNumber: number;            // อันดับใน Leaderboard ปัจจุบัน
