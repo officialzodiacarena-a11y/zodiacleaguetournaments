@@ -37,7 +37,7 @@ export async function GET(
 
     return NextResponse.json({ url: signed.signedUrl });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal Server Error';
-    return NextResponse.json({ error: { code: 'SERVER_ERROR', message } }, { status: 500 });
+    console.error('[admin/entry-payments/slip-url] unexpected error:', err);
+    return NextResponse.json({ error: { code: 'SERVER_ERROR', message: 'เกิดข้อผิดพลาด กรุณาลองใหม่' } }, { status: 500 });
   }
 }

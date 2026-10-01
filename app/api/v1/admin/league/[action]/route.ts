@@ -170,12 +170,17 @@ export async function POST(
 
     if (error) {
       const mapped = mapLeagueRpcError(error.message);
+      if (mapped.status >= 500) {
+        // ข้อผิดพลาดที่ไม่ได้ map ไว้: code ถูกตัดมาจากข้อความ DB ดิบ → log ฝั่ง server เท่านั้น ไม่ส่งให้ client
+        console.error('[admin/league] unmapped rpc error:', error);
+        return NextResponse.json({ error: { code: 'SERVER_ERROR', message: 'เกิดข้อผิดพลาด กรุณาลองใหม่' } }, { status: 500 });
+      }
       return NextResponse.json({ error: { code: mapped.code, message: mapped.message } }, { status: mapped.status });
     }
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal Server Error';
-    return NextResponse.json({ error: { code: 'SERVER_ERROR', message } }, { status: 500 });
+    console.error('[admin/league] unexpected error:', err);
+    return NextResponse.json({ error: { code: 'SERVER_ERROR', message: 'เกิดข้อผิดพลาด กรุณาลองใหม่' } }, { status: 500 });
   }
 }
