@@ -454,8 +454,11 @@ export default function SeasonalGateway({ currentQuarter, openTournamentsCount }
                 style={{ width: 'max(100cqw, calc(100cqh * 1792 / 2400))', aspectRatio: '1792 / 2400' }}
               >
                 <div className="absolute left-[10%] right-[10%] top-[66%] bottom-[7%] flex flex-col items-center justify-center gap-1 text-center">
-                  <span className="text-[11px] font-black tracking-wide text-[#F9EDD8] drop-shadow">ทำเนียบแชมป์ SEASON 2</span>
-                  <span className="text-[10px] font-bold text-[#94A3B8]">เร็ว ๆ นี้</span>
+                  <span className="h-px w-3/4 bg-gradient-to-r from-transparent via-[#E8B429] to-transparent" />
+                  <span className="text-[7.5px] font-bold uppercase tracking-[0.25em] text-[#E8B429]">SEASON 2 · SUMMER CIRCUIT</span>
+                  <span className="whitespace-nowrap text-[11px] font-black text-[#F9EDD8] drop-shadow">ร้อนแรงทุกนัด ดุเดือดทุกแมตช์</span>
+                  <span className="whitespace-nowrap font-mono text-[7px] tracking-wider text-[#94A3B8]">12 SIGNS • 4 SEASONS • 1 DESTINY</span>
+                  <span className="h-px w-3/4 bg-gradient-to-r from-transparent via-[#E8B429] to-transparent" />
                 </div>
               </div>
             </div>
