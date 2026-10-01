@@ -53,7 +53,8 @@ export async function POST(
     });
 
     if (error) {
-      return NextResponse.json({ error: { code: 'SERVER_ERROR', message: error.message } }, { status: 500 });
+      console.error('[admin/entry-payments/review] rpc error:', error);
+      return NextResponse.json({ error: { code: 'SERVER_ERROR', message: 'เกิดข้อผิดพลาด กรุณาลองใหม่' } }, { status: 500 });
     }
 
     const result = data as unknown as { ok: boolean; code?: string };
@@ -65,7 +66,7 @@ export async function POST(
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal Server Error';
-    return NextResponse.json({ error: { code: 'SERVER_ERROR', message } }, { status: 500 });
+    console.error('[admin/entry-payments/review] unexpected error:', err);
+    return NextResponse.json({ error: { code: 'SERVER_ERROR', message: 'เกิดข้อผิดพลาด กรุณาลองใหม่' } }, { status: 500 });
   }
 }
