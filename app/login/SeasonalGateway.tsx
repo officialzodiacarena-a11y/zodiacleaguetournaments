@@ -9,6 +9,7 @@ import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
 import {
   SEASON_ENDED_COLOR,
   getSeasonCardState,
+  getSeasonDisplayOrder,
   getSeasonTickerText,
   type SeasonCardState,
   type SeasonQuarter,
@@ -61,6 +62,14 @@ export default function SeasonalGateway({ currentQuarter, openTournamentsCount }
   const fallState = getSeasonCardState(3, currentQuarter, hasOpenRegistration);
   const winterState = getSeasonCardState(4, currentQuarter, hasOpenRegistration);
 
+  // ลำดับการ์ด: ฤดูกาลปัจจุบันอยู่ช่องกลาง (ช่อง 3 จาก 5 เมื่อ Zodiac League อยู่ซ้ายสุด) · มือถือ/แท็บเล็ตเรียงแนวตั้ง
+  // ให้การ์ดปัจจุบันอยู่ถัดจาก Zodiac League — ใช้ CSS order ตามลำดับที่คำนวณจาก getSeasonDisplayOrder
+  const displayOrder = getSeasonDisplayOrder(currentQuarter);
+  const orderVars = (q: SeasonQuarter) => ({
+    '--om': q === currentQuarter ? 1 : 2 + displayOrder.indexOf(q),
+    '--ol': displayOrder.indexOf(q) + 1,
+  });
+
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [timeString, setTimeString] = useState<string>('');
@@ -112,7 +121,7 @@ export default function SeasonalGateway({ currentQuarter, openTournamentsCount }
         <span className="text-[8px] text-amber-400 font-black uppercase tracking-wider block font-mono">
           ATHLETE ACCESS
         </span>
-        <span className="text-[7px] text-zinc-300">เข้าสู่ระบบเพื่อสะสมคะแนน ZP</span>
+        <span className="text-[7px] text-zinc-300">เข้าสู่ระบบเพื่อสะสมคะแนน VLP</span>
       </div>
 
       {error && (
@@ -297,12 +306,12 @@ export default function SeasonalGateway({ currentQuarter, openTournamentsCount }
 
         {/* CARD 2: SPRING */}
         <div
-          className={`relative h-[400px] rounded-xl overflow-hidden border-[#63A66F] bg-zinc-950/20 flex flex-col justify-between p-2.5 transition-all duration-300 ${
+          className={`[order:var(--om)] lg:[order:var(--ol)] relative h-[400px] rounded-xl overflow-hidden border-[#63A66F] bg-zinc-950/20 flex flex-col justify-between p-2.5 transition-all duration-300 ${
             springState.kind === 'live'
               ? 'border-2 anim-live-glow hover:scale-[1.02]'
               : 'border hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(99,166,111,0.5)] shadow-[0_4px_20px_rgba(0,0,0,0.6)]'
           }`}
-          style={{ '--za-glow': '99,166,111' } as React.CSSProperties}
+          style={{ '--za-glow': '99,166,111', ...orderVars(1) } as React.CSSProperties}
         >
           <div className="absolute inset-0 -z-10">
             <Image
@@ -381,12 +390,12 @@ export default function SeasonalGateway({ currentQuarter, openTournamentsCount }
 
         {/* CARD 3: SUMMER (LIVE & AUTH PORTAL) */}
         <div
-          className={`relative h-[400px] rounded-xl overflow-hidden border-[#E8B429] bg-zinc-950/20 flex flex-col justify-between p-2.5 transition-all duration-300 ${
+          className={`[order:var(--om)] lg:[order:var(--ol)] [container-type:size] relative h-[400px] rounded-xl overflow-hidden border-[#E8B429] bg-zinc-950/20 flex flex-col justify-between p-2.5 transition-all duration-300 ${
             summerState.kind === 'live'
               ? 'border-2 anim-live-glow hover:scale-[1.02]'
               : 'border hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(232,180,41,0.5)] shadow-[0_4px_20px_rgba(0,0,0,0.6)]'
           }`}
-          style={{ '--za-glow': '232,180,41' } as React.CSSProperties}
+          style={{ '--za-glow': '232,180,41', ...orderVars(2) } as React.CSSProperties}
         >
           <div className="absolute inset-0 -z-10">
             <Image
@@ -436,16 +445,34 @@ export default function SeasonalGateway({ currentQuarter, openTournamentsCount }
           </div>
 
           {summerState.kind === 'live' && athleteAccessPanel}
+
+          {/* ข้อความทับกล่องมืดที่อยู่ในรูป Summer.jpg (ไม่แตะรูป) — เลียนแบบ object-cover ด้วยกล่องอัตราส่วนเดียวกับรูป (1792x2400) */}
+          {summerState.kind !== 'live' && (
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+              <div
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                style={{ width: 'max(100cqw, calc(100cqh * 1792 / 2400))', aspectRatio: '1792 / 2400' }}
+              >
+                <div className="absolute left-[10%] right-[10%] top-[66%] bottom-[7%] flex flex-col items-center justify-center gap-1 text-center">
+                  <span className="h-px w-3/4 bg-gradient-to-r from-transparent via-[#E8B429] to-transparent" />
+                  <span className="text-[7.5px] font-bold uppercase tracking-[0.25em] text-[#E8B429]">SEASON 2 · SUMMER CIRCUIT</span>
+                  <span className="whitespace-nowrap text-[11px] font-black text-[#F9EDD8] drop-shadow">ร้อนแรงทุกนัด ดุเดือดทุกแมตช์</span>
+                  <span className="whitespace-nowrap font-mono text-[7px] tracking-wider text-[#94A3B8]">12 SIGNS • 4 SEASONS • 1 DESTINY</span>
+                  <span className="h-px w-3/4 bg-gradient-to-r from-transparent via-[#E8B429] to-transparent" />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* CARD 4: FALL */}
         <div
-          className={`relative h-[400px] rounded-xl overflow-hidden border-[#E87529] bg-zinc-950/20 flex flex-col justify-between p-2.5 transition-all duration-300 ${
+          className={`[order:var(--om)] lg:[order:var(--ol)] relative h-[400px] rounded-xl overflow-hidden border-[#E87529] bg-zinc-950/20 flex flex-col justify-between p-2.5 transition-all duration-300 ${
             fallState.kind === 'live'
               ? 'border-2 anim-live-glow hover:scale-[1.02]'
               : 'border hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(232,117,41,0.5)] shadow-[0_4px_20px_rgba(0,0,0,0.6)]'
           }`}
-          style={{ '--za-glow': '232,117,41' } as React.CSSProperties}
+          style={{ '--za-glow': '232,117,41', ...orderVars(3) } as React.CSSProperties}
         >
           <div className="absolute inset-0 -z-10">
             <Image
@@ -497,12 +524,12 @@ export default function SeasonalGateway({ currentQuarter, openTournamentsCount }
 
         {/* CARD 5: WINTER */}
         <div
-          className={`relative h-[400px] rounded-xl overflow-hidden border-[#5BA8D4] bg-zinc-950/20 flex flex-col justify-between p-2.5 transition-all duration-300 ${
+          className={`[order:var(--om)] lg:[order:var(--ol)] relative h-[400px] rounded-xl overflow-hidden border-[#5BA8D4] bg-zinc-950/20 flex flex-col justify-between p-2.5 transition-all duration-300 ${
             winterState.kind === 'live'
               ? 'border-2 anim-live-glow hover:scale-[1.02]'
               : 'border hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(91,168,212,0.5)] shadow-[0_4px_20px_rgba(0,0,0,0.6)]'
           }`}
-          style={{ '--za-glow': '91,168,212' } as React.CSSProperties}
+          style={{ '--za-glow': '91,168,212', ...orderVars(4) } as React.CSSProperties}
         >
           <div className="absolute inset-0 -z-10">
             <Image

@@ -6,6 +6,13 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Crown, ExternalLink, Sparkles } from 'lucide-react';
 import type { SponsorBannerPublic, SponsorSlotPosition } from '@/types/sponsor';
+import {
+  getBangkokQuarter,
+  getSeasonCardState,
+  getSeasonDisplayOrder,
+  type SeasonCardKind,
+  type SeasonQuarter,
+} from '@/lib/season/current-season';
 
 interface SkyscraperTowerProps {
   position: Extract<SponsorSlotPosition, 'LEFT_TOWER' | 'RIGHT_TOWER'>;
@@ -100,13 +107,67 @@ const SEASON_CARDS = [
   },
 ];
 
+const SEASON_CARD_COUNT = SEASON_CARDS.length;
 const FALLBACK_LOGO_SRC = '/images/logo/logo.png';
+
+const CARD_BY_QUARTER: Record<SeasonQuarter, (typeof SEASON_CARDS)[number]> = {
+  1: SEASON_CARDS[1],
+  2: SEASON_CARDS[2],
+  3: SEASON_CARDS[3],
+  4: SEASON_CARDS[4],
+};
+
+// ป้ายสถานะ/ข้อความของการ์ดฤดูกาลคำนวณจากไตรมาสปัจจุบัน (เวลาไทย) — ไม่เขียนตายตัว
+// จบฤดูกาล = เทา #6B7280 · LIVE = แดง #E3322F · NEXT/LOCKED = โทนสีของฤดูกาลนั้น
+const STATUS_BG: Record<SeasonCardKind, string | null> = {
+  ended: 'text-[#6B7280] bg-black/70 border-[#6B7280]',
+  live: 'bg-[#E3322F]/90 text-white border-red-400 animate-pulse',
+  next: null,
+  locked: null,
+};
+
+function resolveSeasonCard(card: (typeof SEASON_CARDS)[number], quarter: SeasonQuarter, currentQuarter: SeasonQuarter) {
+  const state = getSeasonCardState(quarter, currentQuarter, false);
+  if (state.kind === 'live') {
+    return {
+      ...card,
+      statusTag: state.badge,
+      statusBg: STATUS_BG.live as string,
+      subtitle: '',
+      footerTop: 'ATHLETE ACCESS',
+      footerBottom: `S${quarter} ACTIVE CIRCUIT`,
+    };
+  }
+  // ข้อความตายตัวเดิมคงไว้เฉพาะที่ยังไม่ขัดกับสถานะ (Spring = ข้อมูลมอคอัพแชมป์ · Winter · Fall ก่อนเปิดฤดูกาล)
+  const keepStatic =
+    card.id === 'spring' ||
+    card.id === 'winter' ||
+    (card.id === 'fall' && (state.kind === 'next' || state.kind === 'locked'));
+  return {
+    ...card,
+    statusTag: state.badge,
+    statusBg: STATUS_BG[state.kind] ?? card.statusBg,
+    subtitle: keepStatic ? card.subtitle : '',
+    footerTop: keepStatic ? card.footerTop : '',
+    footerBottom: keepStatic ? card.footerBottom : '',
+  };
+}
+
+// ลำดับ: [Zodiac League, ฤดูกาลก่อนหน้า, ปัจจุบัน, ถัดไป, ถัดจากนั้น] — ปัจจุบันอยู่ช่องกลาง
+function buildSeasonCards(currentQuarter: SeasonQuarter) {
+  return [
+    SEASON_CARDS[0],
+    ...getSeasonDisplayOrder(currentQuarter).map((q) => resolveSeasonCard(CARD_BY_QUARTER[q], q, currentQuarter)),
+  ];
+}
 
 export function SkyscraperTower({ position, className = '' }: SkyscraperTowerProps) {
   const [banner, setBanner] = useState<SponsorBannerPublic | null>(null);
   const [loading, setLoading] = useState(position === 'LEFT_TOWER');
   const [hasTrackedImpression, setHasTrackedImpression] = useState(false);
-  const [seasonIndex, setSeasonIndex] = useState(0);
+  const [currentQuarter] = useState<SeasonQuarter>(() => getBangkokQuarter());
+  // เริ่มที่การ์ดฤดูกาลปัจจุบัน (ช่องที่ 3 ของ 5 = index 2) แล้วหมุนต่อทุก 10 วินาที
+  const [seasonIndex, setSeasonIndex] = useState(2);
   const [imgError, setImgError] = useState(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -119,7 +180,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
   useEffect(() => {
     if (isLeft) return;
     const interval = setInterval(() => {
-      setSeasonIndex((prev) => (prev + 1) % SEASON_CARDS.length);
+      setSeasonIndex((prev) => (prev + 1) % SEASON_CARD_COUNT);
     }, 10000);
 
     return () => clearInterval(interval);
@@ -210,7 +271,8 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
 
   if (isLeft && loading && !banner) return null;
 
-  const currentSeason = SEASON_CARDS[seasonIndex];
+  const seasonCards = buildSeasonCards(currentQuarter);
+  const currentSeason = seasonCards[seasonIndex];
 
   return (
     <aside
@@ -238,7 +300,7 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
                 <span>TITLE SPONSOR</span>
               </div>
               <span className="text-[8px] xl:text-[9px] font-mono text-zinc-400 uppercase tracking-widest">
-                ZODIAC ARENA S2
+                ZODIAC ARENA S{currentQuarter}
               </span>
             </div>
 
@@ -359,32 +421,36 @@ export function SkyscraperTower({ position, className = '' }: SkyscraperTowerPro
               <h2 className={`text-lg xl:text-xl font-black tracking-tight leading-none drop-shadow-[0_0_12px_rgba(255,255,255,0.4)] font-mono ${currentSeason.textColor}`}>
                 {currentSeason.name}
               </h2>
-              <p className="text-[8px] xl:text-[8.5px] text-zinc-100 tracking-widest uppercase font-black mt-1 drop-shadow line-clamp-1">
-                {currentSeason.subtitle}
-              </p>
+              {currentSeason.subtitle && (
+                <p className="text-[8px] xl:text-[8.5px] text-zinc-100 tracking-widest uppercase font-black mt-1 drop-shadow line-clamp-1">
+                  {currentSeason.subtitle}
+                </p>
+              )}
             </div>
           </div>
 
           {/* Bottom Card Strip + 10s Dot Indicators */}
           <div className="space-y-1.5">
-            <div 
-              className="bg-black/85 backdrop-blur-md rounded-lg p-2 border text-center shadow-lg"
-              style={{ borderColor: `${currentSeason.borderColor}50` }}
-            >
-              <span className="text-[7.5px] xl:text-[8px] text-zinc-300 block font-mono">
-                {currentSeason.footerTop}
-              </span>
-              <span 
-                className="text-[10px] xl:text-[11px] font-black font-mono tracking-wider"
-                style={{ color: currentSeason.borderColor }}
+            {currentSeason.footerTop && (
+              <div
+                className="bg-black/85 backdrop-blur-md rounded-lg p-2 border text-center shadow-lg"
+                style={{ borderColor: `${currentSeason.borderColor}50` }}
               >
-                {currentSeason.footerBottom}
-              </span>
-            </div>
+                <span className="text-[7.5px] xl:text-[8px] text-zinc-300 block font-mono">
+                  {currentSeason.footerTop}
+                </span>
+                <span
+                  className="text-[10px] xl:text-[11px] font-black font-mono tracking-wider"
+                  style={{ color: currentSeason.borderColor }}
+                >
+                  {currentSeason.footerBottom}
+                </span>
+              </div>
+            )}
 
             {/* 5 Season Dots Indicator */}
             <div className="flex items-center justify-center gap-1.5 pt-0.5">
-              {SEASON_CARDS.map((_, idx) => (
+              {seasonCards.map((_, idx) => (
                 <span
                   key={idx}
                   className={`h-1 rounded-full transition-all duration-300 ${

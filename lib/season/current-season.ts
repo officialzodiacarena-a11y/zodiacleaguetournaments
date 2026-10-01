@@ -32,6 +32,12 @@ export function getBangkokQuarter(now: Date = new Date()): SeasonQuarter {
   return Math.ceil(month / 3) as SeasonQuarter;
 }
 
+// ลำดับแสดงการ์ดฤดูกาล (วนตามไตรมาส): [ก่อนหน้า, ปัจจุบัน(ช่องกลาง), ถัดไป, ถัดจากนั้น]
+// ต.ค. (Q4) = Fall, Winter, Spring, Summer · ม.ค. (Q1) = Winter, Spring, Summer, Fall
+export function getSeasonDisplayOrder(currentQuarter: SeasonQuarter): SeasonQuarter[] {
+  return [-1, 0, 1, 2].map((offset) => ((((currentQuarter - 1 + offset) % 4) + 4) % 4 + 1) as SeasonQuarter);
+}
+
 export function getSeasonCardState(
   cardQuarter: SeasonQuarter,
   currentQuarter: SeasonQuarter,
