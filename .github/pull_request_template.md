@@ -1,32 +1,36 @@
-## สถานะ merge (อลิสเป็นคนติ๊กข้อสุดท้าย)
-- [ ] 🔴 ยังห้าม merge
-- [ ] 🟢 merge ได้ (อลิส G3 PASS)
+## สถานะ merge (อลิสเป็นคนติ๊กข้อสุดท้าย — โคลท์ห้ามติ๊กเอง)
+- [ ] 🔴 ยังห้าม merge — รอ: …
+- [ ] 🟢 merge ได้ — อลิส G3 PASS (เวลา)
 
-## ทำอะไร (ภาษาไทย อ่านแล้วพี่หยัดเข้าใจ ไม่มีศัพท์เทคนิคล้วน)
+เงื่อนไขก่อน merge (ภาษาไทย):
+- ต้องรัน SQL ก่อน: (ชื่อไฟล์ หรือ "ไม่มี")
+- ต้องใส่ env ก่อน: (ชื่อ หรือ "ไม่มี")
+- ลำดับ merge: (หลัง PR # หรือ "อิสระ")
+
+## สรุปภาษาไทย (2–3 บรรทัด)
 -
 
-## ไฟล์ที่แก้ (git diff --stat)
+## What changed (English, technical detail for AI)
+<!-- Detailed, not a one-liner. Future AI sessions read this to debug/revert. Explain what, where, and why. -->
 -
 
-## ไม่ได้แตะ
-- [ ] ไม่มี SQL / migration
-- [ ] ไม่แตะรูป/อาร์ต
-- [ ] ไม่แตะ env
+## Files changed (git diff --stat)
+-
 
-## ต้องทำก่อน/หลัง merge
-- [ ] ต้องรัน SQL ก่อน: (ชื่อไฟล์ หรือ "ไม่มี")
-- [ ] ต้องใส่ env ก่อน: (ชื่อ หรือ "ไม่มี")
-- [ ] ลำดับ merge: (หลัง PR # หรือ "อิสระ")
+## Not touched
+- [ ] No SQL / migration
+- [ ] No images / art assets
+- [ ] No env changes
 
-## ตรวจแล้ว
+## Verification
 - [ ] tsc
 - [ ] lint
 - [ ] build
-- [ ] test (ชื่อไฟล์ + ผล)
-- [ ] แคปหน้าจอ 1280px + 390px (ที่อยู่ไฟล์)
+- [ ] test (file names + result)
+- [ ] Screenshots 1280px + 390px (file paths)
 - [ ] 🛸 แอนดี้ตรวจ (FROM_ANDY_… · PASS/FAIL)
-- [ ] 🐱 อลิส G3 (อ่านโค้ดเอง)
+- [ ] 🐱 อลิส G3 (read the code herself)
 - [ ] ทีมพี่ไอซ์/พี่หยัดเช็คหน้าเว็บ (ถ้าต้อง)
 
-## ใบงานอ้างอิง
+## Work order reference
 TO_KOLT_… / FROM_KOLT_…
