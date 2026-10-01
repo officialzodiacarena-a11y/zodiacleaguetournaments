@@ -1,0 +1,134 @@
+- generic [ref=f1e1]:
+  - banner [ref=f1e2]:
+    - generic [ref=f1e3]:
+      - link "Zodiac Arena ZODIAC ARENA ESPORTS SAAS PROTOCOL" [ref=f1e4] [cursor=pointer]:
+        - /url: /
+        - img "Zodiac Arena" [ref=f1e7]
+        - generic [ref=f1e8]:
+          - generic [ref=f1e9]:
+            - text: ZODIAC
+            - generic [ref=f1e10]: ARENA
+          - generic [ref=f1e11]: ESPORTS SAAS PROTOCOL
+      - navigation [ref=f1e12]:
+        - link "HOME" [ref=f1e13] [cursor=pointer]:
+          - /url: /
+        - link "TOURNAMENT" [ref=f1e14] [cursor=pointer]:
+          - /url: /tournament
+        - link "LEADERBOARD" [ref=f1e15] [cursor=pointer]:
+          - /url: /leaderboard
+        - link "STORE" [ref=f1e16] [cursor=pointer]:
+          - /url: /store
+        - link "ATHLETE MARKET" [ref=f1e17] [cursor=pointer]:
+          - /url: /marketplace/athletes
+        - link "AI ORACLE" [ref=f1e18] [cursor=pointer]:
+          - /url: /chatbot
+        - link "DASHBOARD" [ref=f1e133] [cursor=pointer]:
+          - /url: /dashboard
+        - link "SUPER ADMIN ROOT" [ref=f1e134] [cursor=pointer]:
+          - /url: /admin
+          - text: SUPER ADMIN
+          - generic [ref=f1e135]: ROOT
+      - generic [ref=f1e20]:
+        - generic [ref=f1e136]: 13,850 AP
+        - link "นายหัว eSport (illiYhad) นายหัว eSport (illiYhad)" [ref=f1e143] [cursor=pointer]:
+          - /url: /profile
+          - img "นายหัว eSport (illiYhad)" [ref=f1e145]
+          - generic [ref=f1e146]: นายหัว eSport (illiYhad)
+        - link "SUPER ADMIN" [ref=f1e147] [cursor=pointer]:
+          - /url: /admin
+        - button "LOGOUT" [ref=f1e151]
+  - button "Open ZODIAC ORACLE" [ref=f1e22] [cursor=pointer]
+  - generic [ref=f1e26]:
+    - complementary "Sponsor Skyscraper Left" [ref=f1e156]:
+      - link "TITLE SPONSOR ZODIAC ARENA S2 LUMINARY GLOBAL LUMINARY GLOBAL VISIT PARTNER" [ref=f1e157] [cursor=pointer]:
+        - /url: /sponsor/luminary
+        - generic [ref=f1e158]:
+          - generic [ref=f1e159]: TITLE SPONSOR
+          - generic [ref=f1e163]: ZODIAC ARENA S2
+        - generic [ref=f1e164]:
+          - img "LUMINARY GLOBAL" [ref=f1e166]
+          - heading "LUMINARY GLOBAL" [level=4] [ref=f1e168]
+        - generic [ref=f1e169]: VISIT PARTNER
+    - complementary "Sponsor Skyscraper Right" [ref=f1e27]:
+      - link "SPRING SEASON 1 • JAN-MAR CHAMPION SPRING CONCLUDED • 64W - 41L 🏆 ZODIAC APEX 1st SEED CHAMPION" [ref=f1e179] [cursor=pointer]:
+        - /url: /tournament
+        - img "SPRING" [ref=f1e181]
+        - generic [ref=f1e182]:
+          - generic [ref=f1e183]:
+            - generic [ref=f1e184]: SEASON 1 • JAN-MAR
+            - generic [ref=f1e185]: CHAMPION
+          - generic [ref=f1e194]:
+            - heading "SPRING" [level=2] [ref=f1e195]
+            - paragraph [ref=f1e196]: CONCLUDED • 64W - 41L
+        - generic [ref=f1e198]:
+          - generic [ref=f1e199]: 🏆 ZODIAC APEX
+          - text: 1st SEED CHAMPION
+    - generic [ref=f1e53]:
+      - generic [ref=f1e54]: ลีก · LEAGUE
+      - heading "TOURNAMENT REGISTRY" [level=1] [ref=f1e57]
+      - paragraph [ref=f1e58]: เลือกรายการแข่งขันที่ต้องการสมัคร
+    - generic [ref=f1e59]:
+      - generic [ref=f1e60]:
+        - button "SPRING" [ref=f1e62] [cursor=pointer]
+        - button "SUMMER" [ref=f1e65] [cursor=pointer]
+        - button "FALL" [ref=f1e67] [cursor=pointer]
+        - button "WINTER" [active] [ref=f1e69] [cursor=pointer]
+      - generic [ref=f1e70]:
+        - generic [ref=f1e71]: ยังไม่ประกาศซีซัน
+        - generic [ref=f1e73]: ·
+        - generic [ref=f1e74]: ลงทะเบียนได้ถึง TBA
+    - generic [ref=f1e75]:
+      - generic [ref=f1e76]:
+        - generic [ref=f1e78]:
+          - generic [ref=f1e79]:
+            - generic [ref=f1e80]: WINTER CIRCUIT
+            - 'heading "WINTER OPEN QUALIFIER #1" [level=2] [ref=f1e207]'
+          - generic [ref=f1e82]:
+            - generic [ref=f1e83]: ◆ UPCOMING
+            - generic [ref=f1e84]: DOUBLE_ELIMINATION
+        - generic [ref=f1e85]:
+          - generic [ref=f1e86]:
+            - generic [ref=f1e87]: PRIZE POOL
+            - generic [ref=f1e88]: ZP 1,000
+            - generic [ref=f1e89]: TOP 8
+          - generic [ref=f1e90]:
+            - generic [ref=f1e91]: DATE
+            - generic [ref=f1e92]: SOON
+            - generic [ref=f1e93]: "2026"
+        - generic [ref=f1e94]:
+          - generic [ref=f1e95]: Teams Registered
+          - generic [ref=f1e96]:
+            - text: 0/
+            - generic [ref=f1e97]: 12 TEAMS
+        - button "ยังไม่เปิดรับ / NOT YET OPEN" [disabled] [ref=f1e99]
+      - generic [ref=f1e100]:
+        - generic [ref=f1e102]:
+          - generic [ref=f1e103]:
+            - generic [ref=f1e104]: WINTER CIRCUIT
+            - heading "WINTER REGIONAL PREVIEW" [level=2] [ref=f1e208]
+          - generic [ref=f1e106]:
+            - generic [ref=f1e107]: ◆ UPCOMING
+            - generic [ref=f1e108]: DOUBLE_ELIMINATION
+        - generic [ref=f1e109]:
+          - generic [ref=f1e110]:
+            - generic [ref=f1e111]: PRIZE POOL
+            - generic [ref=f1e112]: ZP 2,500
+            - generic [ref=f1e113]: TOP 4
+          - generic [ref=f1e114]:
+            - generic [ref=f1e115]: DATE
+            - generic [ref=f1e116]: TBA
+            - generic [ref=f1e117]: "2026"
+        - generic [ref=f1e118]:
+          - generic [ref=f1e119]: Teams Registered
+          - generic [ref=f1e120]:
+            - text: 0/
+            - generic [ref=f1e121]: 16 TEAMS
+        - button "ยังไม่เปิดรับ / NOT YET OPEN" [disabled] [ref=f1e123]
+    - generic [ref=f1e210]:
+      - generic [ref=f1e211]: OFFICIAL PARTNERS & ECOSYSTEM SPONSORS
+      - link "LUMINARY GLOBAL LUMINARY GLOBAL" [ref=f1e217] [cursor=pointer]:
+        - /url: /sponsor/luminary
+        - img "LUMINARY GLOBAL" [ref=f1e219]
+        - generic [ref=f1e220]: LUMINARY GLOBAL
+  - button "Open Next.js Dev Tools" [ref=f1e129] [cursor=pointer]
+  - alert [ref=f1e222]
