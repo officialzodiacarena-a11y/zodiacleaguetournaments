@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ExternalLink, Sparkles } from 'lucide-react';
+import { ShippingAddressPicker } from './ShippingAddressPicker';
 
 interface Variant {
   id: string;
@@ -17,15 +19,18 @@ interface StoreItem {
   description: string | null;
   item_type: string | null;
   partner_brand: string | null;
+  image_url: string | null;
   variants: Variant[];
 }
 
 export function ProductCard({ item }: { item: StoreItem }) {
   const [redeeming, setRedeeming] = useState(false);
+  const [pickingAddress, setPickingAddress] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const variant = item.variants[0];
+  const isPhysical = item.type === 'PHYSICAL';
 
-  async function handleRedeem() {
+  async function handleRedeem(shippingAddressId?: string) {
     if (!variant || variant.sold_out || redeeming) return;
     setRedeeming(true);
     setResult(null);
@@ -33,7 +38,11 @@ export function ProductCard({ item }: { item: StoreItem }) {
       const orderRes = await fetch('/api/v1/store/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify({ items: { [variant.id]: 1 } }),
+        body: JSON.stringify(
+          shippingAddressId
+            ? { items: { [variant.id]: 1 }, shippingAddressId }
+            : { items: { [variant.id]: 1 } }
+        ),
       });
       const orderJson = await orderRes.json();
       if (!orderRes.ok) throw new Error(orderJson.error?.message ?? 'สร้างคำสั่งซื้อไม่สำเร็จ');
@@ -42,7 +51,13 @@ export function ProductCard({ item }: { item: StoreItem }) {
       const checkoutJson = await checkoutRes.json();
       if (!checkoutRes.ok) throw new Error(checkoutJson.error?.message ?? 'แลกสินค้าไม่สำเร็จ');
 
-      setResult({ ok: true, message: `แลกสำเร็จ! ใช้ไป ${checkoutJson.ap_deducted} AP` });
+      setResult({
+        ok: true,
+        message: isPhysical
+          ? `แลกสำเร็จ! ใช้ไป ${checkoutJson.ap_deducted} AP · ทีมงานจะจัดส่งไปยังที่อยู่ที่เลือก`
+          : `แลกสำเร็จ! ใช้ไป ${checkoutJson.ap_deducted} AP`,
+      });
+      setPickingAddress(false);
     } catch (err: unknown) {
       setResult({ ok: false, message: err instanceof Error ? err.message : 'เกิดข้อผิดพลาด' });
     } finally {
@@ -55,6 +70,18 @@ export function ProductCard({ item }: { item: StoreItem }) {
 
   return (
     <div className="flex flex-col rounded-xl bg-[#1A1C2E] p-4 border border-white/5 hover:border-[#E8B429]/40 transition-all shadow-lg">
+      {item.image_url && (
+        <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-lg bg-[#12142A]">
+          <Image
+            src={item.image_url}
+            alt={item.name}
+            fill
+            sizes="(max-width: 768px) 50vw, 25vw"
+            className="object-cover"
+          />
+        </div>
+      )}
+
       <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
         <div className="flex items-center gap-1.5 flex-wrap">
           {isLuminary ? (
@@ -84,15 +111,33 @@ export function ProductCard({ item }: { item: StoreItem }) {
             <span className="text-lg font-black text-[#E8B429]">{variant.price_ap.toLocaleString()}</span>
             <span className="text-xs text-[#94A3B8]">AP · ≈ ฿{variant.price_thb}</span>
           </div>
-          <button
-            type="button"
-            disabled={variant.sold_out || redeeming}
-            onClick={handleRedeem}
-            className="w-full rounded-lg bg-[#E8B429] hover:bg-[#f5c84c] py-2 text-xs font-black text-[#0D0E1A] disabled:opacity-40 transition-colors cursor-pointer"
-          >
-            {variant.sold_out ? 'สินค้าหมด' : redeeming ? 'กำลังแลก...' : 'แลกเลย'}
-          </button>
-          
+
+          {pickingAddress ? (
+            <ShippingAddressPicker
+              busy={redeeming}
+              onConfirm={(addressId) => {
+                void handleRedeem(addressId);
+              }}
+              onCancel={() => setPickingAddress(false)}
+            />
+          ) : (
+            <button
+              type="button"
+              disabled={variant.sold_out || redeeming}
+              onClick={() => {
+                if (isPhysical) {
+                  setResult(null);
+                  setPickingAddress(true);
+                } else {
+                  void handleRedeem();
+                }
+              }}
+              className="w-full rounded-lg bg-[#E8B429] hover:bg-[#f5c84c] py-2 text-xs font-black text-[#0D0E1A] disabled:opacity-40 transition-colors cursor-pointer"
+            >
+              {variant.sold_out ? 'สินค้าหมด' : redeeming ? 'กำลังแลก...' : 'แลกเลย'}
+            </button>
+          )}
+
           {/* Link ใต้สินค้า ไปยังหน้าสปอนเซอร์ */}
           <div className="pt-1 text-center">
             <Link

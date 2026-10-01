@@ -22,6 +22,7 @@ interface StoreItem {
   description: string | null;
   item_type: string | null;
   partner_brand: string | null;
+  image_url: string | null;
   variants: Variant[];
 }
 
