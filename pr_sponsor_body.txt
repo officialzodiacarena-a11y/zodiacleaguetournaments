@@ -1,0 +1,1 @@
+﻿คืนค่าหน้า Landing Page ของ Luminary Global ให้มีข้อมูลบริการครบ 6 ด้าน สิทธิประโยชน์แลกแต้ม AP และใส่ลิงก์เว็บไซต์จริง https://luminary-global.vercel.app/ พร้อมระบบ Fallback ป้องกันหน้าว่าง
