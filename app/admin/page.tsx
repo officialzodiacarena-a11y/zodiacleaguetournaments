@@ -17,7 +17,8 @@ import {
   ExternalLink,
   Radio,
   UserCog,
-  Crown
+  Crown,
+  GitBranch
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -277,6 +278,32 @@ export default async function AdminMasterHubPage() {
               </p>
               <div className="mt-4 flex items-center gap-1.5 text-[11px] font-bold text-[#E3322F]">
                 <span>เข้าสู่ศูนย์ควบคุมข้อพิพาท</span>
+                <span>→</span>
+              </div>
+            </Link>
+
+            {/* 1b. จัดสายการแข่งขัน (แอดมิน/กรรมการ) */}
+            <Link
+              href="/admin/tournaments"
+              className={`group relative overflow-hidden rounded-xl border bg-[#1A1C2E] p-6 transition-all duration-200 hover:-translate-y-1 ${
+                canAccessMatchOps
+                  ? 'border-[#E8B429]/30 hover:border-[#E8B429] hover:shadow-[0_8px_30px_rgba(232,180,41,0.15)]'
+                  : 'opacity-40 pointer-events-none border-white/5'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E8B429]/15 border border-[#E8B429]/30 text-[#E8B429]">
+                  <GitBranch className="w-5 h-5" />
+                </div>
+              </div>
+              <h3 className="text-lg font-black text-white group-hover:text-[#E8B429] transition-colors">
+                จัดสายการแข่งขัน
+              </h3>
+              <p className="text-xs text-[#94A3B8] mt-1 line-clamp-2">
+                สร้างสาย จัดทีมลงสาย ตั้ง Bo และเวลาเริ่ม แล้วเปิดสายแข่ง
+              </p>
+              <div className="mt-4 flex items-center gap-1.5 text-[11px] font-bold text-[#E8B429]">
+                <span>เข้าสู่หน้าจัดสาย</span>
                 <span>→</span>
               </div>
             </Link>
