@@ -73,14 +73,23 @@ export function planFinishMap(state: SeriesState, nowIso: string): FinishMapPlan
 
   const roundsA = match.rounds_won_a ?? 0;
   const roundsB = match.rounds_won_b ?? 0;
-  if (roundsA === roundsB) {
+  
+  // In BO2, a match can end in a draw map (e.g. 12-12). In other formats, it cannot.
+  const isBo2 = (match.format_config as any)?.best_of === 2 || match.best_of === 2;
+  const isMapDraw = roundsA === roundsB;
+
+  if (isMapDraw && !isBo2) {
     return { ok: false, httpStatus: 422, code: 'TIED_ROUNDS', message: `สกอร์รอบเสมอกัน (${roundsA}–${roundsB}) ยังหาผู้ชนะของแมพนี้ไม่ได้` };
   }
 
+  // If it's a map draw, there's no winner for this specific map.
   const aWins = roundsA > roundsB;
-  const winnerTeamId = aWins ? match.team_a_id : match.team_b_id;
+  const winnerTeamId = isMapDraw ? null : (aWins ? match.team_a_id : match.team_b_id);
+  // A draw doesn't increment series map wins for either team in a typical sense, or maybe it gives 1 point to each?
+  // Usually, a BO2 series draw means Team A won map 1, Team B won map 2. 
+  // If a single map is 12-12, it's a map draw. We won't increment winsA/winsB.
   const winsAfterA = state.winsA + (aWins ? 1 : 0);
-  const winsAfterB = state.winsB + (aWins ? 0 : 1);
+  const winsAfterB = state.winsB + (!isMapDraw && !aWins ? 1 : 0);
   const completedAfter = state.completedCount + 1;
   const seriesOverAfter = winsAfterA >= state.winsNeeded || winsAfterB >= state.winsNeeded || completedAfter >= state.totalGames;
 

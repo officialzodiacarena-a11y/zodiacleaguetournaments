@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -10,16 +10,22 @@ export default function ReportMatchPage({ params }: { params: { id: string } }) 
 
   // Mock props based on the spec requirement
   // In reality these should be fetched from the server.
-  const stageType = 'GROUP_STAGE'; // ROUND_ROBIN, GROUP_STAGE
+  const stageType: string = 'GROUP_STAGE'; // ROUND_ROBIN, GROUP_STAGE
   const bestOf = 2;
 
   const showDrawButton = stageType === 'ROUND_ROBIN' || stageType === 'GROUP_STAGE' || bestOf === 2;
 
-  async function handleSubmit(isDraw: boolean = false) {
+  async function handleSubmit(isRefereeDraw: boolean = false) {
     const isLeague = stageType === 'ROUND_ROBIN' || stageType === 'GROUP_STAGE';
-    const endpoint = isLeague ? /api/v1/matches/ + params.id + /report-league : /api/v1/matches/ + params.id + /report;
+    const endpoint = isLeague ? `/api/v1/matches/${params.id}/report-league` : `/api/v1/matches/${params.id}/report`;
     
-    const body = isDraw ? { winnerTeamId: null, scoreA, scoreB } : { winnerTeamId, scoreA, scoreB };
+    // Auto-infer draw if scores are tied in a BO2, or if Referee forced a draw.
+    const isAutoDraw = scoreA === scoreB && scoreA > 0;
+    const isDraw = isRefereeDraw || isAutoDraw;
+    
+    // For non-draws, if winnerTeamId is empty, it will fail UUID validation, so we send the raw string unless it's a draw.
+    const finalWinnerId = isDraw ? null : (winnerTeamId || null);
+    const body = { winnerTeamId: finalWinnerId, scoreA, scoreB };
     
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -29,7 +35,7 @@ export default function ReportMatchPage({ params }: { params: { id: string } }) 
     
     if (res.ok) {
       alert('Reported successfully');
-      router.push(/matches/ + params.id + /lobby);
+      router.push(`/matches/${params.id}/lobby`);
     } else {
       alert('Error reporting match');
     }

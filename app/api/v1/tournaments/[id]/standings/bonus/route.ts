@@ -1,4 +1,4 @@
-﻿import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminRole } from '@/lib/admin/requireAdminRole';
@@ -33,14 +33,23 @@ export async function POST(
       return NextResponse.json({ error: { code: 'VALIDATION_ERROR', message: 'ข้อมูลไม่ถูกต้อง', details: parsed.error.format() } }, { status: 400 });
     }
 
-    // Call RPC or update the tournament_standings table directly
-    // Assuming tournament_standings has columns: tournament_id, team_id, bonus_points
+    const { data: tournament, error: tourneyErr } = await supabase
+      .from('tournaments')
+      .select('season_id')
+      .eq('id', tournamentId)
+      .single();
+
+    if (tourneyErr || !tournament) {
+      return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'ไม่พบทัวร์นาเมนต์นี้' } }, { status: 404 });
+    }
+
     const { data, error } = await supabase
-      .rpc('add_tournament_bonus_points', {
-        p_tournament_id: tournamentId,
+      .rpc('adjust_league_points', {
+        p_season_id: tournament.season_id,
         p_team_id: parsed.data.teamId,
         p_points: parsed.data.bonusPoints,
-        p_reason: parsed.data.reason
+        p_reason: parsed.data.reason,
+        p_key: `tourney-bonus-${tournamentId}-${Date.now()}`
       });
 
     if (error) {
