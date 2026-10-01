@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { playerHasAnyRole } from '@/lib/auth/hasAnyRole';
 
 export async function PATCH(
   request: Request,
@@ -13,6 +14,20 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // เลื่อนเวลาแมตช์ได้เฉพาะกรรมการ/แอดมิน (รองรับผู้ใช้หลาย role) ก่อนแตะ admin client
+  const { data: player } = await supabase
+    .from('players')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (!player || !(await playerHasAnyRole(supabase, player.id))) {
+    return NextResponse.json(
+      { error: 'FORBIDDEN_ROLE: สิทธิ์ในการเลื่อนเวลาแมตช์จำกัดเฉพาะกรรมการหรือแอดมินระบบเท่านั้น' },
+      { status: 403 }
+    );
   }
 
   const body = await request.json();
@@ -34,7 +49,7 @@ export async function PATCH(
 
   if (currentMatch.status !== 'SCHEDULED') {
     return NextResponse.json(
-      { error: 'CANNOT_RESCHEDULE: Match is not in SCHEDULED status' }, 
+      { error: 'CANNOT_RESCHEDULE: Match is not in SCHEDULED status' },
       { status: 422 }
     );
   }
@@ -53,7 +68,8 @@ export async function PATCH(
     .single();
 
   if (updateErr) {
-    return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    console.error('[matches/schedule] update failed', updateErr);
+    return NextResponse.json({ error: 'เกิดข้อผิดพลาด กรุณาลองใหม่' }, { status: 500 });
   }
 
   return NextResponse.json(updatedMatch);
