@@ -1,16 +1,10 @@
-﻿import React from 'react';
+import React from 'react';
 import { notFound } from 'next/navigation';
 import type { TeamProfileData, PlayerSlot, TeamRoleType } from '@/types/team';
 import { AthleteQuickPopover } from '@/components/profile/AthleteQuickPopover';
 import { lockRosterAction } from '@/actions/team';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
-
-// เธ”เนเธฒเธเนเธ return:
-<div className="max-w-7xl mx-auto p-6">
-  <SponsorSlot className="mb-6" />
-  {/* เธเนเธญเธกเธนเธฅเธ—เธตเธก เนเธฅเธฐ Roster List */}
-</div>
 
 interface PageProps {
   params: Promise<{ teamId: string }>;
@@ -122,7 +116,7 @@ async function getTeamProfileData(teamIdParam: string): Promise<(TeamProfileData
       const riotId =
         matchingAccount?.game_name && matchingAccount?.tag_line
           ? `${matchingAccount.game_name}#${matchingAccount.tag_line}`
-          : 'เธขเธฑเธเนเธกเนเธเธนเธ Riot ID';
+          : 'ยังไม่ผูก Riot ID';
 
       const displayName = player.real_name ?? player.display_name;
       const slot: PlayerSlot = {
@@ -156,8 +150,8 @@ async function getTeamProfileData(teamIdParam: string): Promise<(TeamProfileData
     logoInitials: initialsFromName(team.name),
     currentRank,
     seasonName: activeSeason
-      ? `${(activeCircuit?.name ?? '').toUpperCase()} ยท ${activeSeason.name}`
-      : 'เธขเธฑเธเนเธกเนเธกเธต Season Active',
+      ? `${(activeCircuit?.name ?? '').toUpperCase()} · ${activeSeason.name}`
+      : 'ยังไม่มี Season Active',
     stats: {
       wins: team.wins,
       losses: team.losses,
@@ -168,7 +162,7 @@ async function getTeamProfileData(teamIdParam: string): Promise<(TeamProfileData
     rosterStatus: team.is_locked ? 'LOCKED' : 'OPEN',
     lockDeadlineText:
       team.is_locked && team.locked_until
-        ? `เธฅเนเธญเธเธ–เธถเธ ${new Date(team.locked_until).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}`
+        ? `ล็อกถึง ${new Date(team.locked_until).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}`
         : undefined,
     startingRoster,
     substitutes,
@@ -229,6 +223,8 @@ export default async function TeamProfilePage({ params }: PageProps) {
   return (
     <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 select-none">
       <main className="max-w-[1280px] mx-auto px-6 md:px-12 pt-9">
+        <SponsorSlot className="mb-6" />
+
         {/* 2. TEAM BANNER */}
         <div className="relative mb-7 overflow-hidden rounded-2xl border border-[#E8B429]/25 bg-[#1A1C2E]">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_120%_at_60%_-20%,rgba(232,180,41,0.08)_0%,transparent_60%),radial-gradient(ellipse_50%_80%_at_100%_50%,rgba(145,132,217,0.06)_0%,transparent_50%)] pointer-events-none" />
@@ -284,7 +280,7 @@ export default async function TeamProfilePage({ params }: PageProps) {
               <div className="text-right">
                 <div className="text-[10px] text-[#75798c] tracking-widest">RANK</div>
                 <div className="text-2xl font-bold text-[#E8B429]">
-                  {data.currentRank !== null ? `#${data.currentRank}` : 'โ€”'}
+                  {data.currentRank !== null ? `#${data.currentRank}` : '—'}
                 </div>
               </div>
             </div>
@@ -294,7 +290,7 @@ export default async function TeamProfilePage({ params }: PageProps) {
         {/* 3. MAIN ROSTER HEADER */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
-            <span className="text-xs font-bold tracking-[3px] text-[#b2b6ca] uppercase">เธเธฑเธเธเธตเธฌเธฒเธซเธฅเธฑเธ ยท STARTING ROSTER</span>
+            <span className="text-xs font-bold tracking-[3px] text-[#b2b6ca] uppercase">นักกีฬาหลัก · STARTING ROSTER</span>
             <div className="h-[1px] w-10 bg-gradient-to-r from-[#E8B429] to-transparent" />
           </div>
           <span className="text-[11px] text-[#75798c] tracking-wider font-mono">
@@ -305,7 +301,7 @@ export default async function TeamProfilePage({ params }: PageProps) {
         {/* 4. ROSTER GRID */}
         {data.startingRoster.length === 0 ? (
           <div className="mb-5 rounded-xl border border-white/10 bg-[#1A1C2E] p-8 text-center text-sm text-[#75798c]">
-            เธขเธฑเธเนเธกเนเธกเธตเธชเธกเธฒเธเธดเธเนเธเธ—เธตเธก
+            ยังไม่มีสมาชิกในทีม
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-5">
@@ -323,7 +319,7 @@ export default async function TeamProfilePage({ params }: PageProps) {
                   <div className={`h-[3px] w-full ${role.stripe}`} />
                   <div className="p-3.5">
                     {player.isCaptain && (
-                      <span className="absolute top-2.5 right-2.5 text-base drop-shadow-[0_0_6px_#E8B429]">๐‘‘</span>
+                      <span className="absolute top-2.5 right-2.5 text-base drop-shadow-[0_0_6px_#E8B429]">👑</span>
                     )}
                     <div className="flex items-start gap-2.5 mb-2.5">
                       <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-gradient-to-br from-[#232540] to-[#2e3060] font-bold text-sm text-[#b2b6ca]">
@@ -354,7 +350,7 @@ export default async function TeamProfilePage({ params }: PageProps) {
                     <div className="flex items-center justify-between border-t border-white/5 pt-2 text-center">
                       <div>
                         <div className="text-sm font-bold text-[#cfd3e5]">
-                          {player.jerseyNumber !== null ? `#${player.jerseyNumber}` : 'โ€”'}
+                          {player.jerseyNumber !== null ? `#${player.jerseyNumber}` : '—'}
                         </div>
                         <div className="text-[9px] text-[#75798c]">JERSEY</div>
                       </div>
@@ -376,7 +372,7 @@ export default async function TeamProfilePage({ params }: PageProps) {
         {data.substitutes.length > 0 && (
           <div className="mb-7">
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-[10px] font-semibold tracking-widest text-[#75798c]">เธ•เธฑเธงเธชเธณเธฃเธญเธ ยท SUBSTITUTE BENCH</span>
+              <span className="text-[10px] font-semibold tracking-widest text-[#75798c]">ตัวสำรอง · SUBSTITUTE BENCH</span>
               <div className="h-[1px] flex-1 max-w-[200px] bg-white/10" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
@@ -415,46 +411,48 @@ export default async function TeamProfilePage({ params }: PageProps) {
           </div>
         )}
 
-          {/* 5.5 COACHES */}
-          {data.coaches.length > 0 && (
-            <div className="mb-7">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-[10px] font-semibold tracking-widest text-[#4AE38F]">โค้ช · COACHES</span>
-                <div className="h-[1px] flex-1 max-w-[200px] bg-white/10" />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
-                {data.coaches.map((coach) => (
-                  <div
-                    key={coach.id}
-                    className="flex items-center gap-3 rounded-lg border border-[#4AE38F]/20 bg-[#1A1C2E] p-3 transition-colors hover:border-[#4AE38F]/50"
-                  >
-                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-[#4AE38F]/30 bg-gradient-to-br from-[#1b3a2a] to-[#204a35] text-xs font-bold text-[#4AE38F]">
-                      {coach.initials}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <AthleteQuickPopover
-                        playerId={coach.userId}
-                        fallbackData={{
-                          riotId: coach.handle,
-                          role: coach.role,
-                          tierTitle: 'Unranked',
-                          winRate: 0,
-                          avgAcs: 0,
-                          avgKd: 0, avgAdr: 0, headshotPct: 0,
-                        }}
-                      >
-                        <div className="text-xs font-bold text-white truncate cursor-pointer hover:text-[#4AE38F] transition-colors underline decoration-dashed decoration-zinc-600 underline-offset-4">{coach.handle}</div>
-                      </AthleteQuickPopover>
-                      <div className="text-[10px] text-[#9397ab] truncate">{coach.fullNameTh}</div>
-                    </div>
-                    <span className="rounded border border-[#4AE38F]/30 bg-[#4AE38F]/15 px-1.5 py-0.5 text-[9px] font-bold text-[#4AE38F]">
-                      COACH
-                    </span>
-                  </div>
-                ))}
-              </div>
+        {/* 5.5 COACHES */}
+        {data.coaches.length > 0 && (
+          <div className="mb-7">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[10px] font-semibold tracking-widest text-[#4AE38F]">โค้ช · COACHES</span>
+              <div className="h-[1px] flex-1 max-w-[200px] bg-white/10" />
             </div>
-          )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+              {data.coaches.map((coach) => (
+                <div
+                  key={coach.id}
+                  className="flex items-center gap-3 rounded-lg border border-[#4AE38F]/20 bg-[#1A1C2E] p-3 transition-colors hover:border-[#4AE38F]/50"
+                >
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-[#4AE38F]/30 bg-gradient-to-br from-[#1b3a2a] to-[#204a35] text-xs font-bold text-[#4AE38F]">
+                    {coach.initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <AthleteQuickPopover
+                      playerId={coach.userId}
+                      fallbackData={{
+                        riotId: coach.handle,
+                        role: coach.role,
+                        tierTitle: 'Unranked',
+                        winRate: 0,
+                        avgAcs: 0,
+                        avgKd: 0,
+                        avgAdr: 0,
+                        headshotPct: 0,
+                      }}
+                    >
+                      <div className="text-xs font-bold text-white truncate cursor-pointer hover:text-[#4AE38F] transition-colors underline decoration-dashed decoration-zinc-600 underline-offset-4">{coach.handle}</div>
+                    </AthleteQuickPopover>
+                    <div className="text-[10px] text-[#9397ab] truncate">{coach.fullNameTh}</div>
+                  </div>
+                  <span className="rounded border border-[#4AE38F]/30 bg-[#4AE38F]/15 px-1.5 py-0.5 text-[9px] font-bold text-[#4AE38F]">
+                    COACH
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 6. ACTION BAR */}
         <div className="flex flex-wrap items-center gap-3 mb-9">
@@ -462,7 +460,7 @@ export default async function TeamProfilePage({ params }: PageProps) {
             type="button"
             className="flex items-center gap-2 rounded-lg border border-[#E8B429] bg-transparent px-5 py-2 text-xs font-bold tracking-wider text-[#E8B429] hover:bg-[#E8B429]/15 hover:shadow-[0_0_16px_rgba(232,180,41,0.25)] transition-all cursor-pointer"
           >
-            + เน€เธเธดเธเธเธนเนเน€เธฅเนเธ / INVITE PLAYER
+            + เชิญผู้เล่น / INVITE PLAYER
           </button>
 
           <form action={handleLockRoster}>
@@ -471,7 +469,7 @@ export default async function TeamProfilePage({ params }: PageProps) {
               disabled={data.rosterStatus === 'LOCKED'}
               className="flex items-center gap-2 rounded-lg bg-[#E8B429] px-5 py-2 text-xs font-bold tracking-wider text-[#0D0E1A] hover:shadow-[0_0_20px_rgba(232,180,41,0.4)] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              ๐”’ เธฅเนเธญเธ Roster / LOCK ROSTER
+              🔒 ล็อก Roster / LOCK ROSTER
             </button>
           </form>
 
@@ -490,7 +488,7 @@ export default async function TeamProfilePage({ params }: PageProps) {
         {/* 7. TEAM STATS STRIP */}
         <div className="mb-4">
           <div className="flex items-center gap-2.5 mb-3">
-            <span className="text-xs font-bold tracking-[3px] text-[#b2b6ca] uppercase">เธชเธ–เธดเธ•เธดเธ—เธตเธก ยท TEAM STATS</span>
+            <span className="text-xs font-bold tracking-[3px] text-[#b2b6ca] uppercase">สถิติทีม · TEAM STATS</span>
             <div className="h-[1px] w-10 bg-gradient-to-r from-[#E8B429] to-transparent" />
           </div>
           <div className="relative grid grid-cols-2 md:grid-cols-4 overflow-hidden rounded-xl border border-[#E8B429]/25 bg-[#1A1C2E]">
