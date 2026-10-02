@@ -8,12 +8,18 @@ type FeedbackKind = 'success' | 'info' | 'error';
 export function EntrySlipUploader({ paymentId }: { paymentId: string }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const accountNameRef = useRef<HTMLInputElement | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: FeedbackKind; message: string } | null>(null);
 
   async function handleSubmit() {
     const file = fileInputRef.current?.files?.[0];
-    if (!file) return;
+    const accountName = accountNameRef.current?.value?.trim();
+    
+    if (!file) {
+      setFeedback({ kind: 'error', message: 'กรุณาเลือกไฟล์สลิปก่อนส่ง' });
+      return;
+    }
 
     setSubmitting(true);
     setFeedback(null);
@@ -21,6 +27,9 @@ export function EntrySlipUploader({ paymentId }: { paymentId: string }) {
     try {
       const formData = new FormData();
       formData.append('slip', file);
+      if (accountName) {
+        formData.append('account_name', accountName);
+      }
 
       const res = await fetch(`/api/v1/entry-payments/${paymentId}/slip`, {
         method: 'POST',
@@ -55,27 +64,47 @@ export function EntrySlipUploader({ paymentId }: { paymentId: string }) {
       : 'text-rose-300';
 
   return (
-    <div className="rounded-xl border border-[#9184d9]/25 bg-[#1A1C2E] p-4">
-      <div className="flex flex-col gap-3">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="text-xs text-[#cfd3e5] file:mr-3 file:rounded-lg file:border-0 file:bg-[#E8B429]/15 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#E8B429]"
-        />
-        <button
-          type="button"
-          onClick={handleSubmit}
+    <div className="rounded-xl border border-white/10 bg-[#1A1C2E] p-6 mb-6 mt-4">
+      <h3 className="text-sm font-bold text-white mb-4">แจ้งหลักฐานการโอนเงิน</h3>
+      
+      <div className="mb-5">
+        <label className="block text-xs font-semibold text-[#75798c] mb-2 uppercase tracking-wider">ชื่อบัญชีผู้โอน (ที่แสดงบนสลิป)</label>
+        <input 
+          ref={accountNameRef}
+          type="text" 
+          placeholder="เช่น นายสมชาย ใจดี" 
+          className="w-full bg-[#0D0E1A] border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-[#E8B429]/50 focus:ring-1 focus:ring-[#E8B429]/50 transition-all placeholder:text-[#75798c]/50"
           disabled={submitting}
-          className="rounded-lg bg-gradient-to-r from-[#E8B429] to-[#d97706] px-5 py-2.5 text-xs font-black tracking-wider text-[#0D0E1A] disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {submitting ? 'กำลังตรวจสลิป…' : 'ส่งสลิป'}
-        </button>
-        {feedback && <div className={`text-xs font-medium ${feedbackColor}`}>{feedback.message}</div>}
-        <p className="text-[11px] text-[#75798c]">
-          ใช้รูปสลิปจากแอปธนาคารแบบเต็มใบ ไม่ครอป ให้เห็น QR มุมสลิป
-        </p>
+        />
+        <p className="text-[11px] text-[#75798c] mt-1.5">* กรุณากรอกให้ตรงกับสลิป เพื่อความรวดเร็วในการตรวจสอบ</p>
       </div>
+
+      <div className="mb-5">
+        <label className="block text-xs font-semibold text-[#75798c] mb-2 uppercase tracking-wider">อัปโหลดสลิป</label>
+        <div className="flex flex-col gap-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="text-xs text-[#cfd3e5] file:mr-3 file:rounded-lg file:border-0 file:bg-[#E8B429]/15 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#E8B429] file:cursor-pointer w-full bg-[#0D0E1A] border border-white/10 rounded-lg p-2"
+            disabled={submitting}
+          />
+          <p className="text-[11px] text-[#75798c]">
+            ใช้รูปสลิปจากแอปธนาคารแบบเต็มใบ ไม่ครอป ให้เห็น QR มุมสลิป
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={handleSubmit}
+        disabled={submitting}
+        className="w-full bg-[#E8B429] text-[#08090F] font-black text-sm py-3.5 rounded-xl hover:bg-[#f5c84c] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {submitting ? 'กำลังตรวจสลิป…' : 'ส่งข้อมูลเพื่อตรวจสอบ'}
+      </button>
+
+      {feedback && <div className={`text-xs font-medium ${feedbackColor} mt-4 text-center`}>{feedback.message}</div>}
     </div>
   );
 }

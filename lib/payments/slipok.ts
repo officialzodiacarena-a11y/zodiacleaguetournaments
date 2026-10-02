@@ -192,14 +192,14 @@ export function evaluateSlipOkResponse(
   }
 }
 
-export async function checkSlip(file: Blob, fileName: string, expectedAmountThb: number): Promise<SlipCheck> {
+export async function checkSlip(file: Blob, fileName: string, expectedAmountThb: number, senderAccountName?: string): Promise<SlipCheck> {
   const { slipok, bank } = readEntryFeeEnv();
 
   if (!slipok || !bank) {
     return {
       verdict: 'MANUAL',
       code: 'SLIPOK_NOT_CONFIGURED',
-      message: 'ส่งให้แอดมินตรวจ',
+      message: senderAccountName ? `ส่งให้แอดมินตรวจ (บัญชี: ${senderAccountName})` : 'ส่งให้แอดมินตรวจ',
       transRef: null,
       transAt: null,
       amountThb: null,
