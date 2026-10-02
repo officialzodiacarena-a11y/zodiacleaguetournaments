@@ -223,7 +223,7 @@ export default async function LandingPage() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
             <Link
-              href="/home"
+              href="/tournament"
               className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-[#E8B429] text-[#08090F] font-black text-sm tracking-wider hover:bg-[#f5c84c] hover:shadow-[0_0_25px_rgba(232,180,41,0.4)] transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>เข้าสู่สนามประลอง (TOURNAMENT HUB)</span>
