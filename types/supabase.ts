@@ -2460,6 +2460,7 @@ export type Database = {
         | "GROUP_STAGE"
         | "GAUNTLET"
         | "SHOWDOWN"
+          | "ZODIAC_ARENA_SYSTEM"
       stage_status_type:
         | "PENDING"
         | "SEEDING"
@@ -2743,6 +2744,7 @@ export const Constants = {
         "GROUP_STAGE",
         "GAUNTLET",
         "SHOWDOWN",
+          "ZODIAC_ARENA_SYSTEM",
       ],
       stage_status_type: [
         "PENDING",

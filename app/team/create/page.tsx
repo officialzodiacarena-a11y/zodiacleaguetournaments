@@ -45,9 +45,9 @@ export default function CreateTeamPage() {
         setError(res.error.message);
       } else if ('success' in res && res.success) {
         if (res.teamId) {
-          router.push(`/teams/${res.teamId}`);
-        } else {
-          router.push('/profile');
+          router.push('/tournament/41f8dd25-233e-44d2-9c70-e21db79070c5/register');
+          } else {
+            router.push('/tournament/41f8dd25-233e-44d2-9c70-e21db79070c5/register');
         }
       }
     } catch (err: unknown) {

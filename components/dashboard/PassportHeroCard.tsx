@@ -63,14 +63,14 @@ export const PassportHeroCard: React.FC<Props> = ({ profile, kpi }) => {
           <div className="bg-[#080811]/90 border border-white/[0.08] rounded-xl px-4 py-2 min-w-[95px] min-h-[74px] flex flex-col justify-between text-center">
             <span className="text-[10px] font-orbitron font-bold text-slate-400 block tracking-wider uppercase">ACS</span>
             <span className="text-2xl font-black font-rajdhani text-[#06B6D4] leading-none">{kpi.acs}</span>
-            <span className="text-[9px] text-slate-500 font-mono block">Top 4%</span>
+            <span className="text-[9px] text-slate-500 font-mono block">TBD</span>
           </div>
 
           {/* KDA */}
           <div className="bg-[#080811]/90 border border-white/[0.08] rounded-xl px-4 py-2 min-w-[95px] min-h-[74px] flex flex-col justify-between text-center">
             <span className="text-[10px] font-orbitron font-bold text-slate-400 block tracking-wider uppercase">KDA</span>
             <span className="text-2xl font-black font-rajdhani text-[#F59E0B] leading-none">{kpi.kdRatio}</span>
-            <span className="text-[9px] text-slate-500 font-mono block">420/290/95</span>
+            <span className="text-[9px] text-slate-500 font-mono block">-</span>
           </div>
 
           {/* WIN RATE */}

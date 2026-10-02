@@ -15,6 +15,7 @@ const VALID_FORMATS = [
   'GROUP_STAGE',
   'GAUNTLET',
   'SHOWDOWN',
+  'ZODIAC_ARENA_SYSTEM',
 ] as const;
 
 type StageFormat = (typeof VALID_FORMATS)[number];
