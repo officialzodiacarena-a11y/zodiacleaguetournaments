@@ -253,10 +253,38 @@ function renderStatusBadge(status: TournamentItem['status']) {
 export default async function TournamentRegistryPage() {
   const data = await getRegistryData();
 
-  const displayTournaments: TournamentItem[] =
-    data.tournaments.length > 0
-      ? data.tournaments
-      : [
+  const mockTournaments: TournamentItem[] = data.activeSeason === 'WINTER' ? [
+          {
+            id: '41f8dd25-233e-44d2-9c70-e21db79070c5',
+            circuitSeasonText: `WINTER CIRCUIT`,
+            name: `Zodiac League : Valorant · 3–4 ต.ค. 2569`,
+            status: 'OPEN',
+            format: 'DOUBLE_ELIMINATION',
+            prizePoolZp: 1000,
+            entryFeeAp: 100,
+            prizeTopText: 'TOP 8',
+            dateRangeText: 'SOON',
+            yearText: '2026',
+            registeredTeams: 0,
+            maxTeams: 12,
+            accentTheme: 'gold',
+          },
+          {
+            id: 'mock-qualifier-2',
+            circuitSeasonText: `WINTER CIRCUIT`,
+            name: `WINTER REGIONAL PREVIEW`,
+            status: 'NOT_YET_OPEN',
+            format: 'DOUBLE_ELIMINATION',
+            prizePoolZp: 2500,
+            entryFeeAp: 250,
+            prizeTopText: 'TOP 4',
+            dateRangeText: 'TBA',
+            yearText: '2026',
+            registeredTeams: 0,
+            maxTeams: 16,
+            accentTheme: 'purple',
+          }
+  ] : [
           {
             id: 'mock-qualifier-1',
             circuitSeasonText: `${data.activeSeason} CIRCUIT`,
@@ -288,6 +316,8 @@ export default async function TournamentRegistryPage() {
             accentTheme: 'gold',
           },
         ];
+
+  const displayTournaments: TournamentItem[] = data.tournaments.length > 0 ? data.tournaments : mockTournaments;
 
   return (
     <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 select-none relative">
@@ -422,7 +452,7 @@ export default async function TournamentRegistryPage() {
                     disabled
                     className="w-full rounded-lg border border-white/10 bg-transparent py-2.5 text-xs font-bold tracking-wider text-[#e9e9ed]/40 cursor-not-allowed"
                   >
-                    ยังไม่เปิดรับ / NOT YET OPEN
+                    COMING SOON
                   </button>
                 ) : (
                   <Link
