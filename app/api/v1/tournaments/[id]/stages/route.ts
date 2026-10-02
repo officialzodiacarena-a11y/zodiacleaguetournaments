@@ -86,6 +86,7 @@ const VALID_FORMATS: StageFormat[] = [
   'GROUP_STAGE',
   'GAUNTLET',
   'SHOWDOWN',
+  'ZODIAC_ARENA_SYSTEM',
 ];
 
 // POST /api/v1/tournaments/:id/stages

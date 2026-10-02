@@ -9,10 +9,16 @@ export function canManageBrackets(roles: ReadonlyArray<{ role: unknown }> | null
   return hasAnyRole(roles, BRACKET_ADMIN_ROLES);
 }
 
-// หน้าใหม่ให้เลือกแค่ 2 รูปแบบ (Q15 — ค่าอื่นของ enum seed route ยังไม่รองรับครบสำหรับงานเสาร์)
+// หน้าใหม่ให้เลือกรูปแบบการจัดสายได้ครบตามระบบของ Zodiac Arena
 export const BRACKET_FORMATS = [
   { value: 'SINGLE_ELIMINATION', label: 'Single Elimination (แพ้ตกรอบ)' },
   { value: 'DOUBLE_ELIMINATION', label: 'Double Elimination (แพ้ 2 ครั้งตกรอบ)' },
+  { value: 'SWISS', label: 'Swiss System (ระบบสวิส)' },
+  { value: 'ROUND_ROBIN', label: 'Round Robin (พบกันหมด)' },
+  { value: 'GROUP_STAGE', label: 'Group Stage (รอบแบ่งกลุ่ม)' },
+  { value: 'GAUNTLET', label: 'Gauntlet (ไต่หอคอย)' },
+  { value: 'SHOWDOWN', label: 'Showdown (นัดพิเศษ)' },
+  { value: 'ZODIAC_ARENA_SYSTEM', label: 'Zodiac Arena System (VLP Points)' },
 ] as const;
 
 export type BracketFormat = (typeof BRACKET_FORMATS)[number]['value'];

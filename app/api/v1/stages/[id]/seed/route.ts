@@ -155,7 +155,7 @@ export async function POST(
     );
   }
 
-  const SUPPORTED_FORMATS = ['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'GROUP_STAGE'];
+  const SUPPORTED_FORMATS = ['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'GROUP_STAGE', 'SWISS', 'GAUNTLET', 'SHOWDOWN', 'ZODIAC_ARENA_SYSTEM'];
   if (!SUPPORTED_FORMATS.includes(stage.format)) {
     return NextResponse.json(
       {
