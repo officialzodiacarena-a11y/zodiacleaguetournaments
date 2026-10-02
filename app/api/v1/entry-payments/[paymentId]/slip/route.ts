@@ -47,6 +47,7 @@ export async function POST(
 
     const formData = await req.formData();
     const file = formData.get('slip');
+    const accountName = formData.get('account_name')?.toString().trim();
     if (!(file instanceof File) || !ALLOWED_TYPES[file.type] || file.size < 1 || file.size > MAX_FILE_BYTES) {
       return NextResponse.json(
         { error: { code: 'INVALID_FILE', message: 'รองรับเฉพาะรูป jpg / png / webp ไม่เกิน 5MB' } },
@@ -102,7 +103,7 @@ export async function POST(
       return NextResponse.json({ error: { code: 'UPLOAD_FAILED', message: uploadError.message } }, { status: 500 });
     }
 
-    const check = await checkSlip(file, `slip.${ext}`, Number(payment.amount_thb));
+    const check = await checkSlip(file, `slip.${ext}`, Number(payment.amount_thb), accountName);
     console.log('[entry-slip] check.code =', check.code);
 
     const { data, error } = await admin.rpc('submit_entry_slip_result', {
