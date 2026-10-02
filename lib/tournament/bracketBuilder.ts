@@ -23,10 +23,11 @@ export const BRACKET_FORMATS = [
 
 export type BracketFormat = (typeof BRACKET_FORMATS)[number]['value'];
 
-export type BestOfPreset = 'BO1_ALL' | 'BO3_ALL' | 'BO1_FINALS_BO3';
+export type BestOfPreset = 'BO1_ALL' | 'BO2_ALL' | 'BO3_ALL' | 'BO1_FINALS_BO3';
 
 export const BEST_OF_PRESETS: ReadonlyArray<{ value: BestOfPreset; label: string }> = [
   { value: 'BO1_ALL', label: 'Bo1 ทุกรอบ' },
+  { value: 'BO2_ALL', label: 'Bo2 ทุกรอบ' },
   { value: 'BO3_ALL', label: 'Bo3 ทุกรอบ' },
   { value: 'BO1_FINALS_BO3', label: 'Bo1 + รอบรอง/ชิง Bo3' },
 ];
@@ -34,6 +35,8 @@ export const BEST_OF_PRESETS: ReadonlyArray<{ value: BestOfPreset; label: string
 // รูปแบบ best_of_config ที่ seed route อ่าน (Q11): { default, semifinal?, final? } — ตัวเลขเท่านั้น
 export function bestOfConfigForPreset(preset: BestOfPreset): Record<string, number> {
   switch (preset) {
+    case 'BO2_ALL':
+      return { default: 2 };
     case 'BO3_ALL':
       return { default: 3 };
     case 'BO1_FINALS_BO3':
@@ -49,7 +52,8 @@ export function presetFromBestOfConfig(config: unknown): BestOfPreset | null {
   const c = config as Record<string, unknown>;
   const keys = Object.keys(c).sort().join(',');
   if (keys === 'default' && c.default === 1) return 'BO1_ALL';
-  if (keys === 'default' && c.default === 3) return 'BO3_ALL';
+  if (keys === 'default' && c.default === 2) return 'BO2_ALL';
+    if (keys === 'default' && c.default === 3) return 'BO3_ALL';
   if (keys === 'default,final,semifinal' && c.default === 1 && c.semifinal === 3 && c.final === 3) {
     return 'BO1_FINALS_BO3';
   }
