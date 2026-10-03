@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, use } from 'react';
-import { useSearchParams } from 'next/navigation';
+
 import { createClient } from '@supabase/supabase-js';
 import type { TelemetryPlayerFrame } from '@/lib/overlay/telemetry-schema';
 import {
@@ -84,7 +84,8 @@ export default function StreamHubMainPage({
   const [bgMode, setBgMode] = useState<'transparent' | 'amber' | 'arena' | 'chroma'>('transparent');
   const searchParams = useSearchParams();
   const isViewer = searchParams.get('viewer') === 'true';
-  const [showControls, setShowControls] = useState<boolean>(!isViewer);
+  const [showControls, setShowControls] = useState<boolean>(true);
+  useEffect(() => { if (isViewer) setShowControls(false); }, [isViewer]);
   const [showSystemLabel, setShowSystemLabel] = useState<boolean>(true);
   const [showBuyPhase, setShowBuyPhase] = useState<boolean>(false);
 
@@ -1838,4 +1839,5 @@ export default function StreamHubMainPage({
     </div>
   );
 }
+
 
