@@ -127,6 +127,7 @@ export default function MatchBroadcastOverlay({
   const [clutchScene, setClutchScene] = useState<{ side: "A" | "B"; player: BuyPhasePlayer; opponentAlive: number } | null>(null);
   const clutchShownForRef = useRef<string | null>(null); // กันยิงป้ายซ้ำในรอบเดียวกัน (เก็บ key เป็น "side-เลขรอบ")
   const [showBuyPhase, setShowBuyPhase] = useState<boolean>(false);
+  const [showRosterSidebar, setShowRosterSidebar] = useState<boolean>(false);
   const [rosterA, setRosterA] = useState<BuyPhasePlayer[]>([]);
   const [rosterB, setRosterB] = useState<BuyPhasePlayer[]>([]);
   const [tournamentName, setTournamentName] = useState<string | null>(null);
@@ -168,10 +169,7 @@ export default function MatchBroadcastOverlay({
   // Hotkey listener สำหรับ Alt+C เพื่อ Toggle Buy Phase HUD
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === "c" || e.key === "C" || e.code === "KeyC")) {
-        e.preventDefault();
-        setShowBuyPhase((prev) => !prev);
-      }
+      if (e.altKey && (e.key === "c" || e.key === "C" || e.code === "KeyC")) { e.preventDefault(); setShowBuyPhase((prev) => !prev); } else if (e.altKey && (e.key === "x" || e.key === "X" || e.code === "KeyX")) { e.preventDefault(); setShowRosterSidebar((prev) => !prev); }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -673,8 +671,8 @@ export default function MatchBroadcastOverlay({
 
       {/* PLAYER SIDEBARS: ชื่อผู้เล่นจริงจาก team_members / participants (ไม่มีข้อมูล HP จริง จึงไม่แสดง) */}
       {/* ซ่อนอัตโนมัติตอน Buy Phase เปิด — กันทับกับตาราง Buy Phase ที่กินพื้นที่กลางจอเกือบเต็มความกว้าง */}
-      {showScoreboard && !showBuyPhase && <LiveRosterSidebar roster={rosterA} side="left" team="A" />}
-      {showScoreboard && !showBuyPhase && <LiveRosterSidebar roster={rosterB} side="right" team="B" />}
+      {showScoreboard && !showBuyPhase && showRosterSidebar && <LiveRosterSidebar roster={rosterA} side="left" team="A" />}
+      {showScoreboard && !showBuyPhase && showRosterSidebar && <LiveRosterSidebar roster={rosterB} side="right" team="B" />}
 
       {/* 2.5 PRE-MATCH (SCHEDULED นับถอยหลัง / READY_CHECK สถานะ Ready แต่ละทีม) — เดิมไม่มีฉากเลย */}
       {(displayStatus === "SCHEDULED" || displayStatus === "READY_CHECK") && team_a && team_b && (
