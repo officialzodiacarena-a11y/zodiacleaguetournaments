@@ -170,8 +170,8 @@ export default function SpectatorHUDControlPanel({
         setPlaylistTitleInput(file.name);
       }
       setFeedback({ type: "info", msg: "อัปโหลดสำเร็จ (กดเพิ่มในคิวต่อได้เลย)" });
-    } catch (err: any) {
-      setFeedback({ type: "error", msg: `อัปโหลดไม่สำเร็จ: ${err.message || ""}` });
+    } catch (err) {
+      setFeedback({ type: "error", msg: `อัปโหลดไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` });
     } finally {
       setUploadingVdo(false);
       e.target.value = ''; // reset
