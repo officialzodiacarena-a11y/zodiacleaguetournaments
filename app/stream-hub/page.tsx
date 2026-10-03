@@ -83,7 +83,7 @@ export default function StreamHubMainPage({
   const [activeScene, setActiveScene] = useState<number>(5);
   const [bgMode, setBgMode] = useState<'transparent' | 'amber' | 'arena' | 'chroma'>('transparent');
   const [isViewer, setIsViewer] = useState(false);
-  useEffect(() => { setIsViewer(window.location.search.includes('viewer=true')); }, []);
+  useEffect(() => { const params = new URLSearchParams(window.location.search); setIsViewer(params.get('viewer') === 'true'); const urlMatchId = params.get('matchId'); if (urlMatchId) { setCurrentMatchId(urlMatchId); } }, []);
   const [showControls, setShowControls] = useState<boolean>(true);
   useEffect(() => { if (isViewer) setShowControls(false); }, [isViewer]);
   const [showSystemLabel, setShowSystemLabel] = useState<boolean>(true);
