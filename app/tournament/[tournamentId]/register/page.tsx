@@ -155,7 +155,7 @@ export default async function TournamentRegistrationPage({ params, searchParams 
   const { data: members } = team
     ? await supabase
         .from('team_members')
-        .select('id, role, player_id, players!team_members_player_id_fkey(id, display_name, real_name, game_accounts(verification_status, game_id))')
+        .select('id, role, player_id, players!team_members_player_id_fkey(id, display_name, real_name, game_accounts!game_accounts_player_id_fkey(verification_status, game_id))')
         .eq('team_id', team.id)
         .eq('status', 'ACTIVE')
     : { data: [] as never[] };

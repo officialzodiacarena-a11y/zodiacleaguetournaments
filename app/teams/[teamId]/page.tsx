@@ -75,7 +75,7 @@ async function getTeamProfileData(teamIdParam: string): Promise<(TeamProfileData
   const [{ data: members }, { count: tournamentsEntered }, { data: circuits }] = await Promise.all([
     supabase
       .from('team_members')
-      .select('id, role, jersey_number, player_id, players!team_members_player_id_fkey(id, display_name, real_name, slug, game_accounts(verification_status, game_id, game_name, tag_line))')
+      .select('id, role, jersey_number, player_id, players!team_members_player_id_fkey(id, display_name, real_name, slug, game_accounts!game_accounts_player_id_fkey(verification_status, game_id, game_name, tag_line))')
       .eq('team_id', team.id)
       .eq('status', 'ACTIVE'),
     supabase.from('tournament_registrations').select('id', { count: 'exact', head: true }).eq('team_id', team.id),
