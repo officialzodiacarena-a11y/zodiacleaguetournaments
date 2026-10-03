@@ -14,7 +14,7 @@ let nextWorkerIndex = 0;
 async function getWorkerPool(): Promise<Worker[]> {
   if (!workerPoolPromise) {
     workerPoolPromise = Promise.all(
-      Array.from({ length: POOL_SIZE }, () => createWorker('eng'))
+      Array.from({ length: POOL_SIZE }, () => createWorker(['eng', 'tha']))
     );
   }
   return workerPoolPromise;
