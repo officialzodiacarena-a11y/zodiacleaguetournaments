@@ -161,7 +161,6 @@ async function getRegistryData(): Promise<TournamentRegistryPageData> {
         yearText: startDate ? String(new Date(startDate).getFullYear()) : String(new Date().getFullYear()),
         registeredTeams: countByTournament.get(t.id) ?? 0,
         maxTeams,
-        isRegistrationClosed: t.registration_closes_at ? new Date(t.registration_closes_at).getTime() < Date.now() : false,
         accentTheme,
       };
     });
@@ -455,13 +454,6 @@ export default async function TournamentRegistryPage() {
                   >
                     COMING SOON
                   </button>
-                ) : tour.isRegistrationClosed || tour.status === 'ONGOING' || tour.status === 'ACTIVE' ? (
-                  <Link
-                    href={/tournament//bracket}
-                    className="block w-full text-center rounded-lg border border-[#E8B429] bg-[#E8B429]/10 py-2.5 text-xs font-bold tracking-wider text-[#E8B429] hover:bg-[#E8B429]/20 transition-all"
-                  >
-                    ดูสายการแข่ง / VIEW BRACKET
-                  </Link>
                 ) : (
                   <Link
                     href={`/tournament/${tour.id}/register`}
