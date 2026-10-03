@@ -80,7 +80,7 @@ export default async function AdminTournamentBracketPage({ params, searchParams 
   ]);
 
   const approvedTeams: ApprovedTeam[] = (registrations ?? [])
-    .filter((r) => r.status === 'APPROVED')
+    .filter((r) => (r.status === 'APPROVED' || r.status === 'ELIGIBLE'))
     .map((r) => {
       const t = teamOf(r);
       return { id: r.team_id, name: t?.name ?? r.team_id, tag: t?.tag ?? '' };
@@ -186,3 +186,4 @@ export default async function AdminTournamentBracketPage({ params, searchParams 
     </div>
   );
 }
+
