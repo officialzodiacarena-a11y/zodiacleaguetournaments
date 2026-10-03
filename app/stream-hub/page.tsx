@@ -7,7 +7,8 @@ import type { TelemetryPlayerFrame } from '@/lib/overlay/telemetry-schema';
 import {
   Clock, Layers, Sparkles, Maximize2, Tv, Play, Pause, RotateCcw, 
   ChevronDown, CheckCircle2, XCircle, Sliders, Users, Trophy, RefreshCw, 
-  Target, Armchair, Timer, ExternalLink, Radio, ImagePlus, Swords, Shield, Keyboard
+  Target, Armchair, Timer, ExternalLink, Radio, ImagePlus, Swords, Shield, Keyboard,
+  Volume2, VolumeX, Eye, EyeOff, Video, ListVideo
 } from 'lucide-react';
 
 import { comboFromEvent, useStreamHubHotkeys, HOTKEY_ACTIONS, DEFAULT_HOTKEYS } from '@/components/stream-hub/hotkeys';
@@ -162,6 +163,16 @@ export default function StreamHubMainPage({
           byId: prev.byId,
         }));
       })
+      .on('broadcast', { event: 'live_source_update' }, ({ payload }) => {
+        const src = payload as Partial<LiveSource>;
+        if (src) {
+          setLiveSource((prev) => ({
+            ...prev,
+            ...src,
+            playlist: src.playlist ?? prev.playlist ?? [],
+          }));
+        }
+      })
       .on('broadcast', { event: SPONSOR_BOX_EVENTS.image }, ({ payload }) => {
         const img = payload as SponsorBoxImage;
         if (!img?.id || !img?.dataUrl) return;
@@ -209,6 +220,93 @@ export default function StreamHubMainPage({
       payload: { enabled },
     });
   }, []);
+
+  const toggleLiveVideoVisible = useCallback(async () => {
+    const nextVisible = !(liveSource.video_visible ?? true);
+    const updated: LiveSource = { ...liveSource, video_visible: nextVisible };
+    setLiveSource(updated);
+    broadcastChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'live_source_update',
+      payload: updated,
+    });
+    try {
+      await fetch(`/api/v1/matches/${currentMatchId}/broadcast-config`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ live_source: updated }),
+      });
+    } catch (e) {
+      console.error('Failed to sync video toggle:', e);
+    }
+  }, [currentMatchId, liveSource]);
+
+  const adjustLiveVolume = useCallback(async (delta: number) => {
+    const curVol = liveSource.volume ?? 100;
+    const nextVol = Math.max(0, Math.min(100, curVol + delta));
+    const updated: LiveSource = { ...liveSource, volume: nextVol };
+    setLiveSource(updated);
+    broadcastChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'live_source_update',
+      payload: updated,
+    });
+    try {
+      await fetch(`/api/v1/matches/${currentMatchId}/broadcast-config`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ live_source: updated }),
+      });
+    } catch (e) {
+      console.error('Failed to sync volume:', e);
+    }
+  }, [currentMatchId, liveSource]);
+
+  const toggleLiveMute = useCallback(async () => {
+    const nextMuted = !(liveSource.muted ?? false);
+    const updated: LiveSource = { ...liveSource, muted: nextMuted };
+    setLiveSource(updated);
+    broadcastChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'live_source_update',
+      payload: updated,
+    });
+    try {
+      await fetch(`/api/v1/matches/${currentMatchId}/broadcast-config`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ live_source: updated }),
+      });
+    } catch (e) {
+      console.error('Failed to sync mute:', e);
+    }
+  }, [currentMatchId, liveSource]);
+
+  const switchPlaylistVideo = useCallback(async (index: number) => {
+    const list = liveSource.playlist || [];
+    const target = list[index];
+    if (!target) return;
+    const updated: LiveSource = {
+      ...liveSource,
+      url: target.url,
+      active_index: index,
+    };
+    setLiveSource(updated);
+    broadcastChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'live_source_update',
+      payload: updated,
+    });
+    try {
+      await fetch(`/api/v1/matches/${currentMatchId}/broadcast-config`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ live_source: updated }),
+      });
+    } catch (e) {
+      console.error('Failed to sync playlist switch:', e);
+    }
+  }, [currentMatchId, liveSource]);
 
   const [realVetoes, setRealVetoes] = useState<OverlayVeto[]>([]);
   const [realMapGames, setRealMapGames] = useState<(OverlayGame & {
@@ -957,6 +1055,85 @@ export default function StreamHubMainPage({
                 </select>
               </div>
 
+              {/* Video & Audio Controls (Live Source) */}
+              {liveSource.mode !== 'OFF' && (
+                <div className="flex items-center gap-2 bg-black/60 px-3 py-1 rounded-xl border border-[#00D4FF]/30 font-mono text-xs shadow-inner flex-wrap">
+                  <button
+                    onClick={toggleLiveVideoVisible}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-black transition ${
+                      liveSource.video_visible !== false
+                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                        : 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                    }`}
+                    title={liveSource.video_visible !== false ? 'คลิกเพื่อซ่อนวิดีโอบน Overlay' : 'คลิกเพื่อแสดงวิดีโอบน Overlay'}
+                  >
+                    {liveSource.video_visible !== false ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                    <span>VDO {liveSource.video_visible !== false ? 'ON' : 'OFF'}</span>
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={toggleLiveMute}
+                      className={`p-1 rounded border text-xs transition ${
+                        liveSource.muted
+                          ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                          : 'bg-white/5 border-white/10 text-gray-300 hover:text-white'
+                      }`}
+                      title={liveSource.muted ? 'เปิดเสียง' : 'ปิดเสียง'}
+                    >
+                      {liveSource.muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                    </button>
+
+                    <button
+                      onClick={() => adjustLiveVolume(-10)}
+                      disabled={liveSource.volume === 0}
+                      className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-gray-300 hover:text-white text-[10px] font-bold disabled:opacity-30"
+                      title="ลดเสียง 10%"
+                    >
+                      −
+                    </button>
+
+                    <button
+                      onClick={() => adjustLiveVolume(10)}
+                      disabled={liveSource.volume === 100}
+                      className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-gray-300 hover:text-white text-[10px] font-bold disabled:opacity-30"
+                      title="เพิ่มเสียง 10%"
+                    >
+                      +
+                    </button>
+
+                    <div className="flex items-center gap-1.5 ml-1">
+                      <div className="w-12 bg-white/10 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-[#00D4FF] h-full transition-all"
+                          style={{ width: `${liveSource.muted ? 0 : (liveSource.volume ?? 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-gray-300 w-8 text-right font-black">
+                        {liveSource.muted ? 'MUTE' : `${liveSource.volume ?? 100}%`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Video Playlist Quick Selector */}
+                  {(liveSource.playlist || []).length > 1 && (
+                    <select
+                      value={liveSource.active_index ?? 0}
+                      onChange={(e) => switchPlaylistVideo(Number(e.target.value))}
+                      className="bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-[10px] text-amber-300 font-bold outline-none cursor-pointer max-w-[140px] truncate"
+                      style={{ colorScheme: 'dark' }}
+                      title="สลับวิดีโอจาก Playlist"
+                    >
+                      {liveSource.playlist!.map((v, i) => (
+                        <option key={v.id || i} value={i} className="bg-[#0B0F17] text-white">
+                          #{i + 1} {v.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
             </div>
 
           </div>
@@ -1173,12 +1350,18 @@ export default function StreamHubMainPage({
               </div>
 
               {/* === 5.1 LEFT: กล่องวิดีโอ (Live Source โหมด A — คลิป/ไลฟ์จากเว็บ) === */}
-              {liveSource.mode === 'A' && (
+              {liveSource.mode === 'A' && liveSource.video_visible !== false && liveSource.url && (
                 <div
                   className="absolute left-16 top-[330px] z-10 w-[790px] aspect-video rounded-xl overflow-hidden"
                   style={{ border: '1px solid rgba(232,180,41,0.35)', boxShadow: '0 24px 60px rgba(0,0,0,0.65), 0 0 24px rgba(220,38,38,0.25)' }}
                 >
-                  <LiveFeedPlayer key={liveSource.url} source={liveSource} className="absolute inset-0" />
+                  <LiveFeedPlayer
+                    key={`${liveSource.url}:${liveSource.muted}:${liveSource.volume}`}
+                    source={liveSource}
+                    muted={liveSource.muted}
+                    volume={liveSource.volume}
+                    className="absolute inset-0"
+                  />
                 </div>
               )}
 

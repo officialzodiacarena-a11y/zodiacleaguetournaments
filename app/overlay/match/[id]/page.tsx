@@ -501,6 +501,22 @@ export default function MatchBroadcastOverlay({
       .on("broadcast", { event: "hud_notification_clear" }, () => {
         if (isMounted) setHudBanner(null);
       })
+      .on("broadcast", { event: "live_source_update" }, (payload) => {
+        const src = payload.payload as Record<string, unknown>;
+        if (src && isMounted) {
+          setMatch((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  format_config: {
+                    ...(prev.format_config || {}),
+                    live_source: src,
+                  },
+                }
+              : null
+          );
+        }
+      })
       .subscribe();
 
     return () => {
