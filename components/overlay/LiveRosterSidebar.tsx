@@ -11,7 +11,7 @@ export function LiveRosterSidebar({ roster, side, team }: { roster: BuyPhasePlay
   const isLeft = side === "left";
 
   return (
-    <section className={`absolute ${isLeft ? "left-6" : "right-6"} bottom-[60px] flex flex-col gap-1.5 z-40 w-[340px]`}>
+    <section className={`absolute ${isLeft ? "left-[100px]" : "right-[100px]"} bottom-[60px] flex flex-col gap-1.5 z-40 w-[340px]`}>
       {roster.map((player) => {
         const hp = typeof player.hp === "number" ? player.hp : 100;
         const hpMax = typeof player.hpMax === "number" ? player.hpMax : 100;
