@@ -1,34 +1,15 @@
+// \D:\zodiacleague-tournaments\zodiacleague-web\app\stream-hub\page.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, use } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import type { TelemetryPlayerFrame } from '@/lib/overlay/telemetry-schema';
 import {
-  Clock,
-  Layers,
-  Sparkles,
-  Maximize2,
-  Tv,
-  Play,
-  Pause,
-  RotateCcw,
-  ChevronDown,
-  CheckCircle2,
-  XCircle,
-  Sliders,
-  Users,
-  Trophy,
-  RefreshCw,
-  Target,
-  Armchair,
-  Timer,
-  ExternalLink,
-  Radio,
-  ImagePlus,
-  Swords,
-  Shield,
-  Keyboard
+  Clock, Layers, Sparkles, Maximize2, Tv, Play, Pause, RotateCcw, 
+  ChevronDown, CheckCircle2, XCircle, Sliders, Users, Trophy, RefreshCw, 
+  Target, Armchair, Timer, ExternalLink, Radio, ImagePlus, Swords, Shield, Keyboard
 } from 'lucide-react';
+
 import { comboFromEvent, useStreamHubHotkeys, HOTKEY_ACTIONS, DEFAULT_HOTKEYS } from '@/components/stream-hub/hotkeys';
 import { HotkeySettingsModal } from '@/components/stream-hub/HotkeySettingsModal';
 import { NetworkStat } from '@/components/stream-hub/NetworkStat';
@@ -52,11 +33,9 @@ import {
   type SponsorBoxSettings,
 } from '@/lib/stream-hub/sponsor-box';
 
-// Production overlay type (หน้าตาจริงตอนนี้แสดงผ่าน iframe ไปที่ /overlay/match/[id] แทนการประกอบเอง — ดูฉาก 5 และ 6)
 import type { BuyPhasePlayer } from '@/components/overlay/BuyPhaseHud';
 import { TEAM_A_TEXT, TEAM_B_TEXT, DetailCell, isGameDone, type OverlayTeam, type OverlayVeto, type OverlayGame } from '@/components/overlay/series';
 
-// Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yjygevsdfebdyzywbpdr.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_Y3j6k9biGK8YsBiHkaibkw_IcAFbWQj';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -80,7 +59,6 @@ export interface SqlMatchOption {
   team_b?: { id: string; name: string; tag: string } | null;
 }
 
-// ป้ายบอกเวลาแบบคร่าวๆ (เช่น "5 นาทีที่แล้ว") ไว้ให้แยกแมตช์ในลิสต์ได้ง่ายเวลามีหลายห้องพร้อมกัน
 function relativeTimeLabel(iso?: string | null): string {
   if (!iso) return '';
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -100,40 +78,26 @@ export default function StreamHubMainPage({
   const resolvedParams = params ? ('then' in params ? use(params) : params) : undefined;
   const initialMatchId = resolvedParams?.matchId || DEFAULT_MATCH_ID;
 
-  // Active Scene ID:
-  // 5: Live In-Game Overlay
-  // 6: BuyPhase HUD
-  // 7: Clean Map Veto Dashboard
-  // 8: Clean Intermission & MVP Summary
-  // 9: Spectator & Camera Control Room
-  // 10: Captain Interactive Veto Room
   const [activeScene, setActiveScene] = useState<number>(5);
-
-  // Theme & Viewport
   const [bgMode, setBgMode] = useState<'transparent' | 'amber' | 'arena' | 'chroma'>('transparent');
   const [showControls, setShowControls] = useState<boolean>(true);
   const [showSystemLabel, setShowSystemLabel] = useState<boolean>(true);
   const [showBuyPhase, setShowBuyPhase] = useState<boolean>(false);
 
-  // ซ่อนแผงคุม (ปุ่ม "Show Controls" มุมขวาบน): โชว์ป้าย "Zodiac Live / SYSTEM" สีทองเล็กๆ 10 วิ แล้วยุบเหลือแค่โลโก้หมุน
-  // ตั้ง timeout ตอนกดปุ่มโดยตรง (ไม่ใช้ useEffect) เพื่อเลี่ยง setState ซ้อนในเอฟเฟกต์
   const hideControls = () => {
     setShowControls(false);
     setShowSystemLabel(true);
     setTimeout(() => setShowSystemLabel(false), 10000);
   };
 
-  // Active Match ID & Lists
   const [currentMatchId, setCurrentMatchId] = useState<string>(initialMatchId);
   const [tournamentMatches, setTournamentMatches] = useState<SqlMatchOption[]>([]);
   const [lobbyMatches, setLobbyMatches] = useState<SqlMatchOption[]>([]);
   const [loadingMatches, setLoadingMatches] = useState<boolean>(false);
 
-  // Dropdown open states
   const [openTournamentDropdown, setOpenTournamentDropdown] = useState<boolean>(false);
   const [openLobbyDropdown, setOpenLobbyDropdown] = useState<boolean>(false);
 
-  // Active Match Real Database States
   const [activeMatchData, setActiveMatchData] = useState<SqlMatchOption | null>(null);
   const [teamA, setTeamA] = useState<OverlayTeam>({ id: 'team-a', name: 'MWL ESPORTS', tag: 'MWL' });
   const [teamB, setTeamB] = useState<OverlayTeam>({ id: 'team-b', name: 'DEFENDERS', tag: 'DEF' });
@@ -145,39 +109,35 @@ export default function StreamHubMainPage({
   const [currentMap, setCurrentMap] = useState<string>('ASCENT');
   const [tournamentName, setTournamentName] = useState<string>('ZODIAC ARENA');
   const [subStage, setSubStage] = useState<string>('LIVE MATCH');
-  // แหล่งภาพ (ตั้งจากหน้า Broadcast Control) — B/C = ภาพจากภายนอก ปิดระบบที่อาศัยข้อมูลในเกม
+  
   const [liveSource, setLiveSource] = useState<LiveSource>(LIVE_SOURCE_OFF);
   const externalFeed = isExternalFeed(liveSource);
 
-  // Roster ผู้เล่นจริงของแมตช์ที่เลือก — ดึงจาก team_members ทุกครั้งที่สลับแมตช์ (เรียงตาม jersey_number
-  // เป็นตัวแทน "ลำดับที่นั่งจริง" เพราะตาราง team_members ไม่มีคอลัมน์ลำดับที่นั่งโดยตรง)
   const [rosterA, setRosterA] = useState<(BuyPhasePlayer & { avatarUrl?: string | null })[]>([]);
   const [rosterB, setRosterB] = useState<(BuyPhasePlayer & { avatarUrl?: string | null })[]>([]);
 
-  // ช่องส่งสัญญาณจริงไปหา Overlay ตัวที่ OBS ใช้ (channel ชื่อเดียวกับที่ app/overlay/match/[id]/page.tsx ฟังอยู่)
-  // ปุ่ม/สไลเดอร์ในห้องคุมจะยิงผ่านช่องนี้ ไม่ใช่แค่แก้ state ในเครื่องเฉยๆ เหมือนก่อนหน้านี้
   const broadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  // telemetry จากในเกมล่าสุด (โชว์ในแถบ Spectator Link) — แยกแหล่งด้วยฟิลด์ debug ของ OCR (raw_ocr_name)
   const [lastFrameAt, setLastFrameAt] = useState<number | null>(null);
   const [feedSource, setFeedSource] = useState<FeedSource | null>(null);
-  // คำสั่งจากหน้า Broadcast Control (รีโมต) — ชี้ไปที่ runAction ตัวล่าสุดเสมอ
   const remoteActionRef = useRef<(id: string) => void>(() => {});
-  // กล่องรูปสปอนเซอร์ (5.3) — รับจากหน้า sponsor-overlay ผ่าน Realtime, เก็บสำเนาในเครื่องกันรีเฟรชแล้วหาย
+  
   const [sponsorBox, setSponsorBox] = useState<{
     settings: SponsorBoxSettings;
     order: string[];
     byId: Record<string, SponsorBoxImage>;
   }>({ settings: DEFAULT_SPONSOR_BOX_SETTINGS, order: [], byId: {} });
+  
   const sponsorImages = useMemo(
     () => sponsorBox.order.map((id) => sponsorBox.byId[id]).filter((img): img is SponsorBoxImage => !!img),
     [sponsorBox],
   );
-  // เขียนสำเนาลงเครื่องเฉพาะตอนข้อมูลกล่องเปลี่ยน (ไม่ใช่ทุกรอบโพล) — และต้องโหลดสำเนาเดิมเสร็จก่อน ไม่งั้นค่าว่างตอนเปิดหน้าจะเขียนทับ
+  
   const sponsorCacheLoadedRef = useRef(false);
   useEffect(() => {
     if (!sponsorCacheLoadedRef.current) return;
     saveSnapshot(HUB_CACHE_KEY, { settings: sponsorBox.settings, images: sponsorImages });
   }, [sponsorBox.settings, sponsorImages]);
+  
   useEffect(() => {
     const channel = supabase
       .channel(`match-realtime-${currentMatchId}`)
@@ -207,9 +167,9 @@ export default function StreamHubMainPage({
         if (!img?.id || !img?.dataUrl) return;
         setSponsorBox((prev) => ({ ...prev, byId: { ...prev.byId, [img.id]: img } }));
       });
+      
     channel.subscribe((status) => {
       if (status !== 'SUBSCRIBED') return;
-      // โหลดสำเนาในเครื่องก่อน (โชว์ได้ทันทีแม้หน้า sponsor-overlay ปิดอยู่) แล้วขอข้อมูลล่าสุด
       const cached = loadSnapshot(HUB_CACHE_KEY);
       sponsorCacheLoadedRef.current = true;
       if (cached) {
@@ -229,7 +189,6 @@ export default function StreamHubMainPage({
     return () => {
       supabase.removeChannel(channel);
       broadcastChannelRef.current = null;
-      // สลับแมตช์ = สถานะ telemetry ของแมตช์เก่าไม่เกี่ยวแล้ว
       setLastFrameAt(null);
       setFeedSource(null);
     };
@@ -251,19 +210,15 @@ export default function StreamHubMainPage({
     });
   }, []);
 
-  // Real Map Vetoes from database
   const [realVetoes, setRealVetoes] = useState<OverlayVeto[]>([]);
-  // Completed/live map scores (per-map result), keyed by map_name for the ingame veto strip
   const [realMapGames, setRealMapGames] = useState<(OverlayGame & {
     team_a_side_start: string | null;
     team_b_side_start: string | null;
   })[]>([]);
 
-  // Timer
   const [timerSeconds, setTimerSeconds] = useState<number>(135);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
-  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = () => {
       setOpenTournamentDropdown(false);
@@ -273,27 +228,16 @@ export default function StreamHubMainPage({
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // 1. FETCH ALL MATCHES FROM SQL
   const fetchAllMatchesFromSql = useCallback(async () => {
     setLoadingMatches(true);
     try {
       const { data: matchesData, error } = await supabase
         .from('matches')
         .select(`
-          id,
-          status,
-          tournament_id,
-          stage_id,
-          format_config,
-          best_of,
-          rounds_won_a,
-          rounds_won_b,
-          team_a_ready_at,
-          team_b_ready_at,
-          created_at,
-          tournaments:tournament_id ( id, name, status ),
-          team_a:team_a_id ( id, name, tag ),
-          team_b:team_b_id ( id, name, tag )
+          id, status, tournament_id, stage_id, format_config, best_of,
+          rounds_won_a, rounds_won_b, team_a_ready_at, team_b_ready_at,
+          created_at, tournaments:tournament_id ( id, name, status ),
+          team_a:team_a_id ( id, name, tag ), team_b:team_b_id ( id, name, tag )
         `)
         .order('created_at', { ascending: false })
         .limit(30);
@@ -322,7 +266,6 @@ export default function StreamHubMainPage({
           };
         });
 
-        // Group into Tournaments and Custom Lobbies
         setTournamentMatches(formatted.filter((m) => m.tournament_id !== null));
         setLobbyMatches(formatted.filter((m) => m.tournament_id === null || m.lobby_code !== null));
       }
@@ -333,7 +276,6 @@ export default function StreamHubMainPage({
     }
   }, []);
 
-  // 2. LOAD SPECIFIC MATCH DATA FROM DATABASE
   const loadMatchDetails = useCallback(async (matchId: string) => {
     try {
       const { data: matchData } = await supabase
@@ -372,13 +314,12 @@ export default function StreamHubMainPage({
         setScoreA(matchData.rounds_won_a ?? 0);
         setScoreB(matchData.rounds_won_b ?? 0);
         setBestOf(matchData.best_of ?? 1);
-        // เก็บเป็น state ใหม่เฉพาะตอนค่าเปลี่ยน — โพลทุก 3 วิ ไม่ควรทำให้ตัวเล่นวิดีโอโหลดใหม่
+        
         const nextSource = readLiveSource(matchData.format_config);
         setLiveSource((prev) => (prev.mode === nextSource.mode && prev.url === nextSource.url ? prev : nextSource));
         if (tour?.name) setTournamentName(tour.name);
         setSubStage(matchData.status === 'LIVE' ? 'LIVE MATCH' : matchData.status === 'READY_CHECK' ? 'READY CHECK (นั่งที่)' : matchData.status);
 
-        // ผู้เล่นจริงของแมตช์นี้ — เรียงตาม jersey_number (ตัวแทนลำดับที่นั่ง เพราะยังไม่มีคอลัมน์ลำดับที่นั่งจริงในฐานข้อมูล)
         if (matchData.team_a_id && matchData.team_b_id) {
           const { data: members } = await supabase
             .from('team_members')
@@ -414,7 +355,6 @@ export default function StreamHubMainPage({
         }
       }
 
-      // Fetch Vetoes
       const { data: vetoData } = await supabase
         .from('map_vetoes')
         .select('*')
@@ -433,7 +373,6 @@ export default function StreamHubMainPage({
         if (picked) setCurrentMap(picked.map_name);
       }
 
-      // Fetch per-map results (score/winner/side) for the ingame veto strip
       const { data: gamesData } = await supabase
         .from('match_games')
         .select('game_number, map_name, status, score_a, score_b, winner_team_id, team_a_side_start, team_b_side_start')
@@ -442,7 +381,6 @@ export default function StreamHubMainPage({
 
       if (gamesData) {
         setRealMapGames(gamesData);
-        // สกอร์ซีรีส์ (BO) = จำนวนแมพที่แต่ละทีมชนะจริงใน match_games
         if (matchData) {
           setWinsA(gamesData.filter((g) => g.winner_team_id && g.winner_team_id === matchData.team_a_id).length);
           setWinsB(gamesData.filter((g) => g.winner_team_id && g.winner_team_id === matchData.team_b_id).length);
@@ -453,7 +391,6 @@ export default function StreamHubMainPage({
     }
   }, []);
 
-  // Initial load & periodic poll
   useEffect(() => {
     let active = true;
     const loadInitial = async () => {
@@ -463,7 +400,6 @@ export default function StreamHubMainPage({
     };
     void loadInitial();
 
-    // 3s interval to check if players pressed "Ready" (นั่งที่)
     const interval = setInterval(() => {
       if (active) {
         void loadMatchDetails(currentMatchId);
@@ -476,7 +412,6 @@ export default function StreamHubMainPage({
     };
   }, [currentMatchId, fetchAllMatchesFromSql, loadMatchDetails]);
 
-  // Timer Tick
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isTimerRunning && timerSeconds > 0) {
@@ -487,8 +422,6 @@ export default function StreamHubMainPage({
     return () => clearInterval(interval);
   }, [isTimerRunning, timerSeconds]);
 
-  // คำสั่งของแท็บ SYSTEM SCENES + Buy Phase — ปุ่มบนหน้าจอกับ Hotkey เรียกตัวเดียวกัน
-  // เปลี่ยนฉากผ่านทรานซิชั่น (เฟดดำ → โลโก้หมุนขยายบังจอ → สลับฉากตอนบังมิด)
   const [transitionId, setTransitionId] = useState(0);
   const pendingSceneRef = useRef<number | null>(null);
   const activeSceneRef = useRef(activeScene);
@@ -503,6 +436,9 @@ export default function StreamHubMainPage({
     pendingSceneRef.current = null;
   }, []);
 
+  // -------------------------------------------------------------
+  // [UPDATE] รองรับ Dummy Data Test Clutch 1vX
+  // -------------------------------------------------------------
   const runAction = useCallback((id: string) => {
     switch (id) {
       case 'startingSoon': goScene(4); break;
@@ -513,16 +449,39 @@ export default function StreamHubMainPage({
       case 'captainVeto': goScene(10); break;
       case 'testClutch':
         if (externalFeed) return; // โหมด B/C ไม่มีข้อมูลเลือดให้ทดสอบ
-        // ทดสอบฉาก Clutch / Last Man Standing บน Overlay จริง — ยิง HP ปลอมผ่าน telemetry จริง (path เดียวกับ Observer Bridge)
-        // ทำให้ทีม A เหลือรอด 1 คน (คนแรกของ roster) ส่วนทีม B รอดครบ เพื่อดูว่า Overlay ขึ้นป้าย 1vX ถูกไหม
+        
         if (rosterA.length < 2 || rosterB.length < 2) return;
-        sendTelemetry([
-          ...rosterA.map((p, i) => ({ name: p.name, hp: i === 0 ? 100 : 0 })),
-          ...rosterB.map((p) => ({ name: p.name, hp: 100 })),
-        ]);
+        
+        // ส่ง Dummy Payload เต็มรูปแบบทั้ง HP, เกราะ และปืน
+        const mockTelemetryPlayers: TelemetryPlayerFrame[] = [
+          ...rosterA.map((p, i) => ({ 
+            name: p.name, 
+            hp: i === 0 ? 100 : 0, 
+            hpMax: 100,
+            matched_player_id: p.id,
+            credits: p.credits || 0,
+            weapon: p.weapon || 'Vandal',
+            armor: p.armor || 'HEAVY',
+            ultPoints: p.ultPoints || 0,
+            ultMax: p.ultMax || 8
+          })),
+          ...rosterB.map((p) => ({ 
+            name: p.name, 
+            hp: 100, 
+            hpMax: 100,
+            matched_player_id: p.id,
+            credits: p.credits || 0,
+            weapon: p.weapon || 'Phantom',
+            armor: p.armor || 'HEAVY',
+            ultPoints: p.ultPoints || 0,
+            ultMax: p.ultMax || 8
+          })),
+        ];
+        
+        sendTelemetry(mockTelemetryPlayers);
         break;
       case 'buyPhase':
-        if (externalFeed) return; // โหมด B/C ไม่มีข้อมูลเงิน/อาวุธ
+        if (externalFeed) return; 
         setShowBuyPhase((prev) => {
           const next = !prev;
           sendToggleBuyPhase(next);
@@ -536,7 +495,6 @@ export default function StreamHubMainPage({
     remoteActionRef.current = runAction;
   }, [runAction]);
 
-  // แจ้งฉากปัจจุบันให้หน้า Broadcast Control (รีโมต) ไฮไลต์ปุ่มถูก — ส่งตอนเปลี่ยน + ย้ำทุก 5 วิ เผื่อรีโมตเพิ่งเปิด
   useEffect(() => {
     const announce = () =>
       broadcastChannelRef.current?.send({ type: 'broadcast', event: 'hub_scene_state', payload: { scene: activeScene } });
@@ -545,7 +503,6 @@ export default function StreamHubMainPage({
     return () => clearInterval(t);
   }, [activeScene, currentMatchId]);
 
-  // Hotkey (ผูกกับบัญชีผู้ใช้ ตั้งค่าได้จากปุ่ม Hotkeys) — ค่าเริ่มต้น Alt+1..7 = แท็บ 1..7, Alt+C = Buy Phase
   const { hotkeys, save: saveHotkeys, userId } = useStreamHubHotkeys(DEFAULT_HOTKEYS);
   const [showHotkeySettings, setShowHotkeySettings] = useState<boolean>(false);
   useEffect(() => {
