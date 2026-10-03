@@ -149,6 +149,34 @@ export default function SpectatorHUDControlPanel({
   const [liveSaving, setLiveSaving] = useState<boolean>(false);
   const [playlistTitleInput, setPlaylistTitleInput] = useState<string>("");
   const [playlistUrlInput, setPlaylistUrlInput] = useState<string>("");
+  const [uploadingVdo, setUploadingVdo] = useState<boolean>(false);
+
+  const handleUploadVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingVdo(true);
+    setFeedback({ type: "info", msg: "กำลังอัปโหลดวิดีโอ... ห้ามปิดหน้านี้" });
+    try {
+      const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.\-_]/g, "")}`;
+      const { error } = await supabase.storage
+        .from("stream-assets")
+        .upload(fileName, file, { cacheControl: '3600', upsert: false });
+
+      if (error) throw error;
+      
+      const { data: publicData } = supabase.storage.from("stream-assets").getPublicUrl(fileName);
+      setPlaylistUrlInput(publicData.publicUrl);
+      if (!playlistTitleInput.trim()) {
+        setPlaylistTitleInput(file.name);
+      }
+      setFeedback({ type: "info", msg: "อัปโหลดสำเร็จ (กดเพิ่มในคิวต่อได้เลย)" });
+    } catch (err) {
+      setFeedback({ type: "error", msg: `อัปโหลดไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setUploadingVdo(false);
+      e.target.value = ''; // reset
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -1008,13 +1036,21 @@ export default function SpectatorHUDControlPanel({
                         onChange={(e) => setPlaylistUrlInput(e.target.value)}
                         placeholder="URL (YouTube / Twitch / Kick / Web)"
                         className="flex-1 bg-black/60 border border-white/10 rounded px-2.5 py-1.5 font-mono text-xs focus:outline-none focus:border-amber-400 text-white placeholder-gray-500"
+                        disabled={uploadingVdo}
                       />
                       <button
                         onClick={handleAddPlaylistItem}
-                        className="px-3 py-1.5 bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 rounded font-mono text-xs font-bold transition flex items-center gap-1 shrink-0"
+                        disabled={uploadingVdo}
+                        className="px-3 py-1.5 bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 rounded font-mono text-xs font-bold transition flex items-center gap-1 shrink-0 disabled:opacity-50"
                       >
                         <Plus className="w-3.5 h-3.5" /> เพิ่มในคิว
                       </button>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <label className={`cursor-pointer px-3 py-1.5 border border-white/10 bg-white/5 hover:bg-white/10 text-gray-300 rounded font-mono text-[10px] font-bold transition flex items-center gap-1 shrink-0 ${uploadingVdo ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <Video className="w-3.5 h-3.5" /> {uploadingVdo ? 'กำลังอัปโหลด...' : 'อัปโหลดไฟล์วิดีโอ (.mp4)'}
+                        <input type="file" accept="video/mp4,video/webm" className="hidden" onChange={handleUploadVideo} disabled={uploadingVdo} />
+                      </label>
                     </div>
                   </div>
 
@@ -1520,3 +1556,4 @@ export default function SpectatorHUDControlPanel({
     </div>
   );
 }
+
