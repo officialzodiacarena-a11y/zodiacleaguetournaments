@@ -19,6 +19,7 @@ export interface TournamentItem {
   maxTeams: number;              // จาก tournaments.max_teams (e.g. 16)
   registrationOpensAt?: string | null;
   registrationClosesAt?: string | null;
+  isRegistrationClosed?: boolean;
   accentTheme: 'gold' | 'purple' | 'gray';
 }
 
