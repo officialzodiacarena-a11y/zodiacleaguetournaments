@@ -99,6 +99,8 @@ function renderEligibility(isVerified: boolean, rosterMode: 'VERIFIED' | 'LINKED
   );
 }
 
+export const dynamic = 'force-dynamic';
+
 export default async function TournamentRegistrationPage({ params, searchParams }: PageProps) {
   const { tournamentId } = await params;
   const { error: errorCode } = await searchParams;
