@@ -5,6 +5,7 @@ import { AthleteQuickPopover } from '@/components/profile/AthleteQuickPopover';
 import { lockRosterAction } from '@/actions/team';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
+import { InvitePlayerModal } from '@/components/team/InvitePlayerModal';
 
 interface PageProps {
   params: Promise<{ teamId: string }>;
@@ -454,14 +455,9 @@ export default async function TeamProfilePage({ params }: PageProps) {
           </div>
         )}
 
-        {/* 6. ACTION BAR */}
+                {/* 6. ACTION BAR */}
         <div className="flex flex-wrap items-center gap-3 mb-9">
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-lg border border-[#E8B429] bg-transparent px-5 py-2 text-xs font-bold tracking-wider text-[#E8B429] hover:bg-[#E8B429]/15 hover:shadow-[0_0_16px_rgba(232,180,41,0.25)] transition-all cursor-pointer"
-          >
-            + เชิญผู้เล่น / INVITE PLAYER
-          </button>
+          <InvitePlayerModal teamId={data.id} />
 
           <form action={handleLockRoster}>
             <button

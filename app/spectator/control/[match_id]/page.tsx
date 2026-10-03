@@ -4,7 +4,21 @@ import { TEAM_A_HEX, TEAM_B_HEX } from "@/components/overlay/series";
 import { comboFromEvent, useStreamHubHotkeys, HUB_TABS, HOTKEY_ACTIONS, DEFAULT_HOTKEYS } from "@/components/stream-hub/hotkeys";
 import { HotkeySettingsModal } from "@/components/stream-hub/HotkeySettingsModal";
 import { LiveFeedPlayer } from "@/components/stream-hub/LiveFeedPlayer";
-import { parseExternalEmbedUrl, readLiveSource, type LiveSourceMode } from "@/lib/stream-hub/live-source";
+import { parseExternalEmbedUrl, readLiveSource, type LiveSourceMode, type LiveSource, type PlaylistItem } from "@/lib/stream-hub/live-source";
+import {
+  Play,
+  Plus,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  Volume2,
+  VolumeX,
+  Eye,
+  EyeOff,
+  Video,
+  ListVideo,
+  Volume1,
+} from "lucide-react";
 
 // ตัวเลือก Live Source — ข้อความอธิบายสั้นๆ ให้คนคุมรู้ว่าแต่ละโหมดปิดอะไรบ้าง
 const LIVE_SOURCE_OPTIONS: { mode: LiveSourceMode; title: string; hint: string }[] = [
@@ -133,6 +147,8 @@ export default function SpectatorHUDControlPanel({
   const [liveModeInput, setLiveModeInput] = useState<LiveSourceMode | null>(null);
   const [liveUrlInput, setLiveUrlInput] = useState<string>("");
   const [liveSaving, setLiveSaving] = useState<boolean>(false);
+  const [playlistTitleInput, setPlaylistTitleInput] = useState<string>("");
+  const [playlistUrlInput, setPlaylistUrlInput] = useState<string>("");
 
   useEffect(() => {
     let isMounted = true;
@@ -516,19 +532,54 @@ export default function SpectatorHUDControlPanel({
   };
 
   // บันทึก Live Source ของหน้า Stream Hub ลง format_config.live_source (merge กับคีย์อื่นที่เก็บอยู่)
-  const saveLiveSource = async (mode: LiveSourceMode, url: string) => {
+  const saveLiveSource = async (
+    mode: LiveSourceMode,
+    url: string,
+    playlistOverride?: PlaylistItem[],
+    activeIndexOverride?: number,
+    videoVisibleOverride?: boolean,
+    volumeOverride?: number,
+    mutedOverride?: boolean
+  ) => {
     if (!match) return;
-    if (mode !== "OFF" && !url.trim()) {
-      setFeedback({ type: "error", msg: "ใส่ลิงก์ก่อนบันทึกโหมด " + mode });
+    const currentLive = readLiveSource(match.format_config);
+    const finalPlaylist = playlistOverride ?? currentLive.playlist ?? [];
+    const finalActiveIndex = activeIndexOverride ?? currentLive.active_index ?? 0;
+    const finalVideoVisible = typeof videoVisibleOverride === "boolean" ? videoVisibleOverride : (currentLive.video_visible ?? true);
+    const finalVolume = typeof volumeOverride === "number" ? volumeOverride : (currentLive.volume ?? 100);
+    const finalMuted = typeof mutedOverride === "boolean" ? mutedOverride : (currentLive.muted ?? false);
+
+    const resolvedUrl = mode === "OFF" ? "" : (url.trim() || finalPlaylist[finalActiveIndex]?.url || "");
+
+    if (mode !== "OFF" && !resolvedUrl && finalPlaylist.length === 0) {
+      setFeedback({ type: "error", msg: "ใส่ลิงก์หรือเพิ่มวิดีโอเข้า Playlist ก่อนบันทึกโหมด " + mode });
       return;
     }
+
+    const payloadSource: LiveSource = {
+      mode,
+      url: resolvedUrl,
+      playlist: finalPlaylist,
+      active_index: finalActiveIndex,
+      video_visible: finalVideoVisible,
+      volume: finalVolume,
+      muted: finalMuted,
+    };
+
+    // ส่งสัญญาณ Realtime Broadcast ไปยัง Stream Hub และ Overlay ทันที
+    activeChannel?.send({
+      type: "broadcast",
+      event: "live_source_update",
+      payload: payloadSource,
+    });
+
     setLiveSaving(true);
     try {
       // บันทึกผ่านเซิร์ฟเวอร์ (ตรวจสิทธิ์ broadcast) — เขียนตรงจากเบราว์เซอร์ RLS จะบล็อกเงียบๆ
       const res = await fetch(`/api/v1/matches/${matchId}/broadcast-config`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ live_source: { mode, url: mode === "OFF" ? "" : url.trim() } }),
+        body: JSON.stringify({ live_source: payloadSource }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) {
@@ -539,7 +590,7 @@ export default function SpectatorHUDControlPanel({
         setLiveUrlInput("");
         setFeedback({
           type: "info",
-          msg: mode === "OFF" ? "กลับสู่โหมดปกติแล้ว — ระบบข้อมูลในเกมเปิดใช้งาน" : `ตั้ง Live Source เป็นโหมด ${mode} แล้ว — Stream Hub จะเปลี่ยนตามภายในไม่กี่วินาที`,
+          msg: mode === "OFF" ? "กลับสู่โหมดปกติแล้ว — ระบบข้อมูลในเกมเปิดใช้งาน" : `อัปเดต Live Source (${mode}) และส่งสัญญาณเรียบร้อย`,
         });
       }
     } catch {
@@ -547,6 +598,121 @@ export default function SpectatorHUDControlPanel({
     } finally {
       setLiveSaving(false);
     }
+  };
+
+  const handleAddPlaylistItem = () => {
+    if (!playlistUrlInput.trim()) {
+      setFeedback({ type: "error", msg: "กรุณาระบุ URL วิดีโอก่อนเพิ่มเข้า Playlist" });
+      return;
+    }
+    const currentLive = readLiveSource(match?.format_config);
+    const existing = currentLive.playlist || [];
+    const newItem: PlaylistItem = {
+      id: `vdo-${Date.now()}`,
+      title: playlistTitleInput.trim() || `Video ${existing.length + 1}`,
+      url: playlistUrlInput.trim(),
+    };
+    const updatedPlaylist = [...existing, newItem];
+    setPlaylistTitleInput("");
+    setPlaylistUrlInput("");
+    const targetMode = (liveModeInput ?? currentLive.mode) === "OFF" ? "A" : (liveModeInput ?? currentLive.mode);
+    void saveLiveSource(
+      targetMode,
+      currentLive.url || newItem.url,
+      updatedPlaylist,
+      currentLive.active_index ?? 0
+    );
+  };
+
+  const handlePlayPlaylistItem = (index: number) => {
+    const currentLive = readLiveSource(match?.format_config);
+    const list = currentLive.playlist || [];
+    const target = list[index];
+    if (!target) return;
+    const targetMode = (liveModeInput ?? currentLive.mode) === "OFF" ? "A" : (liveModeInput ?? currentLive.mode);
+    void saveLiveSource(
+      targetMode,
+      target.url,
+      list,
+      index
+    );
+  };
+
+  const handleMovePlaylistItem = (index: number, direction: 'up' | 'down') => {
+    const currentLive = readLiveSource(match?.format_config);
+    const list = [...(currentLive.playlist || [])];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+    const temp = list[index];
+    list[index] = list[targetIndex];
+    list[targetIndex] = temp;
+
+    let newActiveIndex = currentLive.active_index ?? 0;
+    if (newActiveIndex === index) newActiveIndex = targetIndex;
+    else if (newActiveIndex === targetIndex) newActiveIndex = index;
+
+    const targetMode = (liveModeInput ?? currentLive.mode) === "OFF" ? "A" : (liveModeInput ?? currentLive.mode);
+    void saveLiveSource(
+      targetMode,
+      list[newActiveIndex]?.url || currentLive.url,
+      list,
+      newActiveIndex
+    );
+  };
+
+  const handleDeletePlaylistItem = (index: number) => {
+    const currentLive = readLiveSource(match?.format_config);
+    const list = (currentLive.playlist || []).filter((_, i) => i !== index);
+    let newActiveIndex = currentLive.active_index ?? 0;
+    if (newActiveIndex >= list.length) newActiveIndex = Math.max(0, list.length - 1);
+    const nextUrl = list[newActiveIndex]?.url || "";
+    const targetMode = list.length === 0 ? "OFF" : ((liveModeInput ?? currentLive.mode) === "OFF" ? "A" : (liveModeInput ?? currentLive.mode));
+    void saveLiveSource(
+      targetMode,
+      nextUrl,
+      list,
+      newActiveIndex
+    );
+  };
+
+  const handleToggleVideoVisible = () => {
+    const currentLive = readLiveSource(match?.format_config);
+    const nextVisible = !(currentLive.video_visible ?? true);
+    void saveLiveSource(
+      currentLive.mode,
+      currentLive.url,
+      currentLive.playlist,
+      currentLive.active_index,
+      nextVisible
+    );
+  };
+
+  const handleAdjustVolume = (delta: number) => {
+    const currentLive = readLiveSource(match?.format_config);
+    const curVol = currentLive.volume ?? 100;
+    const nextVol = Math.max(0, Math.min(100, curVol + delta));
+    void saveLiveSource(
+      currentLive.mode,
+      currentLive.url,
+      currentLive.playlist,
+      currentLive.active_index,
+      currentLive.video_visible,
+      nextVol
+    );
+  };
+
+  const handleToggleMute = () => {
+    const currentLive = readLiveSource(match?.format_config);
+    const nextMuted = !(currentLive.muted ?? false);
+    void saveLiveSource(
+      currentLive.mode,
+      currentLive.url,
+      currentLive.playlist,
+      currentLive.active_index,
+      currentLive.video_visible,
+      currentLive.volume,
+      nextMuted
+    );
   };
 
   // บันทึก URL ลิงก์สตรีมภายนอก (YouTube / Twitch / Kick) ลง DB
@@ -748,7 +914,187 @@ export default function SpectatorHUDControlPanel({
               ))}
             </div>
 
-            {liveMode !== "OFF" && (
+            {/* AUDIO & VIDEO OVERLAY CONTROLS */}
+            {savedLiveSource.mode !== "OFF" && (
+              <div className="mb-4 p-3 rounded-lg border border-[#00D4FF]/20 bg-black/40 space-y-2 font-mono">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-[#00D4FF] flex items-center gap-1.5">
+                    <Video className="w-3.5 h-3.5" /> OVERLAY VIDEO & AUDIO
+                  </span>
+                  <button
+                    onClick={handleToggleVideoVisible}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-black transition ${
+                      savedLiveSource.video_visible !== false
+                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+                        : "bg-rose-500/20 border-rose-500/40 text-rose-300"
+                    }`}
+                  >
+                    {savedLiveSource.video_visible !== false ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                    {savedLiveSource.video_visible !== false ? "VDO: SHOWN" : "VDO: HIDDEN"}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/5">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={handleToggleMute}
+                      className={`p-1.5 rounded border text-xs transition ${
+                        savedLiveSource.muted
+                          ? "bg-rose-500/20 border-rose-500/40 text-rose-300"
+                          : "bg-white/5 border-white/10 text-gray-300 hover:text-white"
+                      }`}
+                      title={savedLiveSource.muted ? "เปิดเสียง" : "ปิดเสียง"}
+                    >
+                      {savedLiveSource.muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => handleAdjustVolume(-10)}
+                      disabled={savedLiveSource.volume === 0}
+                      className="px-2 py-1 rounded border border-white/10 bg-white/5 text-gray-300 hover:text-white text-[10px] font-bold disabled:opacity-30"
+                      title="ลดเสียง 10%"
+                    >
+                      −10%
+                    </button>
+                    <button
+                      onClick={() => handleAdjustVolume(10)}
+                      disabled={savedLiveSource.volume === 100}
+                      className="px-2 py-1 rounded border border-white/10 bg-white/5 text-gray-300 hover:text-white text-[10px] font-bold disabled:opacity-30"
+                      title="เพิ่มเสียง 10%"
+                    >
+                      +10%
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-20 bg-white/10 h-2 rounded-full overflow-hidden">
+                      <div
+                        className="bg-[#00D4FF] h-full transition-all"
+                        style={{ width: `${savedLiveSource.muted ? 0 : (savedLiveSource.volume ?? 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-gray-400 w-9 text-right font-black">
+                      {savedLiveSource.muted ? "MUTE" : `${savedLiveSource.volume ?? 100}%`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODE A: PLAYLIST MANAGER */}
+            {liveMode === "A" && (
+              <div className="mb-4 space-y-3">
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-black text-amber-300 flex items-center gap-1.5">
+                      <ListVideo className="w-4 h-4" /> Video Playlist & Queue
+                    </span>
+                    <span className="font-mono text-[10px] text-gray-400">
+                      {(savedLiveSource.playlist || []).length} คลิปในคิว
+                    </span>
+                  </div>
+
+                  {/* Add Video Form */}
+                  <div className="space-y-1.5 pt-1">
+                    <input
+                      type="text"
+                      value={playlistTitleInput}
+                      onChange={(e) => setPlaylistTitleInput(e.target.value)}
+                      placeholder="ชื่อคลิป (เช่น เพลงเปิดตัว / Intro Highlight)"
+                      className="w-full bg-black/60 border border-white/10 rounded px-2.5 py-1.5 font-mono text-xs focus:outline-none focus:border-amber-400 text-white placeholder-gray-500"
+                    />
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={playlistUrlInput}
+                        onChange={(e) => setPlaylistUrlInput(e.target.value)}
+                        placeholder="URL (YouTube / Twitch / Kick / Web)"
+                        className="flex-1 bg-black/60 border border-white/10 rounded px-2.5 py-1.5 font-mono text-xs focus:outline-none focus:border-amber-400 text-white placeholder-gray-500"
+                      />
+                      <button
+                        onClick={handleAddPlaylistItem}
+                        className="px-3 py-1.5 bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 rounded font-mono text-xs font-bold transition flex items-center gap-1 shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> เพิ่มในคิว
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Playlist Queue Items */}
+                  {(savedLiveSource.playlist || []).length > 0 && (
+                    <div className="space-y-1.5 pt-2 max-h-56 overflow-y-auto pr-1">
+                      {(savedLiveSource.playlist || []).map((item, idx) => {
+                        const isPlaying = idx === (savedLiveSource.active_index ?? 0) && savedLiveSource.url === item.url;
+                        return (
+                          <div
+                            key={item.id || idx}
+                            className={`p-2 rounded border font-mono text-xs flex items-center justify-between gap-2 transition ${
+                              isPlaying
+                                ? "bg-amber-500/20 border-amber-500 text-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+                                : "bg-black/50 border-white/10 text-gray-300 hover:border-white/20"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className="text-[10px] text-gray-500 font-bold shrink-0">#{idx + 1}</span>
+                              <div className="min-w-0">
+                                <div className="font-bold truncate text-[11px] text-white flex items-center gap-1.5">
+                                  {isPlaying && (
+                                    <span className="px-1 py-0.2 bg-amber-500 text-black text-[9px] font-black rounded shrink-0">
+                                      LIVE
+                                    </span>
+                                  )}
+                                  <span className="truncate">{item.title}</span>
+                                </div>
+                                <div className="text-[9px] text-gray-400 truncate">{item.url}</div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={() => handlePlayPlaylistItem(idx)}
+                                className={`px-2 py-1 rounded text-[10px] font-black flex items-center gap-1 transition ${
+                                  isPlaying
+                                    ? "bg-amber-500 text-black cursor-default"
+                                    : "bg-white/5 border border-white/10 hover:bg-amber-500/20 hover:text-amber-300 hover:border-amber-500/40 text-gray-300"
+                                }`}
+                                title="สลับมาเล่นวิดีโอนี้บน Overlay ทันที"
+                              >
+                                <Play className="w-2.5 h-2.5 fill-current" />
+                                {isPlaying ? "กำลังเล่น" : "เล่นทันที"}
+                              </button>
+                              <button
+                                onClick={() => handleMovePlaylistItem(idx, 'up')}
+                                disabled={idx === 0}
+                                className="p-1 rounded border border-white/10 bg-white/5 text-gray-400 hover:text-white disabled:opacity-20"
+                                title="เลื่อนขึ้น"
+                              >
+                                <ArrowUp className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => handleMovePlaylistItem(idx, 'down')}
+                                disabled={idx === (savedLiveSource.playlist || []).length - 1}
+                                className="p-1 rounded border border-white/10 bg-white/5 text-gray-400 hover:text-white disabled:opacity-20"
+                                title="เลื่อนลง"
+                              >
+                                <ArrowDown className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => handleDeletePlaylistItem(idx)}
+                                className="p-1 rounded border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20"
+                                title="ลบออกจาก Playlist"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Direct URL Input for Modes B / C or Custom override */}
+            {liveMode !== "OFF" && liveMode !== "A" && (
               <input
                 type="text"
                 value={liveUrl}
@@ -761,8 +1107,21 @@ export default function SpectatorHUDControlPanel({
               />
             )}
 
-            {liveMode !== "OFF" && liveUrl.trim() && (
-              <LiveFeedPlayer key={`${liveMode}:${liveUrl}`} muted source={{ mode: liveMode, url: liveUrl.trim() }} className="w-full aspect-video rounded-lg overflow-hidden border border-white/10 mb-3" />
+            {liveMode !== "OFF" && (liveUrl.trim() || savedLiveSource.url) && (
+              <div className="mb-3 space-y-1">
+                <div className="text-[10px] font-mono text-gray-400 flex items-center justify-between">
+                  <span>ตัวอย่างภาพ (Preview ในห้องคุม):</span>
+                  <span className="text-amber-400 font-bold truncate max-w-[200px]">
+                    {savedLiveSource.playlist?.[savedLiveSource.active_index ?? 0]?.title || "Active Feed"}
+                  </span>
+                </div>
+                <LiveFeedPlayer
+                  key={`${liveMode}:${liveUrl || savedLiveSource.url}:${savedLiveSource.muted}`}
+                  muted
+                  source={{ mode: liveMode, url: (liveUrl || savedLiveSource.url).trim(), video_visible: savedLiveSource.video_visible, muted: true }}
+                  className="w-full aspect-video rounded-lg overflow-hidden border border-white/10"
+                />
+              </div>
             )}
 
             <div className="flex gap-2">

@@ -9,14 +9,28 @@ import { asUpdate } from '@/types/supabase-helpers';
 //   live_source : แหล่งภาพของ Stream Hub (OFF / A / B / C) — ดู lib/stream-hub/live-source.ts
 //   lobby_code  : รหัสห้องในเกม
 // เดิมหน้าเว็บเขียน format_config ตรงจากเบราว์เซอร์ ซึ่ง RLS บล็อกเงียบๆ (ไม่ error แต่ไม่บันทึก) — ย้ายมาทำฝั่งเซิร์ฟเวอร์ที่ตรวจสิทธิ์
+const PlaylistItemSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().trim().max(128).optional(),
+  url: z.string().trim().max(2048),
+});
+
 const BodySchema = z
   .object({
     live_source: z
       .object({
         mode: z.enum(['OFF', 'A', 'B', 'C']),
         url: z.string().trim().max(2048),
+        playlist: z.array(PlaylistItemSchema).optional(),
+        active_index: z.number().int().min(0).optional(),
+        video_visible: z.boolean().optional(),
+        volume: z.number().min(0).max(100).optional(),
+        muted: z.boolean().optional(),
       })
-      .refine((v) => v.mode === 'OFF' || /^https?:\/\//i.test(v.url), { message: 'ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https://' })
+      .refine(
+        (v) => v.mode === 'OFF' || v.url === '' || /^https?:\/\//i.test(v.url) || /^[a-zA-Z0-9_-]{11}$/.test(v.url),
+        { message: 'ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https:// หรือ YouTube Video ID' }
+      )
       .optional(),
     lobby_code: z.string().trim().min(1).max(32).optional(),
   })
@@ -60,8 +74,20 @@ export async function PATCH(
     const current = (match.format_config as Record<string, unknown> | null) ?? {};
     const next: Record<string, unknown> = { ...current };
     if (parsed.data.live_source) {
-      const { mode, url } = parsed.data.live_source;
-      next.live_source = mode === 'OFF' ? { mode: 'OFF', url: '' } : { mode, url };
+      const { mode, url, playlist, active_index, video_visible, volume, muted } = parsed.data.live_source;
+      const curLive = (current.live_source as Record<string, unknown> | undefined) ?? {};
+      next.live_source =
+        mode === 'OFF'
+          ? { mode: 'OFF', url: '', playlist: [], active_index: 0, video_visible: true, volume: 100, muted: false }
+          : {
+              mode,
+              url,
+              playlist: playlist ?? curLive.playlist ?? [],
+              active_index: typeof active_index === 'number' ? active_index : (curLive.active_index ?? 0),
+              video_visible: typeof video_visible === 'boolean' ? video_visible : (curLive.video_visible ?? true),
+              volume: typeof volume === 'number' ? volume : (curLive.volume ?? 100),
+              muted: typeof muted === 'boolean' ? muted : (curLive.muted ?? false),
+            };
     }
     if (parsed.data.lobby_code) next.lobby_code = parsed.data.lobby_code.toUpperCase();
 

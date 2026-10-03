@@ -9,14 +9,26 @@ export function LiveFeedPlayer({
   source,
   className = '',
   muted = false,
+  volume,
 }: {
   source: LiveSource;
   className?: string;
-  /** พรีวิวในห้องคุม — ปิดเสียง ไม่ให้ดังที่เครื่องคนคุม */
+  /** พรีวิวในห้องคุม หรือ Overlay — ปิดเสียง หรือกำหนดระดับเสียง */
   muted?: boolean;
+  volume?: number;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const isMuted = muted || Boolean(source.muted);
+  const currentVolume = typeof volume === 'number' ? volume : (source.volume ?? 100);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = isMuted;
+      videoRef.current.volume = Math.max(0, Math.min(1, currentVolume / 100));
+    }
+  }, [isMuted, currentVolume]);
 
   useEffect(() => {
     if (source.mode !== 'C') return;
@@ -50,11 +62,12 @@ export function LiveFeedPlayer({
   }, [source.mode, source.url]);
 
   if (source.mode === 'OFF' || !source.url) return null;
+  if (source.video_visible === false) return null;
 
   if (source.mode === 'C') {
     return (
       <div className={`relative bg-black ${className}`}>
-        <video ref={videoRef} className="absolute inset-0 h-full w-full object-contain" autoPlay playsInline muted={muted} controls={false} />
+        <video ref={videoRef} className="absolute inset-0 h-full w-full object-contain" autoPlay playsInline muted={isMuted} controls={false} />
         {error && (
           <div className="absolute inset-0 flex items-center justify-center p-4 text-center font-mono text-xs text-rose-300">{error}</div>
         )}
@@ -65,7 +78,7 @@ export function LiveFeedPlayer({
   const parsed = parseExternalEmbedUrl(source.url).embedUrl;
   // YouTube: สลับ mute=0 เป็น mute=1 / Twitch, Kick: ต่อ &muted=true
   const embedUrl =
-    parsed && muted
+    parsed && isMuted
       ? parsed.includes('mute=0')
         ? parsed.replace('mute=0', 'mute=1')
         : `${parsed}${parsed.includes('?') ? '&' : '?'}muted=true`
@@ -74,7 +87,7 @@ export function LiveFeedPlayer({
     <div className={`relative bg-black ${className}`}>
       {embedUrl && (
         <iframe
-          key={embedUrl}
+          key={`${embedUrl}:${isMuted}`}
           src={embedUrl}
           title="Live Source"
           className="absolute inset-0 h-full w-full border-0"

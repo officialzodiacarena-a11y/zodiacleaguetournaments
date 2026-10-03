@@ -7,18 +7,62 @@
 // ข้อ C: เบราว์เซอร์/OBS เปิด RTMP ตรงๆ ไม่ได้ ต้องมีตัวแปลง RTMP → HLS (เช่น MediaMTX) ก่อน — รอคลาวด์ของทีม
 export type LiveSourceMode = 'OFF' | 'A' | 'B' | 'C';
 
-export interface LiveSource {
-  mode: LiveSourceMode;
+export interface PlaylistItem {
+  id: string;
+  title: string;
   url: string;
 }
 
-export const LIVE_SOURCE_OFF: LiveSource = { mode: 'OFF', url: '' };
+export interface LiveSource {
+  mode: LiveSourceMode;
+  url: string;
+  playlist?: PlaylistItem[];
+  active_index?: number;
+  video_visible?: boolean;
+  volume?: number; // 0-100
+  muted?: boolean;
+}
+
+export const LIVE_SOURCE_OFF: LiveSource = {
+  mode: 'OFF',
+  url: '',
+  playlist: [],
+  active_index: 0,
+  video_visible: true,
+  volume: 100,
+  muted: false,
+};
 
 export function readLiveSource(formatConfig: unknown): LiveSource {
   const raw = (formatConfig as { live_source?: Partial<LiveSource> } | null)?.live_source;
   const mode = raw?.mode;
-  if ((mode === 'A' || mode === 'B' || mode === 'C') && typeof raw?.url === 'string' && raw.url.trim()) {
-    return { mode, url: raw.url.trim() };
+  const playlist: PlaylistItem[] = Array.isArray(raw?.playlist)
+    ? raw!.playlist.map((item, idx) => ({
+        id: typeof item?.id === 'string' && item.id ? item.id : `vdo-${idx}-${Date.now()}`,
+        title: typeof item?.title === 'string' && item.title.trim() ? item.title.trim() : `Video ${idx + 1}`,
+        url: typeof item?.url === 'string' ? item.url.trim() : '',
+      })).filter((item) => item.url)
+    : [];
+  const active_index = typeof raw?.active_index === 'number' && raw.active_index >= 0 ? raw.active_index : 0;
+  const video_visible = typeof raw?.video_visible === 'boolean' ? raw.video_visible : true;
+  const volume = typeof raw?.volume === 'number' && raw.volume >= 0 && raw.volume <= 100 ? raw.volume : 100;
+  const muted = typeof raw?.muted === 'boolean' ? raw.muted : false;
+
+  let url = typeof raw?.url === 'string' ? raw.url.trim() : '';
+  if (!url && playlist.length > 0 && playlist[active_index]) {
+    url = playlist[active_index].url;
+  }
+
+  if ((mode === 'A' || mode === 'B' || mode === 'C') && (url || playlist.length > 0)) {
+    return {
+      mode,
+      url: url || (playlist[0]?.url ?? ''),
+      playlist,
+      active_index,
+      video_visible,
+      volume,
+      muted,
+    };
   }
   return LIVE_SOURCE_OFF;
 }
