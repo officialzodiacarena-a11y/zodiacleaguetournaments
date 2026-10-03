@@ -206,7 +206,7 @@ export async function invitePlayerAction(teamId: string, formData: FormData): Pr
       team_id: teamId,
       player_id: target.id,
       role: 'PLAYER',
-      status: 'INVITED',
+      status: 'ACTIVE',
     });
 
     if (insertError) {
@@ -218,7 +218,7 @@ export async function invitePlayerAction(teamId: string, formData: FormData): Pr
       action: 'CREATE',
       entity_type: 'team_members',
       entity_id: target.id,
-      after_data: { team_id: teamId, status: 'INVITED' },
+      after_data: { team_id: teamId, status: 'ACTIVE' },
     });
 
     await supabase.from('notifications').insert({
