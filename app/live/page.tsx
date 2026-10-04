@@ -1,16 +1,20 @@
-'use client';
+﻿'use client';
 import { useEffect, useState } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+<<<<<<< HEAD
+import { createClient } from '@/lib/supabase/client';
 // We don't have the data easily available for the BracketView here without fetching,
 // so for the draft, we will just display a placeholder or fetch it in a useEffect.
 // To keep it simple, we'll just display a placeholder for BRACKET scene.
+=======
+>>>>>>> origin/main
 
 export default function LivePage() {
-  const supabase = createClientComponentClient();
+  const supabase = createClient();
   const [activeScene, setActiveScene] = useState<string>('STANDBY');
   const [matchId, setMatchId] = useState<string>('');
   
   useEffect(() => {
+<<<<<<< HEAD
     const channel = supabase.channel('broadcast-director');
     channel.on('broadcast', { event: 'scene-change' }, (payload) => {
       if (payload.payload?.scene) setActiveScene(payload.payload.scene);
@@ -78,6 +82,25 @@ export default function LivePage() {
         </div>
       )}
 
+=======
+    const params = new URLSearchParams(window.location.search);
+    const mId = params.get('matchId');
+    if (mId) setMatchId(mId);
+  }, []);
+
+  let src = '/stream-hub?viewer=true';
+  if (matchId) {
+    src += '&matchId=' + matchId;
+  }
+  
+  return (
+    <div className="w-full h-screen bg-black overflow-hidden m-0 p-0">
+      <iframe 
+        src={src}
+        className="w-full h-full border-none"
+        allowFullScreen
+      />
+>>>>>>> origin/main
     </div>
   );
 }

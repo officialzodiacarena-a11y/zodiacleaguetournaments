@@ -1,9 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/client';
 
 export default function BroadcastDirectorPanel() {
-  const supabase = createClientComponentClient();
+  const supabase = createClient();
   const [activeScene, setActiveScene] = useState<string>('STANDBY');
   const [matchId, setMatchId] = useState<string>('');
   
