@@ -8,10 +8,14 @@ export default function LivePage() {
   const [matchId, setMatchId] = useState<string>('');
   
   useEffect(() => {
-    // Parse URL param to allow fallback override if needed
-    const params = new URLSearchParams(window.location.search);
-    const mId = params.get('matchId');
-    if (mId) setMatchId(mId);
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const mId = params.get('matchId');
+      if (mId) setMatchId(mId);
+      
+      const sc = params.get('scene');
+      if (sc) setActiveScene(sc);
+    }
 
     const channel = supabase.channel('broadcast-director');
     channel.on('broadcast', { event: 'scene-change' }, (payload) => {
