@@ -68,9 +68,9 @@ export async function advanceBracketFromMatch(
 ): Promise<AdvanceBracketResult> {
   const { data: matchData, error: matchDataErr } = await admin.from('matches' as never).select('bracket_node_id').eq('id', matchId).single();
   if (matchDataErr) return { ok: false, error: matchDataErr.message };
-  if (!matchData?.bracket_node_id) return { ok: true, advanced: false };
+  if (!(matchData as unknown as { bracket_node_id: string | null })?.bracket_node_id) return { ok: true, advanced: false };
 
-  const { data: bracketNodeRaw, error: nodeErr } = await admin.from('bracket_nodes' as never).select('id, winner_to_node_id, loser_to_node_id, bracket_type').eq('id', matchData.bracket_node_id).maybeSingle();
+  const { data: bracketNodeRaw, error: nodeErr } = await admin.from('bracket_nodes' as never).select('id, winner_to_node_id, loser_to_node_id, bracket_type').eq('id', (matchData as unknown as { bracket_node_id: string }).bracket_node_id).maybeSingle();
 
   if (nodeErr) return { ok: false, error: nodeErr.message };
 
