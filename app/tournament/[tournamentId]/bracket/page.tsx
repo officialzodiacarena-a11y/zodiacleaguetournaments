@@ -60,7 +60,7 @@ export default async function TournamentBracketPage({ params }: PageProps) {
   if (stage) {
     const { data: nodes } = await supabase
       .from('bracket_nodes')
-      .select('id, bracket_type, round_number, position_in_round, label, team_a_id, team_b_id, status, is_bye, best_of')
+      .select('id, bracket_type, round_number, position_in_round, label, team_a_id, team_b_id, status, is_bye, best_of, matches(id, score_a, score_b, winner_team_id, status)')
       .eq('stage_id', stage.id)
       .order('bracket_type', { ascending: true })
       .order('round_number', { ascending: true })
@@ -82,7 +82,7 @@ export default async function TournamentBracketPage({ params }: PageProps) {
       return { id: t.id, name: t.name, tag: t.tag, logoUrl: t.logo_url };
     };
 
-    matches = (nodes ?? []).map((n, idx) => ({
+    matches = (nodes ?? []).map((n, idx) => { const m = n.matches && n.matches.length > 0 ? n.matches[0] : null; return { scoreA: m?.score_a ?? undefined, scoreB: m?.score_b ?? undefined, winnerTeamId: m?.winner_team_id ?? undefined,
       id: n.id,
       stageId: stage.id,
       matchNumber: idx + 1,
@@ -91,10 +91,10 @@ export default async function TournamentBracketPage({ params }: PageProps) {
       positionInRound: n.position_in_round,
       label: n.label ?? undefined,
       bestOf: n.best_of,
-      status: n.status as BracketMatchNode['status'],
+      status: (m?.status ?? n.status) as BracketMatchNode['status'],
       teamA: toParticipant(n.team_a_id),
       teamB: toParticipant(n.team_b_id),
-    }));
+    }; });
   }
 
   const teamCount = stage?.teams_in
