@@ -82,28 +82,23 @@ export default function StreamHubMainPage({
 
   const [activeScene, setActiveScene] = useState<number>(5);
   const [bgMode, setBgMode] = useState<'transparent' | 'amber' | 'arena' | 'chroma'>('transparent');
-  const [isViewer, setIsViewer] = useState(false);
-  const [showControls, setShowControls] = useState<boolean>(true);
+  const [showControls, setShowControls] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('viewer') !== 'true';
+    }
+    return true;
+  });
   const [showSystemLabel, setShowSystemLabel] = useState<boolean>(true);
   const [showBuyPhase, setShowBuyPhase] = useState<boolean>(false);
-  const [currentMatchId, setCurrentMatchId] = useState<string>(initialMatchId);
+  const [currentMatchId, setCurrentMatchId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('matchId') || initialMatchId;
+    }
+    return initialMatchId;
+  });
   const [tournamentMatches, setTournamentMatches] = useState<SqlMatchOption[]>([]);
   const [lobbyMatches, setLobbyMatches] = useState<SqlMatchOption[]>([]);
   const [loadingMatches, setLoadingMatches] = useState<boolean>(false);
-
-  useEffect(() => { 
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search); 
-      const isV = params.get('viewer') === 'true';
-      setIsViewer(isV); 
-      if (isV) setShowControls(false);
-      
-      const urlMatchId = params.get('matchId'); 
-      if (urlMatchId) { 
-        setCurrentMatchId(urlMatchId); 
-      } 
-    }
-  }, []);
 
   const hideControls = () => {
     setShowControls(false);
