@@ -1,22 +1,26 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { OfficialSponsorsBar } from '@/components/sponsor/OfficialSponsorsBar';
+import { Snowflake } from 'lucide-react';
+import Image from 'next/image';
 
 export default function LivePage() {
   const supabase = createClient();
-  const [activeScene, setActiveScene] = useState<string>('STANDBY');
-  const [matchId, setMatchId] = useState<string>('');
+  const [activeScene, setActiveScene] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('scene') || 'STANDBY';
+    }
+    return 'STANDBY';
+  });
+  const [matchId, setMatchId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('matchId') || '';
+    }
+    return '';
+  });
   
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const mId = params.get('matchId');
-      if (mId) setMatchId(mId);
-      
-      const sc = params.get('scene');
-      if (sc) setActiveScene(sc);
-    }
-
     const channel = supabase.channel('broadcast-director');
     channel.on('broadcast', { event: 'scene-change' }, (payload) => {
       if (payload.payload?.scene) setActiveScene(payload.payload.scene);
@@ -82,23 +86,48 @@ export default function LivePage() {
       )}
 
       {activeScene === 'PODIUM' && (
-        <div className="w-full h-full flex flex-col items-center justify-center p-8 bg-[#0a0a0c] relative overflow-hidden">
+        <div className="w-full h-full flex flex-col items-center justify-between p-8 bg-[#0a0a0c] relative overflow-hidden">
           <div className="absolute inset-0 bg-[url('/img/cyber-grid.png')] opacity-10 pointer-events-none" />
           
-          <div className="z-10 flex flex-col items-center mb-12">
-            <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#E8B429] to-[#F3D370] tracking-wider uppercase drop-shadow-[0_0_15px_rgba(232,180,41,0.5)] text-center">
-              ZODIAC LEAGUE : VALORANT
-            </h1>
-            <h2 className="text-3xl font-bold text-gray-300 mt-4 tracking-[0.2em] text-center">
-              WINTER SPLIT 2026 - FINAL STANDINGS
-            </h2>
+          {/* Top Header Row */}
+          <div className="z-10 w-full flex items-start justify-between px-12 mt-4">
+             {/* Winter Season Card */}
+             <div className="relative w-48 h-60 rounded-xl overflow-hidden border-2 border-[#5BA8D4] bg-zinc-950/20 flex flex-col justify-center items-center shadow-[0_4px_30px_rgba(91,168,212,0.3)]">
+               <div className="absolute inset-0 -z-10">
+                 <Image src="/images/seasons/Winter.jpg" alt="Winter" fill className="object-cover opacity-60 mix-blend-overlay" />
+               </div>
+               <div className="absolute inset-0 bg-gradient-to-b from-cyan-950/40 to-[#0a0a0c]/80 -z-10" />
+               <Snowflake className="w-10 h-10 text-[#5BA8D4] mb-3 drop-shadow-[0_0_8px_rgba(91,168,212,0.8)]" />
+               <h3 className="text-3xl font-black text-cyan-300 drop-shadow-md">WINTER</h3>
+               <p className="text-[10px] text-cyan-200 tracking-widest mt-1 font-mono">SEASON 4</p>
+             </div>
+             
+             {/* Center Title */}
+             <div className="flex flex-col items-center mt-4 mx-8">
+                <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#E8B429] to-[#F3D370] tracking-wider uppercase drop-shadow-[0_0_15px_rgba(232,180,41,0.5)] text-center">
+                  ZODIAC LEAGUE : VALORANT
+                </h1>
+                <h2 className="text-3xl font-bold text-gray-300 mt-4 tracking-[0.2em] text-center">
+                  FINAL STANDINGS
+                </h2>
+             </div>
+
+             {/* Main Sponsor */}
+             <div className="relative w-48 h-60 flex flex-col items-center justify-center bg-[#1c1c1f]/50 border border-white/5 rounded-xl shadow-lg p-4 text-center">
+                <span className="text-[10px] font-mono text-gray-400 mb-4 uppercase tracking-widest">Presented By</span>
+                <div className="w-24 h-24 relative mb-2">
+                  <Image src="/images/logo/logo.png" alt="Zodiac Arena" fill className="object-contain opacity-90 drop-shadow-md" />
+                </div>
+                <span className="text-sm font-bold text-white tracking-widest">ZODIAC ARENA</span>
+             </div>
           </div>
 
-          <div className="z-10 flex items-end justify-center gap-8 h-[500px]">
+          {/* Podium */}
+          <div className="z-10 flex items-end justify-center gap-12 flex-1 mt-8 pb-4 max-h-[500px]">
             {/* 2nd Place */}
             <div className="flex flex-col items-center transform translate-y-16">
               <div className="w-48 h-48 rounded-full bg-[#1c1c1f] border-4 border-[#C0C0C0] p-6 flex items-center justify-center shadow-[0_0_30px_rgba(192,192,192,0.3)] z-20 mb-[-40px]">
-                <img src="/images/Team_Logo/PWE.png" alt="POWER UP" className="w-full h-full object-contain drop-shadow-xl" />
+                <Image src="/images/Team_Logo/PWE.png" alt="POWER UP" width={160} height={160} className="w-full h-full object-contain drop-shadow-xl" />
               </div>
               <div className="w-56 h-72 bg-gradient-to-b from-[#C0C0C0]/20 to-[#0a0a0c] border-t-4 border-x border-[#C0C0C0]/50 rounded-t-xl flex flex-col items-center pt-16">
                 <span className="text-4xl font-black text-[#C0C0C0]">2ND</span>
@@ -113,7 +142,7 @@ export default function LivePage() {
             {/* 1st Place */}
             <div className="flex flex-col items-center z-30">
               <div className="w-64 h-64 rounded-full bg-[#1c1c1f] border-4 border-[#FFD700] p-8 flex items-center justify-center shadow-[0_0_50px_rgba(255,215,0,0.5)] mb-[-50px]">
-                <img src="/images/Team_Logo/ICE.png" alt="ICEBERG" className="w-full h-full object-contain drop-shadow-2xl" />
+                <Image src="/images/Team_Logo/ICE.png" alt="ICEBERG" width={220} height={220} className="w-full h-full object-contain drop-shadow-2xl" />
               </div>
               <div className="w-64 h-96 bg-gradient-to-b from-[#FFD700]/30 to-[#0a0a0c] border-t-4 border-x border-[#FFD700]/60 rounded-t-xl flex flex-col items-center pt-20">
                 <span className="text-6xl font-black text-[#FFD700] drop-shadow-[0_0_15px_rgba(255,215,0,0.8)]">1ST</span>
@@ -128,7 +157,7 @@ export default function LivePage() {
             {/* 3rd Place */}
             <div className="flex flex-col items-center transform translate-y-32">
               <div className="w-40 h-40 rounded-full bg-[#1c1c1f] border-4 border-[#CD7F32] p-5 flex items-center justify-center shadow-[0_0_20px_rgba(205,127,50,0.3)] z-20 mb-[-30px]">
-                <img src="/images/Team_Logo/MR.png" alt="MONARCH" className="w-full h-full object-contain drop-shadow-lg" />
+                <Image src="/images/Team_Logo/MR.png" alt="MONARCH" width={140} height={140} className="w-full h-full object-contain drop-shadow-lg" />
               </div>
               <div className="w-48 h-56 bg-gradient-to-b from-[#CD7F32]/20 to-[#0a0a0c] border-t-4 border-x border-[#CD7F32]/50 rounded-t-xl flex flex-col items-center pt-12">
                 <span className="text-3xl font-black text-[#CD7F32]">3RD</span>
@@ -141,9 +170,13 @@ export default function LivePage() {
             </div>
           </div>
           
-          <div className="absolute bottom-8 right-8 text-gray-500 font-mono text-xs flex flex-col items-end gap-1">
-            <span>* BASE REWARD: 1,000 ZP / TEAM</span>
-            <span>* 1ST BONUS: +1,000 ZP | 2ND BONUS: +500 ZP | 3RD BONUS: +250 ZP</span>
+          {/* Footer Sponsors */}
+          <div className="z-10 w-full flex flex-col items-center gap-6 mt-4">
+            <OfficialSponsorsBar />
+            <div className="text-gray-600 font-mono text-[10px] flex justify-center gap-8 uppercase tracking-widest">
+              <span>* BASE REWARD: 1,000 ZP / TEAM</span>
+              <span>* 1ST BONUS: +1,000 ZP | 2ND BONUS: +500 ZP | 3RD BONUS: +250 ZP</span>
+            </div>
           </div>
         </div>
       )}
