@@ -120,6 +120,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const { name, stage_order, format, teams_in, teams_advancing, format_config, best_of_config, map_pool, veto_format, start_at } = body;
 
+    let parsedVetoFormat = veto_format;
+    if (!parsedVetoFormat || Object.keys(parsedVetoFormat).length === 0) {
+      parsedVetoFormat = {
+        sequence: ["BAN", "BAN", "PICK", "PICK", "DECIDER"],
+        team_a_first: true,
+        time_limit_seconds: 60
+      };
+    }
+
   if (typeof name !== 'string' || name.trim() === '') {
     return NextResponse.json(
       { error: { code: 'VALIDATION_ERROR', message: 'name is required' } },
@@ -196,7 +205,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       map_pool: Array.isArray(map_pool) && map_pool.every((item) => typeof item === 'string')
         ? map_pool
         : null,
-      veto_format: toJson(veto_format ?? {}),
+      veto_format: toJson(parsedVetoFormat),
       start_at: typeof start_at === 'string' ? start_at : null,
     }))
     .select('*')

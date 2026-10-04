@@ -23,8 +23,8 @@ export interface RoiRegion {
 // แถบชื่อผู้เล่น 10 คน (5 ฝั่งซ้าย TEAM A, 5 ฝั่งขวา TEAM B)
 // ปรับเทียบจากภาพอ้างอิงจริง: แผงผู้เล่นเริ่มที่ y≈0.51 ของจอ (กลางจอค่อนลงล่าง) แถวสูงแถวละ ~0.085
 // (92px จาก 1080px) ชื่อผู้เล่นอยู่แถวบนสุดของแต่ละ slot (เหนือหลอด HP กับแถบไอคอนความสามารถ)
-const ROW_TOP = 0.51;
-const ROW_HEIGHT = 0.085;
+const ROW_TOP = 0.72;
+const ROW_HEIGHT = 0.055;
 const NAME_HEIGHT = 0.022; // เฉพาะบรรทัดชื่อ ไม่รวมหลอด HP/ไอคอนด้านล่าง
 
 export const PLAYER_NAME_ROI: RoiRegion[] = [
@@ -32,7 +32,7 @@ export const PLAYER_NAME_ROI: RoiRegion[] = [
   ...Array.from({ length: 5 }, (_, i) => ({
     id: `team_a_${i}`,
     label: `Team A Slot ${i + 1}`,
-    x: 0.043,
+    x: 0.06,
     y: ROW_TOP + i * ROW_HEIGHT,
     width: 0.09,
     height: NAME_HEIGHT,
@@ -41,7 +41,7 @@ export const PLAYER_NAME_ROI: RoiRegion[] = [
   ...Array.from({ length: 5 }, (_, i) => ({
     id: `team_b_${i}`,
     label: `Team B Slot ${i + 1}`,
-    x: 0.868,
+    x: 0.85,
     y: ROW_TOP + i * ROW_HEIGHT,
     width: 0.09,
     height: NAME_HEIGHT,
