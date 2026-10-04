@@ -32,7 +32,8 @@ export default function BroadcastDirectorPanel() {
     { id: 'STANDBY', name: 'Standby / Countdown', color: 'bg-gray-600' },
     { id: 'BRACKET', name: 'Bracket View', color: 'bg-blue-600' },
     { id: 'LIVE_STREAM', name: 'Live Stream (Main)', color: 'bg-red-600' },
-    { id: 'CUSTOM_ICE', name: 'Custom View (สถิติ/พี่ไอซ์)', color: 'bg-purple-600' },
+    { id: 'CUSTOM_ICE', name: 'Custom View (สถิติ/พี่ไอซ์)', color: 'bg-purple-600' }, 
+    { id: 'PODIUM', name: 'Tournament Podium (�š���觢ѹ)', color: 'bg-yellow-600' },
   ];
 
   return (
