@@ -1,12 +1,6 @@
-﻿'use client';
+'use client';
 import { useEffect, useState } from 'react';
-<<<<<<< HEAD
 import { createClient } from '@/lib/supabase/client';
-// We don't have the data easily available for the BracketView here without fetching,
-// so for the draft, we will just display a placeholder or fetch it in a useEffect.
-// To keep it simple, we'll just display a placeholder for BRACKET scene.
-=======
->>>>>>> origin/main
 
 export default function LivePage() {
   const supabase = createClient();
@@ -14,7 +8,11 @@ export default function LivePage() {
   const [matchId, setMatchId] = useState<string>('');
   
   useEffect(() => {
-<<<<<<< HEAD
+    // Parse URL param to allow fallback override if needed
+    const params = new URLSearchParams(window.location.search);
+    const mId = params.get('matchId');
+    if (mId) setMatchId(mId);
+
     const channel = supabase.channel('broadcast-director');
     channel.on('broadcast', { event: 'scene-change' }, (payload) => {
       if (payload.payload?.scene) setActiveScene(payload.payload.scene);
@@ -43,9 +41,6 @@ export default function LivePage() {
         <div className="w-full h-full p-8 flex flex-col">
           <h1 className="text-4xl font-bold mb-8 text-[#E8B429] text-center mt-10">TOURNAMENT BRACKET</h1>
           <div className="flex-1 bg-[#1c1c1f] rounded-2xl border border-white/5 shadow-2xl flex items-center justify-center">
-            {/* The actual TournamentBracketView requires fetching complex nested data. 
-                For the live public page, this would either fetch /api/v1/bracket 
-                or load an iframe of the bracket page. We'll use an iframe for a quick perfect render. */}
              <iframe src="/tournaments" className="w-full h-full rounded-2xl border-none" />
           </div>
         </div>
@@ -82,25 +77,6 @@ export default function LivePage() {
         </div>
       )}
 
-=======
-    const params = new URLSearchParams(window.location.search);
-    const mId = params.get('matchId');
-    if (mId) setMatchId(mId);
-  }, []);
-
-  let src = '/stream-hub?viewer=true';
-  if (matchId) {
-    src += '&matchId=' + matchId;
-  }
-  
-  return (
-    <div className="w-full h-screen bg-black overflow-hidden m-0 p-0">
-      <iframe 
-        src={src}
-        className="w-full h-full border-none"
-        allowFullScreen
-      />
->>>>>>> origin/main
     </div>
   );
 }
