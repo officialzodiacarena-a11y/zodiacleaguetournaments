@@ -83,22 +83,33 @@ export default function StreamHubMainPage({
   const [activeScene, setActiveScene] = useState<number>(5);
   const [bgMode, setBgMode] = useState<'transparent' | 'amber' | 'arena' | 'chroma'>('transparent');
   const [isViewer, setIsViewer] = useState(false);
-  useEffect(() => { const params = new URLSearchParams(window.location.search); setIsViewer(params.get('viewer') === 'true'); const urlMatchId = params.get('matchId'); if (urlMatchId) { setCurrentMatchId(urlMatchId); } }, []);
   const [showControls, setShowControls] = useState<boolean>(true);
-  useEffect(() => { if (isViewer) setShowControls(false); }, [isViewer]);
   const [showSystemLabel, setShowSystemLabel] = useState<boolean>(true);
   const [showBuyPhase, setShowBuyPhase] = useState<boolean>(false);
+  const [currentMatchId, setCurrentMatchId] = useState<string>(initialMatchId);
+  const [tournamentMatches, setTournamentMatches] = useState<SqlMatchOption[]>([]);
+  const [lobbyMatches, setLobbyMatches] = useState<SqlMatchOption[]>([]);
+  const [loadingMatches, setLoadingMatches] = useState<boolean>(false);
+
+  useEffect(() => { 
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search); 
+      const isV = params.get('viewer') === 'true';
+      setIsViewer(isV); 
+      if (isV) setShowControls(false);
+      
+      const urlMatchId = params.get('matchId'); 
+      if (urlMatchId) { 
+        setCurrentMatchId(urlMatchId); 
+      } 
+    }
+  }, []);
 
   const hideControls = () => {
     setShowControls(false);
     setShowSystemLabel(true);
     setTimeout(() => setShowSystemLabel(false), 10000);
   };
-
-  const [currentMatchId, setCurrentMatchId] = useState<string>(initialMatchId);
-  const [tournamentMatches, setTournamentMatches] = useState<SqlMatchOption[]>([]);
-  const [lobbyMatches, setLobbyMatches] = useState<SqlMatchOption[]>([]);
-  const [loadingMatches, setLoadingMatches] = useState<boolean>(false);
 
   const [openTournamentDropdown, setOpenTournamentDropdown] = useState<boolean>(false);
   const [openLobbyDropdown, setOpenLobbyDropdown] = useState<boolean>(false);
