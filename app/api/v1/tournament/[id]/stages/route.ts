@@ -2,6 +2,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { Database, Json } from '@/types/database.types';
+import { resolveStageVetoConfig } from '@/lib/veto/stageConfig';
 
 type TournamentStageInsert = Database['public']['Tables']['tournament_stages']['Insert'];
 type StageFormat = Database['public']['Tables']['tournament_stages']['Row']['format'];
@@ -86,6 +87,14 @@ export async function POST(
       );
     }
 
+    const vetoConfig = resolveStageVetoConfig({ veto_format: body.veto_format, map_pool: body.map_pool });
+    if (!vetoConfig.ok) {
+      return NextResponse.json(
+        { error: { code: vetoConfig.code, message: vetoConfig.message, problems: vetoConfig.problems } },
+        { status: 400 }
+      );
+    }
+
     const payload: TournamentStageInsert = {
       tournament_id: tournamentId,
       name: body.name.trim(),
@@ -95,8 +104,8 @@ export async function POST(
       teams_advancing: typeof body.teams_advancing === 'number' ? body.teams_advancing : null,
       format_config: (body.format_config ?? {}) as unknown as Json,
       best_of_config: (body.best_of_config ?? { default: 1 }) as unknown as Json,
-      map_pool: Array.isArray(body.map_pool) ? (body.map_pool as string[]) : null,
-      veto_format: (body.veto_format ?? {}) as unknown as Json,
+      map_pool: vetoConfig.map_pool,
+      veto_format: vetoConfig.veto_format,
       start_at: typeof body.start_at === 'string' ? body.start_at : null,
       end_at: typeof body.end_at === 'string' ? body.end_at : null,
       status: 'PENDING',
