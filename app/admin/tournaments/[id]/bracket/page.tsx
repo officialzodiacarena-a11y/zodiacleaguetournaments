@@ -6,7 +6,7 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireBracketAdminPage } from '@/lib/admin/requireBracketAdminPage';
 import { isoToThaiParts } from '@/lib/tournament/bracketBuilder';
-import { BracketBuilder, type BuilderStage, type ApprovedTeam, type TournamentSummary } from '@/components/admin/bracket/BracketBuilder';
+import { BracketBuilder, type BuilderStage, type ApprovedTeam, type SuggestedMapPool, type TournamentSummary } from '@/components/admin/bracket/BracketBuilder';
 import type { BracketMatchNode, BracketTeamParticipant } from '@/types/bracket';
 
 export const dynamic = 'force-dynamic';
@@ -41,6 +41,7 @@ interface StageRow {
   teams_in: number | null;
   best_of_config: unknown;
   start_at: string | null;
+  map_pool: string[] | null;
 }
 
 function teamOf(row: RegistrationRow): { id: string; name: string; tag: string } | null {
@@ -74,7 +75,7 @@ export default async function AdminTournamentBracketPage({ params, searchParams 
       .eq('tournament_id', tournament.id) as unknown as Promise<{ data: Array<{ status: string }> | null }>,
     supabase
       .from('tournament_stages')
-      .select('id, name, stage_order, format, status, teams_in, best_of_config, start_at')
+      .select('id, name, stage_order, format, status, teams_in, best_of_config, start_at, map_pool')
       .eq('tournament_id', tournament.id)
       .order('stage_order', { ascending: true }) as unknown as Promise<{ data: StageRow[] | null }>,
   ]);
@@ -112,6 +113,13 @@ export default async function AdminTournamentBracketPage({ params, searchParams 
     startAt: s.start_at,
     nodeCount: nodeCountByStage.get(s.id) ?? 0,
   }));
+
+  // ค่าแนะนำรายชื่อแมพ (อ่านอย่างเดียว): รอบล่าสุดของทัวร์นี้ที่ map_pool ไม่ว่าง · ไม่มี = ว่าง ให้แอดมินกรอกเอง
+  // ทัวร์ไม่มี game_id ในข้อมูลที่หน้านี้โหลด จึงไม่ดึงจากทัวร์อื่น (ใบงาน M1 ข้อ 2)
+  const poolSourceStage = [...stages].reverse().find((s) => Array.isArray(s.map_pool) && s.map_pool.length > 0);
+  const suggestedMapPool: SuggestedMapPool = poolSourceStage
+    ? { maps: poolSourceStage.map_pool ?? [], sourceStageName: poolSourceStage.name, sourceTournamentName: tournament.name }
+    : { maps: [], sourceStageName: null, sourceTournamentName: null };
 
   const selectedStage = builderStages.find((s) => s.id === stageParam) ?? builderStages[builderStages.length - 1] ?? null;
 
@@ -181,6 +189,7 @@ export default async function AdminTournamentBracketPage({ params, searchParams 
           stages={builderStages}
           selectedStageId={selectedStage?.id ?? null}
           matches={matches}
+          suggestedMapPool={suggestedMapPool}
         />
       </div>
     </div>

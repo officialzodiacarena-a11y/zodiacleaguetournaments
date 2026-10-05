@@ -171,7 +171,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  const vetoConfig = resolveStageVetoConfig({ veto_format, map_pool });
+  const vetoConfig = resolveStageVetoConfig({ veto_format, map_pool }, { requireMapPool: true });
   if (!vetoConfig.ok) {
     return NextResponse.json(
       { error: { code: vetoConfig.code, message: vetoConfig.message, problems: vetoConfig.problems } },

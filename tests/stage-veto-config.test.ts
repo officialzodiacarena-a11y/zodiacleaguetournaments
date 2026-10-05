@@ -3,7 +3,7 @@
 // รัน: npx tsx --test tests/stage-veto-config.test.ts
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { INVALID_VETO_CONFIG, defaultVetoFormat, resolveStageVetoConfig } from '@/lib/veto/stageConfig';
+import { INVALID_VETO_CONFIG, MAP_POOL_REQUIRED, defaultVetoFormat, resolveStageVetoConfig } from '@/lib/veto/stageConfig';
 
 // ชื่อสมมติ (ไม่ใช่รายชื่อแมพจริง) ใช้ทดสอบจำนวนและความซ้ำเท่านั้น
 const POOL_7 = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7'];
@@ -97,4 +97,40 @@ test('ลำดับกำหนดเอง 3 สเต็ปที่ถู�
   const r = resolveStageVetoConfig({ veto_format: custom });
   assert.equal(r.ok, true);
   if (r.ok) assert.deepEqual(r.veto_format, custom);
+});
+
+test('ทางสร้าง (requireMapPool) ไม่ส่ง map_pool → MAP_POOL_REQUIRED', () => {
+  const r = resolveStageVetoConfig({ veto_format: DEFAULT_FORMAT }, { requireMapPool: true });
+  assert.equal(r.ok, false);
+  if (!r.ok) {
+    assert.equal(r.code, MAP_POOL_REQUIRED);
+    assert.ok(r.message.length > 0 && r.problems.length === 1);
+  }
+});
+
+test('ทางสร้าง (requireMapPool) ส่ง map_pool เป็น null → MAP_POOL_REQUIRED', () => {
+  const r = resolveStageVetoConfig({ map_pool: null }, { requireMapPool: true });
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.equal(r.code, MAP_POOL_REQUIRED);
+});
+
+test('PATCH ที่ส่ง map_pool: null (requireMapPool) → MAP_POOL_REQUIRED ห้ามล้างรายชื่อแมพ', () => {
+  const r = resolveStageVetoConfig({ veto_format: DEFAULT_FORMAT, map_pool: null }, { requireMapPool: 'map_pool' in { map_pool: null } });
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.equal(r.code, MAP_POOL_REQUIRED);
+});
+
+test('PATCH ที่ไม่ส่ง map_pool (ไม่ requireMapPool) → ผ่านเหมือนเดิม แม้ค่าในฐานข้อมูลยังเป็น null', () => {
+  const body: Record<string, unknown> = { veto_format: DEFAULT_FORMAT };
+  const r = resolveStageVetoConfig({ veto_format: body.veto_format, map_pool: null }, { requireMapPool: 'map_pool' in body });
+  assert.equal(r.ok, true);
+  if (r.ok) assert.equal(r.map_pool, null);
+});
+
+test('requireMapPool + รายชื่อถูกต้อง → ผ่าน · รายชื่อไม่ถูกต้องยังได้ INVALID_VETO_CONFIG (ไม่ใช่ MAP_POOL_REQUIRED)', () => {
+  const ok = resolveStageVetoConfig({ map_pool: POOL_7 }, { requireMapPool: true });
+  assert.equal(ok.ok, true);
+  const bad = resolveStageVetoConfig({ map_pool: ['m1', 'm2'] }, { requireMapPool: true });
+  assert.equal(bad.ok, false);
+  if (!bad.ok) assert.equal(bad.code, INVALID_VETO_CONFIG);
 });

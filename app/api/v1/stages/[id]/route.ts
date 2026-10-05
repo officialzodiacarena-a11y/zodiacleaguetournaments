@@ -112,10 +112,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if ('best_of_config' in body) patch.best_of_config = body.best_of_config as Json;
   if ('map_pool' in body || 'veto_format' in body) {
     // ตรวจค่ารวมหลังแก้ (ค่าที่ส่งมา + ค่าเดิมในฐานข้อมูล) ด้วยตัวตรวจเดียวกับตอนสร้าง · เขียนเฉพาะฟิลด์ที่ส่งมา
-    const vetoConfig = resolveStageVetoConfig({
-      veto_format: 'veto_format' in body ? body.veto_format : stage.veto_format,
-      map_pool: 'map_pool' in body ? body.map_pool : stage.map_pool,
-    });
+    // ส่ง map_pool มาแล้วเป็น null = ล้างรายชื่อแมพทิ้ง → ห้าม (MAP_POOL_REQUIRED) · ไม่ส่ง map_pool มาเลย = คงตามเดิม
+    const vetoConfig = resolveStageVetoConfig(
+      {
+        veto_format: 'veto_format' in body ? body.veto_format : stage.veto_format,
+        map_pool: 'map_pool' in body ? body.map_pool : stage.map_pool,
+      },
+      { requireMapPool: 'map_pool' in body }
+    );
     if (!vetoConfig.ok) {
       return NextResponse.json(
         { error: { code: vetoConfig.code, message: vetoConfig.message, problems: vetoConfig.problems } },

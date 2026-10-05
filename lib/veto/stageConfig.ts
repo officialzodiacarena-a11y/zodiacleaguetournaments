@@ -2,12 +2,14 @@
 // ตัวตรวจ veto_format + map_pool ตัวเดียวของ tournament_stages ที่ทุกทางเขียน (สร้าง 2 ทาง + แก้ PATCH) ต้องผ่านก่อนบันทึก
 // - veto_format ไม่ส่งมา / null / {} → ใช้ค่าเริ่มต้น (ลำดับ BAN, BAN, PICK, PICK, DECIDER · 60 วินาที)
 // - ตัดสินว่าใช้ได้หรือไม่ด้วย parseVetoFormat + validateConfig ของ lib/veto/engine.ts เท่านั้น (ไม่มีกติกาซ้ำ)
-// - map_pool ยังไม่บังคับ (ยังไม่มีรายชื่อแมพตั้งต้นใน repo): null / ไม่ส่งมา = ยังไม่ตั้ง ไม่ถูกปฏิเสธ · ถ้าส่งมาเป็นอาร์เรย์ ต้องผ่าน validateConfig เต็ม
+// - map_pool: ทางที่ส่ง requireMapPool: true (สร้างรอบแข่ง · PATCH ที่ส่ง map_pool มา) ต้องมีรายชื่อแมพ → ไม่ส่ง / null = MAP_POOL_REQUIRED
+//   ทางอื่น (PATCH ที่ไม่ได้ส่ง map_pool) null = ยังไม่ตั้ง ไม่ถูกปฏิเสธ · ถ้าส่งมาเป็นอาร์เรย์ ต้องผ่าน validateConfig เต็ม
 // ทดสอบด้วย: npx tsx --test tests/stage-veto-config.test.ts
 import type { Json } from '@/types/database.types';
 import { DEFAULT_SEQUENCE, DEFAULT_TIME_LIMIT_SECONDS, parseVetoFormat, validateConfig } from '@/lib/veto/engine';
 
 export const INVALID_VETO_CONFIG = 'INVALID_VETO_CONFIG';
+export const MAP_POOL_REQUIRED = 'MAP_POOL_REQUIRED';
 
 // ค่าเริ่มต้นของ veto_format ที่บันทึกลง Stage (ย้ายมาจาก app/api/v1/tournaments/[id]/stages/route.ts — ห้ามเปลี่ยนลำดับขั้น)
 export function defaultVetoFormat(): { sequence: string[]; team_a_first: boolean; time_limit_seconds: number } {
@@ -16,10 +18,15 @@ export function defaultVetoFormat(): { sequence: string[]; team_a_first: boolean
 
 export type StageVetoResult =
   | { ok: true; veto_format: Json; map_pool: string[] | null }
-  | { ok: false; code: typeof INVALID_VETO_CONFIG; message: string; problems: string[] };
+  | { ok: false; code: typeof INVALID_VETO_CONFIG | typeof MAP_POOL_REQUIRED; message: string; problems: string[] };
 
 function fail(problems: string[]): StageVetoResult {
   return { ok: false, code: INVALID_VETO_CONFIG, message: `ตั้งค่า Veto ของรอบแข่งไม่ถูกต้อง: ${problems.join('; ')}`, problems };
+}
+
+function mapPoolRequired(): StageVetoResult {
+  const problem = 'ต้องระบุรายชื่อแมพ (map_pool) ของรอบแข่ง';
+  return { ok: false, code: MAP_POOL_REQUIRED, message: `ต้องระบุรายชื่อแมพของรอบแข่งก่อนบันทึก: ${problem}`, problems: [problem] };
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -27,9 +34,14 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 // รับค่าที่จะบันทึก (หรือค่ารวมหลังแก้) → คืนค่าที่พร้อมบันทึก หรือ error ที่บอกว่าผิดตรงไหน
-export function resolveStageVetoConfig(input: { veto_format?: unknown; map_pool?: unknown }): StageVetoResult {
+export function resolveStageVetoConfig(
+  input: { veto_format?: unknown; map_pool?: unknown },
+  options: { requireMapPool?: boolean } = {}
+): StageVetoResult {
   const rawFormat = input.veto_format;
   const rawPool = input.map_pool;
+
+  if (options.requireMapPool && (rawPool === undefined || rawPool === null)) return mapPoolRequired();
 
   if (rawFormat !== undefined && rawFormat !== null && !isPlainObject(rawFormat)) {
     return fail(['veto_format ต้องเป็น object (เช่น { "sequence": [...] })']);
