@@ -4,21 +4,20 @@ import React from 'react';
 import { usePathname } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
 import ZodiacOracle from '@/components/ZodiacOracle';
+import { chromeVisibility } from '@/lib/layout/chromeVisibility';
 
-// เส้นทางที่ต้องเป็น Clean View ล้วน ๆ (เช่น OBS Browser Source overlay, Stream Hub)
-// ห้ามมี Navbar / floating widget ใด ๆ ปนมาบนภาพสตรีมเด็ดขาด
-const CHROME_FREE_PREFIXES = ['/overlay', '/stream-hub'];
-
+// กฎว่าหน้าไหนแสดง Navbar / ปุ่มลอยแชทบอท อยู่ที่ lib/layout/chromeVisibility.ts ที่เดียว
+// (Clean View ของ /overlay และ /stream-hub ห้ามมี Navbar / floating widget ใด ๆ ปนบนภาพสตรีม)
 export default function ChromeGate() {
   const pathname = usePathname();
-  const isChromeFree = CHROME_FREE_PREFIXES.some((prefix) => pathname?.startsWith(prefix));
+  const { navbar, oracle } = chromeVisibility(pathname);
 
-  if (isChromeFree) return null;
+  if (!navbar && !oracle) return null;
 
   return (
     <>
-      <Navbar />
-      <ZodiacOracle />
+      {navbar && <Navbar />}
+      {oracle && <ZodiacOracle />}
     </>
   );
 }
