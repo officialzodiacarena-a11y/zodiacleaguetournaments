@@ -52,3 +52,15 @@ test('เวลานับถอยหลัง: นับต่อจากค
   assert.equal(secondsRemaining(60, 1_000_000, 900_000), 60); // นาฬิกาย้อน ไม่เกินค่าเดิม
   assert.equal(secondsRemaining(null, 1_000_000, 1_005_000), null);
 });
+
+test('ทีมมีโค้ช: ถึงตาทีมตัวเองแต่กดไม่ได้ = COACH_ONLY · ตาอีกทีมยังเป็น OPPONENT_TURN', () => {
+  const base = { matchStatus: 'VETO', complete: false, currentAction: 'BAN' as const };
+  assert.equal(vetoViewerState({ ...base, currentTeam: 'A', viewerSide: 'A', viewerCanAct: false }), 'COACH_ONLY');
+  assert.equal(vetoViewerState({ ...base, currentTeam: 'B', viewerSide: 'A', viewerCanAct: false }), 'OPPONENT_TURN');
+});
+
+test('viewerCanAct = true หรือไม่ส่งค่า = MY_TURN เหมือนเดิม', () => {
+  const base = { matchStatus: 'VETO', complete: false, currentAction: 'PICK' as const, currentTeam: 'A' as const, viewerSide: 'A' as const };
+  assert.equal(vetoViewerState({ ...base, viewerCanAct: true }), 'MY_TURN');
+  assert.equal(vetoViewerState(base), 'MY_TURN');
+});

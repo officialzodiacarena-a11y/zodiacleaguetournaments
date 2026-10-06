@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { cleanIds, asInsert } from '@/types/supabase-helpers';
-import { teamIdForSide, validateAction, vetoSideForMemberships } from '@/lib/veto/engine';
+import { canActInVeto, teamIdForSide, validateAction, vetoSideForMemberships } from '@/lib/veto/engine';
 import { loadVetoContext, resolveVetoProgress } from '@/lib/veto/service';
 
 // Ban / Pick แมพ โดยกัปตัน / ผู้จัดการ / โค้ชของทีมที่ถึงตา
@@ -83,7 +83,7 @@ export async function POST(
     .maybeSingle();
   const teamHasCoach = Boolean(coachRow);
   const actingRole = memberships.find((m) => m.team_id === actingTeamId)?.role;
-  if (teamHasCoach && actingRole !== 'COACH') {
+  if (!canActInVeto({ role: actingRole, teamHasCoach })) {
     return NextResponse.json(
       { error: 'FORBIDDEN: ทีมนี้มีโค้ชแล้ว ต้องให้โค้ชเป็นคน Ban/Pick แมพแทนทีม' },
       { status: 403 }

@@ -8,6 +8,7 @@ export type VetoViewerState =
   | 'COMPLETE' // ครบทุกสเต็ปแล้ว
   | 'AUTOMATIC' // สเต็ปปัจจุบันเป็น DECIDER ระบบเลือกเอง
   | 'MY_TURN' // ตาของทีมผู้ดู กด Ban / Pick ได้
+  | 'COACH_ONLY' // ถึงตาทีมของผู้ดู แต่ทีมมีโค้ช เฉพาะโค้ชกดได้ ผู้ดูเห็นอย่างเดียว
   | 'OPPONENT_TURN' // ตาของอีกทีม
   | 'VIEW_ONLY'; // ไม่ล็อกอิน หรือไม่ใช่ผู้นำทีมในแมตช์นี้
 
@@ -17,6 +18,7 @@ export interface VetoViewerInput {
   currentAction: VetoActionKind | null;
   currentTeam: TeamSide | null;
   viewerSide: TeamSide | null;
+  viewerCanAct?: boolean; // ไม่ส่ง = ถือว่ากดได้
 }
 
 export function vetoViewerState(input: VetoViewerInput): VetoViewerState {
@@ -24,7 +26,8 @@ export function vetoViewerState(input: VetoViewerInput): VetoViewerState {
   if (input.complete) return 'COMPLETE';
   if (input.currentAction === 'DECIDER') return 'AUTOMATIC';
   if (!input.viewerSide) return 'VIEW_ONLY';
-  return input.currentTeam === input.viewerSide ? 'MY_TURN' : 'OPPONENT_TURN';
+  if (input.currentTeam !== input.viewerSide) return 'OPPONENT_TURN';
+  return input.viewerCanAct === false ? 'COACH_ONLY' : 'MY_TURN';
 }
 
 export type MapTileState =
