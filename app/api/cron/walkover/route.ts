@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { advancePendingWalkovers } from '@/lib/bracket/walkoverAdvance';
 
 interface ResolvedWalkoverRow {
   resolved_match_id: string;
@@ -39,9 +40,14 @@ export async function GET(request: Request) {
     });
   }
 
+  // เลื่อนสายให้ทีมที่ชนะบาย — ทำทุกรอบแม้ RPC ไม่คืนแถวใหม่ เพื่อเก็บตกแมตช์ที่เลื่อนสายพลาดรอบก่อน
+  const bracketAdvanced = await advancePendingWalkovers(adminSupabase, new Date().toISOString());
+
   return NextResponse.json({
     success: true,
     processed_count: matchesList.length,
     details: matchesList,
+    bracket_advanced: bracketAdvanced,
+    bracket_advance_failed_count: bracketAdvanced.filter((r) => r.error !== null).length,
   });
 }
