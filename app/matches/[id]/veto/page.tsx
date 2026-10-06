@@ -16,7 +16,7 @@ interface VetoState {
   status: string;
   team_a_id: string | null;
   team_b_id: string | null;
-  viewer: { authenticated: boolean; side: TeamSide | null };
+  viewer: { authenticated: boolean; side: TeamSide | null; can_act?: boolean; blocked_reason?: 'TEAM_HAS_COACH' | null };
   map_pool: string[];
   veto_sequence: { step: number; action: VetoActionKind; team: TeamSide | null }[];
   completed_steps: VetoRowView[];
@@ -120,6 +120,7 @@ export default function VetoRoomPage() {
         currentAction: veto.current_action,
         currentTeam: currentStepInfo?.team ?? null,
         viewerSide: veto.viewer.side,
+        viewerCanAct: veto.viewer.can_act,
       })
     : null;
   const myTurn = viewerState === 'MY_TURN';
@@ -206,6 +207,12 @@ export default function VetoRoomPage() {
             <>
               <p className="text-lg font-black uppercase tracking-wider" style={{ color: teamHex(veto.viewer.side) }}>ตาของคุณ: {actionVerb} 1 แมพ</p>
               <p className="text-[11px] text-zinc-400 mt-1">เลือกแมพจากรายการด้านล่าง แล้วกดยืนยัน (ยกเลิกไม่ได้หลังยืนยัน)</p>
+            </>
+          )}
+          {viewerState === 'COACH_ONLY' && (
+            <>
+              <p className="text-lg font-black uppercase tracking-wider" style={{ color: teamHex(veto.viewer.side) }}>ตาทีมคุณ: {actionVerb} — รอโค้ช</p>
+              <p className="text-[11px] text-zinc-400 mt-1">ทีมนี้มีโค้ช โค้ชเท่านั้นที่ Ban/Pick แมพแทนทีมได้ คุณดูได้อย่างเดียว</p>
             </>
           )}
           {viewerState === 'OPPONENT_TURN' && (

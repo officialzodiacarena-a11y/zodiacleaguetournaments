@@ -179,6 +179,14 @@ export function vetoSideForMemberships(
   return null;
 }
 
+// กฎ A5: ทีมที่มีโค้ช (ACTIVE) ให้เฉพาะโค้ช Ban/Pick แทนทีม · ทีมไม่มีโค้ช กัปตัน/ผู้จัดการทำได้ตามปกติ
+// ใช้ร่วมกันทั้ง POST /veto/action (บังคับสิทธิ์) และ GET /veto (บอกหน้าจอว่ากดได้ไหม) — กฎนี้อยู่ที่นี่ที่เดียว
+export function canActInVeto(input: { role: string | null | undefined; teamHasCoach: boolean }): boolean {
+  if (!input.role || !VETO_TEAM_ROLES.includes(input.role)) return false;
+  if (input.teamHasCoach) return input.role === 'COACH';
+  return true;
+}
+
 // เวลาเริ่มของสเต็ปปัจจุบัน = เวลาที่แถวล่าสุดถูกบันทึก (Auto-pick ใช้เวลาหมดเวลาของสเต็ปนั้น) ไม่มีแถวเลย = เวลาที่เริ่ม Veto
 export function currentStepStartMs(rows: VetoRowLike[], vetoStartMs: number): number {
   if (rows.length === 0) return vetoStartMs;

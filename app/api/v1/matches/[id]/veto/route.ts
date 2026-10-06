@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { cleanIds } from '@/types/supabase-helpers';
-import { currentStep, isVetoComplete, teamIdForSide, vetoSideForMemberships, type TeamSide } from '@/lib/veto/engine';
+import { canActInVeto, currentStep, isVetoComplete, teamIdForSide, vetoSideForMemberships, VETO_TEAM_ROLES, type TeamSide } from '@/lib/veto/engine';
 import { loadVetoContext, summarizeVeto } from '@/lib/veto/service';
 
 // สถานะ Veto ของแมตช์ (อ่านอย่างเดียว): ลำดับสเต็ปจาก tournament_stages.veto_format, สเต็ปปัจจุบัน + ทีมที่ต้องทำ + เวลาที่เหลือ
@@ -21,6 +21,8 @@ export async function GET(
 
   // ฝั่งของผู้เรียก (ใช้ user client เหมือน POST /veto/action)
   let viewerSide: TeamSide | null = null;
+  let viewerCanAct = false;
+  let viewerBlockedReason: 'TEAM_HAS_COACH' | null = null;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (user) {
@@ -33,6 +35,21 @@ export async function GET(
         .eq('status', 'ACTIVE')
         .in('team_id', cleanIds(match.team_a_id, match.team_b_id));
       viewerSide = vetoSideForMemberships(memberships ?? [], match.team_a_id, match.team_b_id);
+      if (viewerSide) {
+        // กฎ A5 เดียวกับ POST /veto/action: ทีมที่มีโค้ช ACTIVE ให้เฉพาะโค้ชกดได้ (หน้าจอจะได้ไม่ขึ้น "ตาของคุณ" ให้คนที่กดไม่ได้)
+        const viewerTeamId = teamIdForSide(viewerSide, match.team_a_id, match.team_b_id);
+        const { data: coachRow } = await createAdminClient()
+          .from('team_members')
+          .select('id')
+          .eq('team_id', viewerTeamId as string)
+          .eq('status', 'ACTIVE')
+          .eq('role', 'COACH')
+          .maybeSingle();
+        const teamHasCoach = Boolean(coachRow);
+        const viewerRole = (memberships ?? []).find((m) => m.team_id === viewerTeamId && VETO_TEAM_ROLES.includes(m.role))?.role;
+        viewerCanAct = canActInVeto({ role: viewerRole, teamHasCoach });
+        viewerBlockedReason = !viewerCanAct && teamHasCoach ? 'TEAM_HAS_COACH' : null;
+      }
     }
   }
 
@@ -45,7 +62,7 @@ export async function GET(
     status: match.status,
     team_a_id: match.team_a_id,
     team_b_id: match.team_b_id,
-    viewer: { authenticated: Boolean(user), side: viewerSide },
+    viewer: { authenticated: Boolean(user), side: viewerSide, can_act: viewerCanAct, blocked_reason: viewerBlockedReason },
     map_pool: pool,
     veto_sequence: config.steps.map((s) => ({ step: s.step, action: s.action, team: s.team })),
     completed_steps: rows,

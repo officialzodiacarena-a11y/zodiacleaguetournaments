@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  canActInVeto,
   currentDeadlineMs,
   currentStep,
   isVetoComplete,
@@ -270,4 +271,15 @@ test('ฝั่งของผู้ใช้: ต้องเป็น CAPTAIN 
   );
   // ทีมที่ยังไม่ถูกจับสาย (null) ไม่ทำให้ null === null จับคู่ผิด
   assert.equal(vetoSideForMemberships([{ team_id: 'ta', role: 'CAPTAIN' }], 'ta', null), 'A');
+});
+
+test('canActInVeto: กฎ A5 (ทีมมีโค้ช โค้ชเท่านั้น)', () => {
+  assert.equal(canActInVeto({ role: 'COACH', teamHasCoach: true }), true);
+  assert.equal(canActInVeto({ role: 'CAPTAIN', teamHasCoach: true }), false);
+  assert.equal(canActInVeto({ role: 'MANAGER', teamHasCoach: true }), false);
+  assert.equal(canActInVeto({ role: 'CAPTAIN', teamHasCoach: false }), true);
+  assert.equal(canActInVeto({ role: 'MANAGER', teamHasCoach: false }), true);
+  assert.equal(canActInVeto({ role: 'PLAYER', teamHasCoach: false }), false);
+  assert.equal(canActInVeto({ role: 'PLAYER', teamHasCoach: true }), false);
+  assert.equal(canActInVeto({ role: null, teamHasCoach: false }), false);
 });
