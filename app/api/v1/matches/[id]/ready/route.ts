@@ -3,7 +3,13 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asUpdate, cleanIds } from '@/types/supabase-helpers';
 import type { Database } from '@/types/database.types';
-import { decideReadyAccess, isReadyDeadlinePassed, isStaffRole } from '@/lib/match/ready-access';
+import {
+  decideReadyAccess,
+  effectiveReadyDeadline,
+  firstPressDeadlineMs,
+  isReadyDeadlinePassed,
+  isStaffRole,
+} from '@/lib/match/ready-access';
 
 interface MatchReadyUpdatePayload {
   updated_at: string;
@@ -98,7 +104,14 @@ export async function POST(
   }
 
   // กติกา A7: เลยเส้นตาย 15 นาทีแล้วกดพร้อมไม่ได้ (ทุกบัญชีรวมสตาฟ) — การปรับแพ้ทำโดยฟังก์ชันฐานข้อมูลทางเดียว
-  if (isReadyDeadlinePassed(match.forfeit_deadline_at, Date.now())) {
+  const readyDeadline = effectiveReadyDeadline({
+    forfeitDeadlineAt: match.forfeit_deadline_at,
+    scheduledAt: match.scheduled_at,
+    createdAt: match.created_at,
+    teamAReadyAt: match.team_a_ready_at,
+    teamBReadyAt: match.team_b_ready_at,
+  });
+  if (isReadyDeadlinePassed(readyDeadline, Date.now())) {
     return NextResponse.json(
       { error: 'READY_DEADLINE_PASSED: หมดเวลายืนยันความพร้อมแล้ว (15 นาที) ระบบจะปรับแพ้ตามกติกา' },
       { status: 422 }
@@ -134,7 +147,9 @@ export async function POST(
       nextStatus = 'READY_CHECK';
       updatePayload.status = nextStatus;
       if (!match.forfeit_deadline_at) {
-        updatePayload.forfeit_deadline_at = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        updatePayload.forfeit_deadline_at = new Date(
+          firstPressDeadlineMs(Date.now(), match.scheduled_at, match.created_at)
+        ).toISOString();
       }
     }
   }

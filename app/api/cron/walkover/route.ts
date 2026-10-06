@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { advancePendingWalkovers } from '@/lib/bracket/walkoverAdvance';
+import { stampNoShowDeadlines } from '@/lib/match/noShowStamp';
 
 interface ResolvedWalkoverRow {
   resolved_match_id: string;
@@ -18,7 +19,15 @@ export async function GET(request: Request) {
 
   const adminSupabase = createAdminClient();
 
-  const { data: resolvedMatches, error } = await adminSupabase.rpc('resolve_expired_ready_checks');
+  // ตั้งเส้นตายจากเวลานัดให้แมตช์ที่ไม่มีทีมกดพร้อมเลย — ต้องทำก่อน RPC เพื่อให้รอบเดียวกันปรับแพ้ให้เลย
+  let noShowStamped: string[] = [];
+  try {
+    noShowStamped = await stampNoShowDeadlines(adminSupabase, Date.now());
+  } catch (stampErr) {
+    console.error('[cron/walkover] stampNoShowDeadlines threw', stampErr);
+  }
+
+  const { data: resolvedMatches, error } =await adminSupabase.rpc('resolve_expired_ready_checks');
 
   if (error) {
     return NextResponse.json({ error: `Walkover Resolve Engine Failed: ${error.message}` }, { status: 500 });
@@ -47,6 +56,7 @@ export async function GET(request: Request) {
     success: true,
     processed_count: matchesList.length,
     details: matchesList,
+    no_show_stamped: noShowStamped,
     bracket_advanced: bracketAdvanced,
     bracket_advance_failed_count: bracketAdvanced.filter((r) => r.error !== null).length,
   });

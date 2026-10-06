@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { effectiveReadyDeadline } from '@/lib/match/ready-access';
 
 interface PageProps {
   params: Promise<{ id: string }> | { id: string };
@@ -27,6 +28,7 @@ export async function GET(req: Request, { params }: PageProps) {
         id,
         status,
         scheduled_at,
+        created_at,
         forfeit_deadline_at,
         format_config,
         team_a_ready_at,
@@ -113,6 +115,13 @@ export async function GET(req: Request, { params }: PageProps) {
       status: match.status,
       scheduled_at: match.scheduled_at,
       forfeit_deadline_at: match.forfeit_deadline_at,
+      ready_deadline_at: effectiveReadyDeadline({
+        forfeitDeadlineAt: match.forfeit_deadline_at,
+        scheduledAt: match.scheduled_at,
+        createdAt: match.created_at,
+        teamAReadyAt: match.team_a_ready_at,
+        teamBReadyAt: match.team_b_ready_at,
+      }),
       lobby_code: formatConfig?.lobby_code ?? null,
       team_a: teamAData ? {
         id: teamAData.id,

@@ -38,6 +38,7 @@ interface LobbyData {
   status: string;
   scheduled_at: string | null;
   forfeit_deadline_at: string | null;
+  ready_deadline_at?: string | null;
   lobby_code: string | null;
   team_a: LobbyTeam | null;
   team_b: LobbyTeam | null;
@@ -54,6 +55,13 @@ function formatCountdown(deadline: string | null): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function formatClock(iso: string | null | undefined): string {
+  if (!iso) return '--:--';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '--:--';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -148,7 +156,8 @@ export default function MatchLobbyPage() {
 
   // กติกา A7: เลยเส้นตายยืนยันความพร้อมแล้ว (ฟังก์ชันตัดสินอยู่ที่ lib/match/ready-access.ts ที่เดียว)
   const readyWindowOpen = lobby?.status === 'SCHEDULED' || lobby?.status === 'READY_CHECK';
-  const deadlinePassed = readyWindowOpen && isReadyDeadlinePassed(lobby?.forfeit_deadline_at, now);
+  const readyDeadlineAt = lobby?.ready_deadline_at ?? lobby?.forfeit_deadline_at ?? null;
+  const deadlinePassed = readyWindowOpen && isReadyDeadlinePassed(readyDeadlineAt, now);
 
   // หลังเลยเส้นตาย ระบบปรับแพ้ทำที่ฐานข้อมูลโดยไม่ส่งสัญญาณมาที่หน้านี้ → โหลดซ้ำเองทุก 10 วินาทีจนสถานะเปลี่ยน
   useEffect(() => {
@@ -239,8 +248,8 @@ export default function MatchLobbyPage() {
     );
   }
 
-  const countdown = formatCountdown(lobby.forfeit_deadline_at);
-  const countdownActive = lobby.forfeit_deadline_at && new Date(lobby.forfeit_deadline_at).getTime() - now > 0;
+  const countdown = formatCountdown(readyDeadlineAt);
+  const countdownActive = readyDeadlineAt && new Date(readyDeadlineAt).getTime() - now > 0;
 
   return (
     <main className="min-h-screen bg-[#0A0A0F] text-white font-mono p-4 lg:p-6 selection:bg-cyan-500 selection:text-black">
@@ -249,6 +258,12 @@ export default function MatchLobbyPage() {
         <div className="flex items-center gap-3">
           <span className="text-[11px] text-zinc-400 uppercase tracking-widest">Match ID</span>
           <span className="text-[#C9A84C] font-bold tracking-wider">{lobby.match_id.slice(0, 8).toUpperCase()}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-zinc-400 uppercase tracking-widest">Scheduled</span>
+          <span data-testid="lobby-scheduled" className="font-bold tabular-nums text-zinc-200">
+            {formatClock(lobby.scheduled_at)}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-zinc-400 uppercase tracking-widest">Countdown</span>

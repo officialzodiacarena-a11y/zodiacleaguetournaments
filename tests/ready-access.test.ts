@@ -3,7 +3,16 @@
 // รัน: npx tsx --test tests/ready-access.test.ts
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { decideReadyAccess, isReadyDeadlinePassed, isStaffRole, type ReadyAccessInput } from '@/lib/match/ready-access';
+import {
+  READY_WINDOW_MS,
+  decideReadyAccess,
+  effectiveReadyDeadline,
+  firstPressDeadlineMs,
+  isReadyDeadlinePassed,
+  isStaffRole,
+  scheduleBaseMs,
+  type ReadyAccessInput,
+} from '@/lib/match/ready-access';
 
 const TEAM_A = 'team-a';
 const TEAM_B = 'team-b';
@@ -126,4 +135,60 @@ test('isReadyDeadlinePassed: เท่ากับเวลาปัจจุบ
 test('isReadyDeadlinePassed: เลยเส้นตายมาแล้ว 1 วินาที → true', () => {
   const now = Date.parse('2026-10-06T12:00:00.000Z');
   assert.equal(isReadyDeadlinePassed(new Date(now - 1000).toISOString(), now), true);
+});
+// ===== ส่วน A: เส้นตายกดพร้อมนับจากเวลานัด =====
+const T0 = Date.parse('2026-10-06T10:00:00.000Z');
+const iso = (ms: number) => new Date(ms).toISOString();
+
+function deadlineInput(o: Partial<Parameters<typeof effectiveReadyDeadline>[0]> = {}) {
+  return {
+    forfeitDeadlineAt: null,
+    scheduledAt: null,
+    createdAt: null,
+    teamAReadyAt: null,
+    teamBReadyAt: null,
+    ...o,
+  };
+}
+
+test('เวลานัดอนาคต: เส้นตาย = เวลานัด + 15 นาที', () => {
+  const result = effectiveReadyDeadline(deadlineInput({ scheduledAt: iso(T0 + 3600_000), createdAt: iso(T0) }));
+  assert.equal(result, iso(T0 + 3600_000 + READY_WINDOW_MS));
+});
+
+test('เวลานัดผ่านแล้วแต่แมตช์เพิ่งสร้าง: นับจากเวลาสร้าง', () => {
+  const result = effectiveReadyDeadline(deadlineInput({ scheduledAt: iso(T0 - 3600_000), createdAt: iso(T0) }));
+  assert.equal(result, iso(T0 + READY_WINDOW_MS));
+  assert.equal(scheduleBaseMs(iso(T0 - 3600_000), iso(T0)), T0);
+});
+
+test('ไม่มีเวลานัด (ว่างหรืออ่านไม่ออก): ไม่มีเส้นตาย', () => {
+  assert.equal(effectiveReadyDeadline(deadlineInput({ createdAt: iso(T0) })), null);
+  assert.equal(effectiveReadyDeadline(deadlineInput({ scheduledAt: 'not-a-date', createdAt: iso(T0) })), null);
+  assert.equal(scheduleBaseMs(null, iso(T0)), null);
+});
+
+test('มีทีมกดพร้อมแล้วแต่ forfeit_deadline_at ว่าง: ไม่มีเส้นตายจากเวลานัด', () => {
+  const result = effectiveReadyDeadline(
+    deadlineInput({ scheduledAt: iso(T0), createdAt: iso(T0 - 1000), teamAReadyAt: iso(T0 + 1000) }),
+  );
+  assert.equal(result, null);
+});
+
+test('forfeit_deadline_at มีค่า: ใช้ค่านั้น', () => {
+  const result = effectiveReadyDeadline(
+    deadlineInput({ forfeitDeadlineAt: iso(T0 + 5000), scheduledAt: iso(T0 + 3600_000), createdAt: iso(T0) }),
+  );
+  assert.equal(result, iso(T0 + 5000));
+});
+
+test('ทีมแรกกดก่อนเวลานัด: เส้นตาย = เวลานัด + 15 นาที', () => {
+  const ms = firstPressDeadlineMs(T0, iso(T0 + 3600_000), iso(T0 - 1000));
+  assert.equal(ms, T0 + 3600_000 + READY_WINDOW_MS);
+});
+
+test('ทีมแรกกดหลังเวลานัด: เส้นตาย = เวลากด + 15 นาที', () => {
+  const ms = firstPressDeadlineMs(T0 + 600_000, iso(T0), iso(T0 - 1000));
+  assert.equal(ms, T0 + 600_000 + READY_WINDOW_MS);
+  assert.equal(firstPressDeadlineMs(T0, null, null), T0 + READY_WINDOW_MS);
 });
