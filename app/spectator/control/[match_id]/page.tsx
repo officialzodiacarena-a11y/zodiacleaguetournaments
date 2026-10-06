@@ -1358,7 +1358,7 @@ export default function SpectatorHUDControlPanel({
                     MAP {seriesState.current_game_number ?? "-"}
                     {seriesState.current_map_name ? ` • ${seriesState.current_map_name}` : ""}
                   </span>
-                  <span>
+                  <span data-testid="sc-maps">
                     BO{seriesState.best_of} • MAPS{" "}
                     <span style={{ color: TEAM_A_HEX }}>{seriesState.maps_won_a}</span> –{" "}
                     <span style={{ color: TEAM_B_HEX }}>{seriesState.maps_won_b}</span>
@@ -1379,9 +1379,10 @@ export default function SpectatorHUDControlPanel({
                         <div className="font-mono text-[10px] font-black tracking-widest" style={{ color: hex }}>
                           {tag || `TEAM ${side}`}
                         </div>
-                        <div className="font-mono text-4xl font-black text-white my-2 tabular-nums">{value}</div>
+                        <div data-testid={`sc-rounds-${side.toLowerCase()}`} className="font-mono text-4xl font-black text-white my-2 tabular-nums">{value}</div>
                         <div className="flex gap-2 justify-center">
                           <button
+                            data-testid={`sc-round-minus-${side.toLowerCase()}`}
                             onClick={() => change(-1)}
                             disabled={roundBusy || value <= 0}
                             className="w-12 py-1.5 rounded border border-white/10 bg-black/50 font-mono text-lg font-black text-gray-300 hover:border-white/30 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
@@ -1389,6 +1390,7 @@ export default function SpectatorHUDControlPanel({
                             −
                           </button>
                           <button
+                            data-testid={`sc-round-plus-${side.toLowerCase()}`}
                             onClick={() => change(1)}
                             disabled={roundBusy}
                             className="w-12 py-1.5 rounded border font-mono text-lg font-black hover:bg-white/10 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
@@ -1404,6 +1406,7 @@ export default function SpectatorHUDControlPanel({
 
                 <div className="grid grid-cols-3 gap-2">
                   <button
+                    data-testid="sc-rounds-reset"
                     onClick={() => setRounds(0, 0)}
                     disabled={roundBusy || (seriesState.rounds_won_a === 0 && seriesState.rounds_won_b === 0)}
                     className="py-2 rounded border border-white/10 bg-black/40 font-mono text-[10px] font-bold text-gray-300 hover:text-white disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
@@ -1411,6 +1414,7 @@ export default function SpectatorHUDControlPanel({
                     RESET 0–0
                   </button>
                   <button
+                    data-testid="sc-end-map"
                     onClick={finishCurrentMap}
                     disabled={roundBusy || seriesState.series_over}
                     className="py-2 rounded border border-emerald-500/50 bg-emerald-500/10 font-mono text-[10px] font-black text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
@@ -1418,6 +1422,7 @@ export default function SpectatorHUDControlPanel({
                     END MAP
                   </button>
                   <button
+                    data-testid="sc-next-map"
                     onClick={startNextMap}
                     disabled={seriesState.series_over}
                     className="py-2 rounded border border-[#C9A84C]/50 bg-[#C9A84C]/10 font-mono text-[10px] font-black text-[#C9A84C] hover:bg-[#C9A84C]/20 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
