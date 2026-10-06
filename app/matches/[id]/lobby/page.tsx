@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { AthleteQuickPopover } from '@/components/profile/AthleteQuickPopover';
+import { isReadyDeadlinePassed } from '@/lib/match/ready-access';
 
 interface LobbyMember {
   id: string | null;
@@ -145,6 +146,17 @@ export default function MatchLobbyPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [lobby?.messages.length]);
 
+  // กติกา A7: เลยเส้นตายยืนยันความพร้อมแล้ว (ฟังก์ชันตัดสินอยู่ที่ lib/match/ready-access.ts ที่เดียว)
+  const readyWindowOpen = lobby?.status === 'SCHEDULED' || lobby?.status === 'READY_CHECK';
+  const deadlinePassed = readyWindowOpen && isReadyDeadlinePassed(lobby?.forfeit_deadline_at, now);
+
+  // หลังเลยเส้นตาย ระบบปรับแพ้ทำที่ฐานข้อมูลโดยไม่ส่งสัญญาณมาที่หน้านี้ → โหลดซ้ำเองทุก 10 วินาทีจนสถานะเปลี่ยน
+  useEffect(() => {
+    if (!deadlinePassed) return;
+    const t = setInterval(() => fetchLobby(), 10_000);
+    return () => clearInterval(t);
+  }, [deadlinePassed, fetchLobby]);
+
   async function handleReady(side?: 'team_a' | 'team_b') {
     setReadySubmitting(true);
     try {
@@ -259,6 +271,12 @@ export default function MatchLobbyPage() {
         </Link>
       )}
 
+      {deadlinePassed && (
+        <div className="mb-4 rounded-xl border border-rose-500/50 bg-rose-500/10 px-4 py-3 text-sm font-black uppercase tracking-wider text-rose-300">
+          หมดเวลายืนยันความพร้อมแล้ว — รอระบบตัดสินปรับแพ้
+        </div>
+      )}
+
       {error && (
         <div className="mb-4 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
           {error}
@@ -267,8 +285,8 @@ export default function MatchLobbyPage() {
 
       {/* PANEL A/B: TEAM ROSTERS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <TeamPanel team={lobby.team_a} accent="rose" onReady={() => handleReady('team_a')} readySubmitting={readySubmitting} matchId={matchId} />
-        <TeamPanel team={lobby.team_b} accent="emerald" onReady={() => handleReady('team_b')} readySubmitting={readySubmitting} matchId={matchId} />
+        <TeamPanel team={lobby.team_a} accent="rose" onReady={() => handleReady('team_a')} readySubmitting={readySubmitting} readyClosed={deadlinePassed || !readyWindowOpen} matchId={matchId} />
+        <TeamPanel team={lobby.team_b} accent="emerald" onReady={() => handleReady('team_b')} readySubmitting={readySubmitting} readyClosed={deadlinePassed || !readyWindowOpen} matchId={matchId} />
       </div>
 
       {/* PANEL C/D: CREDENTIALS + CHAT */}
@@ -332,12 +350,14 @@ function TeamPanel({
   accent,
   onReady,
   readySubmitting,
+  readyClosed,
   matchId,
 }: {
   team: LobbyTeam | null;
   accent: 'emerald' | 'rose';
   onReady: () => void;
   readySubmitting: boolean;
+  readyClosed: boolean;
   matchId: string;
 }) {
   const accentClasses = accent === 'emerald'
@@ -386,10 +406,10 @@ function TeamPanel({
       </ul>
       <button
         onClick={onReady}
-        disabled={team.ready || readySubmitting}
+        disabled={team.ready || readySubmitting || readyClosed}
         className={`w-full rounded-lg py-2 text-xs font-black uppercase tracking-widest border transition-colors disabled:opacity-40 ${accentClasses.btn}`}
       >
-        {team.ready ? 'Confirmed' : readySubmitting ? 'Confirming...' : 'Confirm Team Ready'}
+        {team.ready ? 'Confirmed' : readyClosed ? 'Ready Closed' : readySubmitting ? 'Confirming...' : 'Confirm Team Ready'}
       </button>
 
       <div className="mt-4 pt-4 border-t border-white/10">
