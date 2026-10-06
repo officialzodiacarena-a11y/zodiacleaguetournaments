@@ -11,6 +11,7 @@ import { LiveRosterSidebar } from "@/components/overlay/LiveRosterSidebar";
 import { LiveScoreboard } from "@/components/overlay/LiveScoreboard";
 import { LastManStandingScene } from "@/components/overlay/LastManStandingScene";
 import { resolveDisplayScene } from "@/lib/overlay/series-flow";
+import { resolvePauseBadge, type OverlayTimeout } from "@/lib/overlay/pause-badge";
 import { currentDeadlineMs, parseVetoFormat, vetoStartMsFromMatch, type VetoConfig } from "@/lib/veto/engine";
 import { SponsorBadge } from "@/components/overlay/SponsorBadge";
 import { buildSeriesGames, countSeriesWins, isGameDone, type OverlayGameStats, type OverlayParticipantStat } from "@/components/overlay/series";
@@ -106,29 +107,6 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholde
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 
-interface OverlayTimeout {
-  type: "TACTICAL" | "TECHNICAL";
-  team: "A" | "B" | null;
-  reason: string | null;
-  started_at: string;
-  ends_at: string | null;
-}
-
-function resolvePauseBadge(
-  info: OverlayTimeout | null,
-  nowMs: number,
-  teamAName: string | undefined,
-  teamBName: string | undefined,
-): string | null {
-  if (info?.type === "TACTICAL" && info.ends_at) {
-    const left = Math.ceil((new Date(info.ends_at).getTime() - nowMs) / 1000);
-    if (left <= 0) return null;
-    const name = (info.team === "B" ? teamBName : teamAName) ?? (info.team === "B" ? "B" : "A");
-    return `TACTICAL TIMEOUT · ${name} · ${String(left).padStart(2, "0")}`;
-  }
-  return "TECHNICAL PAUSE";
-}
-
 export default function MatchBroadcastOverlay({
   params,
 }: {
@@ -161,6 +139,8 @@ export default function MatchBroadcastOverlay({
   // Time out ที่กำลังหยุดอยู่ (จาก GET /api/v1/matches/[id]/timeout และสัญญาณ match_status_changed)
   const [timeoutInfo, setTimeoutInfo] = useState<OverlayTimeout | null>(null);
   const [timeoutNowMs, setTimeoutNowMs] = useState<number>(() => Date.now());
+  // true เมื่อได้คำตอบข้อมูล Time out ของการหยุดครั้งนี้แล้ว (GET ตอบ หรือได้ timeout จากสัญญาณ) · ออกจาก PAUSED = กลับเป็น false
+  const [timeoutLoaded, setTimeoutLoaded] = useState<boolean>(false);
   const statusRef = useRef<MatchStatus | null>(null);
   const matchRef = useRef<MatchData | null>(null);
   useEffect(() => {
@@ -171,18 +151,24 @@ export default function MatchBroadcastOverlay({
   const currentStatus = match?.status ?? null;
   useEffect(() => {
     if (currentStatus !== "PAUSED") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear timeout badge when match leaves PAUSED
+      /* eslint-disable react-hooks/set-state-in-effect -- clear timeout badge when match leaves PAUSED */
       setTimeoutInfo(null);
+      setTimeoutLoaded(false);
+      /* eslint-enable react-hooks/set-state-in-effect */
       return;
     }
     let cancelled = false;
     fetch(`/api/v1/matches/${matchId}/timeout`, { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((body: { active?: OverlayTimeout | null } | null) => {
-        if (!cancelled) setTimeoutInfo(body?.active ?? null);
+        if (cancelled) return;
+        setTimeoutInfo(body?.active ?? null);
+        setTimeoutLoaded(true);
       })
       .catch(() => {
-        if (!cancelled) setTimeoutInfo(null);
+        if (cancelled) return;
+        setTimeoutInfo(null);
+        setTimeoutLoaded(true);
       });
     return () => {
       cancelled = true;
@@ -440,7 +426,29 @@ export default function MatchBroadcastOverlay({
       }
     };
 
+    // สถานะแมตช์เปลี่ยนจริง (จาก postgres_changes · สัญญาณ match_status_changed · ตรวจเองทุก 5 วินาที): ทางเข้าเดียวกันทั้งสามทาง
+    const applyStatusChange = (next: MatchStatus) => {
+      if (!isMounted || next === statusRef.current) return;
+      statusRef.current = next;
+      setMatch((prev) => (prev ? { ...prev, status: next } : prev));
+      setBroadcastScene(null);
+      fetchInitialData();
+    };
+
     fetchInitialData();
+
+    // ตรวจสถานะเอง (กันสัญญาณหลุด): อ่านเฉพาะคอลัมน์ status ขณะ LIVE / PAUSED · อ่านพลาด = ข้ามรอบเงียบ ๆ
+    const statusPoll = setInterval(async () => {
+      const current = statusRef.current;
+      if (current !== "LIVE" && current !== "PAUSED") return;
+      try {
+        const { data, error } = await supabase.from("matches").select("status").eq("id", matchId).maybeSingle();
+        if (error || !data?.status) return;
+        applyStatusChange(data.status as MatchStatus);
+      } catch {
+        // ข้ามรอบนี้
+      }
+    }, 5000);
 
     const matchChannel = supabase
       .channel(`match-realtime-${matchId}`)
@@ -468,11 +476,7 @@ export default function MatchBroadcastOverlay({
 
           setMatch((prev) => (prev ? { ...prev, ...updatedMatch } : updatedMatch));
           // สกอร์รอบ/ผู้ชนะเปลี่ยน (สถานะเดิม): อัปเดตทันทีจาก payload โดยไม่รีเซ็ตฉากที่แอดมินสลับไว้ และไม่ดึงข้อมูลใหม่ทั้งหมด
-          if (updatedMatch.status && updatedMatch.status !== statusRef.current) {
-            statusRef.current = updatedMatch.status;
-            setBroadcastScene(null);
-            fetchInitialData();
-          }
+          if (updatedMatch.status) applyStatusChange(updatedMatch.status);
         }
       )
       .on(
@@ -533,8 +537,11 @@ export default function MatchBroadcastOverlay({
       .on("broadcast", { event: "match_status_changed" }, (payload) => {
         const data = payload.payload as { status?: string; timeout?: OverlayTimeout | null };
         if (!isMounted) return;
-        if (data?.status === "PAUSED") setTimeoutInfo(data.timeout ?? null);
-        else if (data?.status) setTimeoutInfo(null);
+        if (data?.status) applyStatusChange(data.status as MatchStatus);
+        if (data?.status === "PAUSED") {
+          setTimeoutInfo(data.timeout ?? null);
+          if (data.timeout) setTimeoutLoaded(true);
+        } else if (data?.status) setTimeoutInfo(null);
       })
       .on("broadcast", { event: "scene_change" }, (payload) => {
         const scene = (payload.payload as { scene?: string })?.scene;
@@ -579,6 +586,7 @@ export default function MatchBroadcastOverlay({
 
     return () => {
       isMounted = false;
+      clearInterval(statusPoll);
       supabase.removeChannel(matchChannel);
     };
   }, [matchId]);
@@ -612,7 +620,14 @@ export default function MatchBroadcastOverlay({
   const displayStatus = resolveDisplayScene({ status, broadcastScene, formatConfig: match.format_config, completedGames });
   const showScoreboard = displayStatus === "LIVE" || status === "PAUSED";
   // ป้ายหยุด: Tactical ที่ยังไม่ครบเวลา = ชื่อทีม + วินาทีที่เหลือ · Tactical ครบเวลาแล้ว = ไม่ขึ้นป้าย · อื่น ๆ = TECHNICAL PAUSE เหมือนเดิม
-  const pauseBadgeText = status === "PAUSED" ? resolvePauseBadge(timeoutInfo, timeoutNowMs, team_a?.name, team_b?.name) : null;
+  const pauseBadgeText = resolvePauseBadge({
+    status,
+    loaded: timeoutLoaded,
+    info: timeoutInfo,
+    nowMs: timeoutNowMs,
+    teamAName: team_a?.name,
+    teamBName: team_b?.name,
+  });
   // แมพที่กำลังแข่ง: match_games ถูกสร้างเมื่อเกมจบเท่านั้น จึงหาจากลำดับ Veto (PICK/DECIDER) — เกมที่ LIVE ก่อน ถ้าไม่มีใช้เกมถัดไปที่ยังไม่จบ
   const { totalGames, seriesGames, nextGameNumber } = buildSeriesGames(match.best_of ?? 3, vetoes, games);
   const liveGame = seriesGames.find((g) => g.gameStatus === "LIVE") ?? seriesGames.find((g) => g.gameNumber === nextGameNumber);
@@ -665,23 +680,6 @@ export default function MatchBroadcastOverlay({
         </section>
       )}
 
-      {/* 0.5. HUD NOTIFICATION BANNER */}
-      {hudBanner && (
-        <section className="absolute top-[120px] left-1/2 -translate-x-1/2 z-[60]">
-          <div
-            className={`px-6 py-2.5 rounded-full border backdrop-blur-md shadow-lg ${
-              hudBanner.type === "PAUSE"
-                ? "bg-amber-500/15 border-amber-500/60 text-amber-300"
-                : hudBanner.type === "MATCH_POINT"
-                  ? "bg-rose-500/15 border-rose-500/60 text-rose-300"
-                  : "bg-[#00D4FF]/15 border-[#00D4FF]/60 text-[#00D4FF]"
-            }`}
-          >
-            <span className="font-mono text-xs font-black uppercase tracking-[2px]">{hudBanner.message}</span>
-          </div>
-        </section>
-      )}
-
       {/* 1. TOP COMPACT SCOREBOARD CENTER */}
       {showScoreboard && team_a && team_b && (
         <LiveScoreboard
@@ -700,22 +698,36 @@ export default function MatchBroadcastOverlay({
         />
       )}
 
-      {/* 2. DYNAMIC BROADCAST EVENT BADGES */}
-      {showScoreboard && (
-        <section className="absolute top-[64px] left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-40">
-          {status === "PAUSED" && pauseBadgeText && (
+      {/* 2. DYNAMIC BROADCAST EVENT BADGES — อยู่ใต้กรอบสกอร์ (กรอบสกอร์สูงสุดราว 108px) · ป้ายแจ้งเตือน HUD ต่อท้ายกองเดียวกัน */}
+      {(showScoreboard || hudBanner) && (
+        <section data-testid="overlay-badge-stack" className="absolute top-[116px] left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-[60]">
+          {showScoreboard && pauseBadgeText && (
             <div data-testid="overlay-pause-badge" className="animate-pulse px-4 py-1 bg-amber-500/10 border border-amber-500/50 rounded-full shadow-[0_0_10px_rgba(245,158,11,0.2)]">
               <span className="font-mono text-[10px] font-black text-amber-400 uppercase tracking-[3px]">{pauseBadgeText}</span>
             </div>
           )}
-          {isOvertime && (
-            <div className="px-4 py-1 bg-[#C9A84C]/10 border border-[#C9A84C]/50 rounded-full shadow-[0_0_10px_rgba(201,168,76,0.2)]">
+          {showScoreboard && isOvertime && (
+            <div data-testid="overlay-overtime-badge" className="px-4 py-1 bg-[#C9A84C]/10 border border-[#C9A84C]/50 rounded-full shadow-[0_0_10px_rgba(201,168,76,0.2)]">
               <span className="font-mono text-[10px] font-black text-[#C9A84C] uppercase tracking-[3px]">OVERTIME ROUND</span>
             </div>
           )}
-          {!isOvertime && isMatchPoint && (
-            <div className="px-4 py-1 bg-rose-500/10 border border-rose-500/50 rounded-full shadow-[0_0_10px_rgba(244,63,94,0.2)]">
+          {showScoreboard && !isOvertime && isMatchPoint && (
+            <div data-testid="overlay-matchpoint-badge" className="px-4 py-1 bg-rose-500/10 border border-rose-500/50 rounded-full shadow-[0_0_10px_rgba(244,63,94,0.2)]">
               <span className="font-mono text-[10px] font-black text-rose-400 uppercase tracking-[3px]">MATCH POINT</span>
+            </div>
+          )}
+          {hudBanner && (
+            <div
+              data-testid="overlay-hud-banner"
+              className={`px-6 py-2.5 rounded-full border backdrop-blur-md shadow-lg ${
+                hudBanner.type === "PAUSE"
+                  ? "bg-amber-500/15 border-amber-500/60 text-amber-300"
+                  : hudBanner.type === "MATCH_POINT"
+                    ? "bg-rose-500/15 border-rose-500/60 text-rose-300"
+                    : "bg-[#00D4FF]/15 border-[#00D4FF]/60 text-[#00D4FF]"
+              }`}
+            >
+              <span className="font-mono text-xs font-black uppercase tracking-[2px]">{hudBanner.message}</span>
             </div>
           )}
         </section>
