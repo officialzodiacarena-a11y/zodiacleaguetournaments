@@ -10,6 +10,7 @@ import Link from 'next/link';
 import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { TournamentBracketView } from '@/components/tournament-bracket-view';
+import { defaultVetoFormat, resolveStageVetoConfig } from '@/lib/veto/stageConfig';
 import type { BracketMatchNode } from '@/types/bracket';
 import {
   BEST_OF_PRESETS,
@@ -56,12 +57,20 @@ export interface BuilderStage {
   nodeCount: number;
 }
 
+// ค่าแนะนำรายชื่อแมพ + ที่มา (ว่าง = ยังไม่มีรอบก่อนหน้า) — เป็นแค่ค่าเริ่มต้นในช่องกรอก แอดมินแก้ได้และต้องกดสร้างเอง
+export interface SuggestedMapPool {
+  maps: string[];
+  sourceStageName: string | null;
+  sourceTournamentName: string | null;
+}
+
 interface Props {
   tournament: TournamentSummary;
   approvedTeams: ApprovedTeam[];
   stages: BuilderStage[];
   selectedStageId: string | null;
   matches: BracketMatchNode[];
+  suggestedMapPool: SuggestedMapPool;
 }
 
 type Notice = { kind: 'ok' | 'error'; text: string } | null;
@@ -131,7 +140,22 @@ function StepCard({
   );
 }
 
-export function BracketBuilder({ tournament, approvedTeams, stages, selectedStageId, matches }: Props) {
+// เหตุผลที่ยังสร้างรอบไม่ได้เพราะรายชื่อแมพ (null = ใช้ได้) · จำนวนขั้น Veto ตามค่าเริ่มต้นที่ฟอร์มนี้ส่ง (ฟอร์มนี้ไม่ได้ส่ง veto_format)
+function mapPoolBlockReason(maps: string[], pendingInput: string, stepCount: number): string | null {
+  if (pendingInput.trim() !== '') return 'มีชื่อแมพที่พิมพ์ค้างอยู่ — กด "เพิ่มแมพ" ก่อน หรือลบข้อความในช่อง';
+  if (maps.length === 0) return `ยังไม่มีรายชื่อแมพ — ต้องมีอย่างน้อย ${stepCount} แมพ`;
+  const seen = new Set<string>();
+  for (const m of maps) {
+    const key = m.trim().toLowerCase();
+    if (seen.has(key)) return `มีชื่อแมพซ้ำ: ${m}`;
+    seen.add(key);
+  }
+  if (maps.length < stepCount) return `จำนวนแมพ (${maps.length}) น้อยกว่าจำนวนขั้น Veto (${stepCount})`;
+  const checked = resolveStageVetoConfig({ map_pool: maps }, { requireMapPool: true });
+  return checked.ok ? null : checked.problems.join('; ');
+}
+
+export function BracketBuilder({ tournament, approvedTeams, stages, selectedStageId, matches, suggestedMapPool }: Props) {
   const router = useRouter();
   const stage = stages.find((s) => s.id === selectedStageId) ?? null;
   const nextStageOrder = stages.reduce((max, s) => Math.max(max, s.stageOrder), 0) + 1;
@@ -147,6 +171,17 @@ export function BracketBuilder({ tournament, approvedTeams, stages, selectedStag
   const [preset, setPreset] = useState<BestOfPreset>('BO1_ALL');
   const [date, setDate] = useState(tournament.defaultDate);
   const [time, setTime] = useState('20:00');
+  const [maps, setMaps] = useState<string[]>(suggestedMapPool.maps);
+  const [mapInput, setMapInput] = useState('');
+  const vetoStepCount = defaultVetoFormat().sequence.length;
+  const mapBlockReason = mapPoolBlockReason(maps, mapInput, vetoStepCount);
+
+  function addMap() {
+    const value = mapInput.trim();
+    if (!value) return;
+    setMaps((prev) => [...prev, value]);
+    setMapInput('');
+  }
 
   // ฟอร์มแก้สายที่ยัง PENDING
   const stageParts = isoToThaiParts(stage?.startAt);
@@ -199,6 +234,7 @@ export function BracketBuilder({ tournament, approvedTeams, stages, selectedStag
     if (!Number.isInteger(teams) || teams < 2) return fail('จำนวนทีมต้องเป็นจำนวนเต็มตั้งแต่ 2 ขึ้นไป');
     const startAt = thaiLocalToIso(date, time);
     if (!startAt) return fail('กรุณาเลือกวันที่และเวลาเริ่มแข่ง (เวลาไทย)');
+    if (mapBlockReason) return fail(mapBlockReason);
 
     await run('create', async () => {
       const res = await callApi(`/api/v1/tournaments/${tournament.id}/stages`, 'POST', {
@@ -208,6 +244,7 @@ export function BracketBuilder({ tournament, approvedTeams, stages, selectedStag
         teams_in: teams,
         best_of_config: bestOfConfigForPreset(preset),
         start_at: startAt,
+        map_pool: maps.map((m) => m.trim()),
       });
       if (!res.ok) return fail(res.message);
       setNotice({ kind: 'ok', text: 'สร้างสายแล้ว — ต่อไปจัดทีมลงสาย' });
@@ -376,10 +413,65 @@ export function BracketBuilder({ tournament, approvedTeams, stages, selectedStag
               <input id="stage-time" type="time" className={inputCls} value={time} onChange={(e) => setTime(e.target.value)} />
               <p className="text-[11px] text-[#75798c] mt-1">รอบถัดไปจะ +1 ชั่วโมงอัตโนมัติ</p>
             </div>
+            <div className="sm:col-span-2" data-testid="map-pool-field">
+              <label className={labelCls} htmlFor="stage-map-input">รายชื่อแมพของรอบนี้</label>
+              {maps.length > 0 && (
+                <ul className="flex flex-wrap gap-2 mb-2" aria-label="รายชื่อแมพของรอบนี้">
+                  {maps.map((m, i) => (
+                    <li
+                      key={`${m}-${i}`}
+                      className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#0D0E1A] pl-3 pr-1 py-1 text-xs text-white"
+                    >
+                      <span>{m}</span>
+                      <button
+                        type="button"
+                        className="rounded px-2 py-0.5 text-[#9397ab] hover:text-white disabled:opacity-40"
+                        aria-label={`ลบแมพ ${m}`}
+                        disabled={busy !== null}
+                        onClick={() => setMaps((prev) => prev.filter((_, idx) => idx !== i))}
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex gap-2">
+                <input
+                  id="stage-map-input"
+                  className={inputCls}
+                  placeholder="ชื่อแมพ"
+                  value={mapInput}
+                  disabled={busy !== null}
+                  onChange={(e) => setMapInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addMap();
+                    }
+                  }}
+                />
+                <button type="button" className={ghostBtn} disabled={busy !== null || mapInput.trim() === ''} onClick={addMap}>
+                  เพิ่มแมพ
+                </button>
+              </div>
+              <p className="text-[11px] text-[#75798c] mt-1" data-testid="map-pool-summary">
+                {maps.length} แมพ · {vetoStepCount} ขั้น Veto ·{' '}
+                {suggestedMapPool.sourceStageName
+                  ? `คัดลอกจากรอบ ${suggestedMapPool.sourceStageName} ของทัวร์ ${suggestedMapPool.sourceTournamentName ?? ''}`
+                  : 'ยังไม่มีรอบก่อนหน้า กรุณาใส่รายชื่อแมพ'}
+              </p>
+              <p className="text-[11px] font-bold text-[#E8B429] mt-1">ตรวจรายชื่อให้ตรงกับแมพที่เปิดในแพทช์ล่าสุดของเกมก่อนกดสร้าง</p>
+            </div>
             <div className="sm:col-span-2">
-              <button type="button" className={primaryBtn} disabled={busy !== null} onClick={createStage}>
+              <button type="button" className={primaryBtn} disabled={busy !== null || mapBlockReason !== null} onClick={createStage}>
                 {busy === 'create' ? 'กำลังสร้าง…' : 'สร้างสาย'}
               </button>
+              {mapBlockReason && (
+                <p className="text-[11px] text-[#ff8f8f] mt-1" role="status" data-testid="map-pool-block-reason">
+                  สร้างไม่ได้: {mapBlockReason}
+                </p>
+              )}
             </div>
           </div>
         )}

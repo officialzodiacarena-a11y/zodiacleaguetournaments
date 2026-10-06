@@ -8,6 +8,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/database.types';
 import { asInsert, toJson } from '@/types/supabase-helpers';
+import { resolveStageVetoConfig } from '@/lib/veto/stageConfig';
 
 interface BracketSummary {
   total_nodes: number;
@@ -120,15 +121,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const { name, stage_order, format, teams_in, teams_advancing, format_config, best_of_config, map_pool, veto_format, start_at } = body;
 
-    let parsedVetoFormat = veto_format;
-    if (!parsedVetoFormat || Object.keys(parsedVetoFormat).length === 0) {
-      parsedVetoFormat = {
-        sequence: ["BAN", "BAN", "PICK", "PICK", "DECIDER"],
-        team_a_first: true,
-        time_limit_seconds: 60
-      };
-    }
-
   if (typeof name !== 'string' || name.trim() === '') {
     return NextResponse.json(
       { error: { code: 'VALIDATION_ERROR', message: 'name is required' } },
@@ -179,6 +171,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
+  const vetoConfig = resolveStageVetoConfig({ veto_format, map_pool }, { requireMapPool: true });
+  if (!vetoConfig.ok) {
+    return NextResponse.json(
+      { error: { code: vetoConfig.code, message: vetoConfig.message, problems: vetoConfig.problems } },
+      { status: 400 }
+    );
+  }
+
   const { data: tournament } = await supabase
     .from('tournaments')
     .select('id')
@@ -202,10 +202,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       teams_advancing: teams_advancing ?? null,
       format_config: toJson(format_config ?? {}),
       best_of_config: toJson(best_of_config ?? { default: 1 }),
-      map_pool: Array.isArray(map_pool) && map_pool.every((item) => typeof item === 'string')
-        ? map_pool
-        : null,
-      veto_format: toJson(parsedVetoFormat),
+      map_pool: vetoConfig.map_pool,
+      veto_format: toJson(vetoConfig.veto_format),
       start_at: typeof start_at === 'string' ? start_at : null,
     }))
     .select('*')

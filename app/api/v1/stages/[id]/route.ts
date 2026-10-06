@@ -6,6 +6,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { Json } from '@/types/database.types';
+import { resolveStageVetoConfig } from '@/lib/veto/stageConfig';
 
 const VALID_FORMATS = [
   'SINGLE_ELIMINATION',
@@ -60,7 +61,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const { data: stage } = await supabase
     .from('tournament_stages')
-    .select('id, status')
+    .select('id, status, veto_format, map_pool')
     .eq('id', stageId)
     .maybeSingle();
 
@@ -109,8 +110,25 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if ('teams_advancing' in body) patch.teams_advancing = (body.teams_advancing as number | null) ?? null;
   if ('format_config' in body) patch.format_config = body.format_config as Json;
   if ('best_of_config' in body) patch.best_of_config = body.best_of_config as Json;
-  if ('map_pool' in body) patch.map_pool = Array.isArray(body.map_pool) ? (body.map_pool as string[]) : null;
-  if ('veto_format' in body) patch.veto_format = body.veto_format as Json;
+  if ('map_pool' in body || 'veto_format' in body) {
+    // ตรวจค่ารวมหลังแก้ (ค่าที่ส่งมา + ค่าเดิมในฐานข้อมูล) ด้วยตัวตรวจเดียวกับตอนสร้าง · เขียนเฉพาะฟิลด์ที่ส่งมา
+    // ส่ง map_pool มาแล้วเป็น null = ล้างรายชื่อแมพทิ้ง → ห้าม (MAP_POOL_REQUIRED) · ไม่ส่ง map_pool มาเลย = คงตามเดิม
+    const vetoConfig = resolveStageVetoConfig(
+      {
+        veto_format: 'veto_format' in body ? body.veto_format : stage.veto_format,
+        map_pool: 'map_pool' in body ? body.map_pool : stage.map_pool,
+      },
+      { requireMapPool: 'map_pool' in body }
+    );
+    if (!vetoConfig.ok) {
+      return NextResponse.json(
+        { error: { code: vetoConfig.code, message: vetoConfig.message, problems: vetoConfig.problems } },
+        { status: 400 }
+      );
+    }
+    if ('map_pool' in body) patch.map_pool = vetoConfig.map_pool;
+    if ('veto_format' in body) patch.veto_format = vetoConfig.veto_format;
+  }
   if ('start_at' in body) patch.start_at = typeof body.start_at === 'string' ? body.start_at : null;
   if ('end_at' in body) patch.end_at = typeof body.end_at === 'string' ? body.end_at : null;
 

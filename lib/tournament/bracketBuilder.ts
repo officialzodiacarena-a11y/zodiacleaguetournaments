@@ -123,6 +123,8 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   BRACKET_GENERATION_FAILED: 'สร้างสายไม่สำเร็จ กรุณาลองใหม่',
   INVALID_STATUS_TRANSITION: 'เปลี่ยนสถานะสายข้ามขั้นไม่ได้',
   VALIDATION_ERROR: 'ข้อมูลที่กรอกไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง',
+  MAP_POOL_REQUIRED: 'ต้องใส่รายชื่อแมพของรอบนี้ก่อนสร้าง',
+  INVALID_VETO_CONFIG: 'รายชื่อแมพหรือการตั้งค่า Veto ไม่ถูกต้อง (แมพซ้ำ หรือแมพน้อยกว่าจำนวนขั้น Veto)',
   INTERNAL_ERROR: 'เกิดข้อผิดพลาดที่ระบบ กรุณาลองใหม่',
 };
 
