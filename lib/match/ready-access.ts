@@ -44,6 +44,14 @@ function parseSide(raw: unknown): ReadySide | null | 'INVALID' {
   return 'INVALID';
 }
 
+// กติกา A7: เลย forfeit_deadline_at แล้วถือว่าหมดเวลายืนยันความพร้อม — ใช้ทั้ง API และหน้า Lobby (กฎอยู่ที่นี่ที่เดียว)
+export function isReadyDeadlinePassed(forfeitDeadlineAt: string | null | undefined, nowMs: number): boolean {
+  if (!forfeitDeadlineAt) return false;
+  const deadlineMs = new Date(forfeitDeadlineAt).getTime();
+  if (Number.isNaN(deadlineMs)) return false;
+  return nowMs >= deadlineMs;
+}
+
 export function decideReadyAccess(input: ReadyAccessInput): ReadyAccessResult {
   const requested = parseSide(input.rawSide);
   if (requested === 'INVALID') {

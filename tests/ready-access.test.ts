@@ -3,7 +3,7 @@
 // รัน: npx tsx --test tests/ready-access.test.ts
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { decideReadyAccess, isStaffRole, type ReadyAccessInput } from '@/lib/match/ready-access';
+import { decideReadyAccess, isReadyDeadlinePassed, isStaffRole, type ReadyAccessInput } from '@/lib/match/ready-access';
 
 const TEAM_A = 'team-a';
 const TEAM_B = 'team-b';
@@ -102,4 +102,28 @@ test('บทบาทสตาฟ: ADMIN / SUPER_ADMIN / REFEREE นับ แ�
   assert.equal(isStaffRole(['CASTER']), false);
   assert.equal(isStaffRole(['ATHLETE', 'TEAM_MANAGER', 'ORG_OWNER']), false);
   assert.equal(isStaffRole([]), false);
+});
+
+// กติกา A7: เลยเส้นตาย 15 นาทีแล้วกดพร้อมไม่ได้ — กฎ "เลยเส้นตายหรือยัง" อยู่ที่ isReadyDeadlinePassed ที่เดียว
+test('isReadyDeadlinePassed: ไม่มีเส้นตาย (null) → false', () => {
+  assert.equal(isReadyDeadlinePassed(null, Date.now()), false);
+});
+
+test('isReadyDeadlinePassed: ข้อความที่ไม่ใช่เวลา → false', () => {
+  assert.equal(isReadyDeadlinePassed('not-a-date', Date.now()), false);
+});
+
+test('isReadyDeadlinePassed: เส้นตายอยู่ข้างหน้า 1 วินาที → false', () => {
+  const now = Date.parse('2026-10-06T12:00:00.000Z');
+  assert.equal(isReadyDeadlinePassed(new Date(now + 1000).toISOString(), now), false);
+});
+
+test('isReadyDeadlinePassed: เท่ากับเวลาปัจจุบันพอดี → true', () => {
+  const now = Date.parse('2026-10-06T12:00:00.000Z');
+  assert.equal(isReadyDeadlinePassed(new Date(now).toISOString(), now), true);
+});
+
+test('isReadyDeadlinePassed: เลยเส้นตายมาแล้ว 1 วินาที → true', () => {
+  const now = Date.parse('2026-10-06T12:00:00.000Z');
+  assert.equal(isReadyDeadlinePassed(new Date(now - 1000).toISOString(), now), true);
 });

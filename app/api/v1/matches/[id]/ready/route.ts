@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asUpdate, cleanIds } from '@/types/supabase-helpers';
 import type { Database } from '@/types/database.types';
-import { decideReadyAccess, isStaffRole } from '@/lib/match/ready-access';
+import { decideReadyAccess, isReadyDeadlinePassed, isStaffRole } from '@/lib/match/ready-access';
 
 interface MatchReadyUpdatePayload {
   updated_at: string;
@@ -95,6 +95,14 @@ export async function POST(
   });
   if (!access.ok) {
     return NextResponse.json({ error: `${access.code}: ${access.message}` }, { status: access.httpStatus });
+  }
+
+  // กติกา A7: เลยเส้นตาย 15 นาทีแล้วกดพร้อมไม่ได้ (ทุกบัญชีรวมสตาฟ) — การปรับแพ้ทำโดยฟังก์ชันฐานข้อมูลทางเดียว
+  if (isReadyDeadlinePassed(match.forfeit_deadline_at, Date.now())) {
+    return NextResponse.json(
+      { error: 'READY_DEADLINE_PASSED: หมดเวลายืนยันความพร้อมแล้ว (15 นาที) ระบบจะปรับแพ้ตามกติกา' },
+      { status: 422 }
+    );
   }
 
   const adminSupabase = await createAdminClient();
