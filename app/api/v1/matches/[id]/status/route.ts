@@ -87,7 +87,8 @@ export async function PATCH(
     const updatePayload: Record<string, string> = { status, updated_at: nowISO };
 
     if (status === 'LIVE') {
-      updatePayload.started_at = nowISO;
+      // กลับจาก PAUSED = แข่งต่อ ไม่ใช่เริ่มแมตช์ใหม่ → ห้ามเขียน started_at ใหม่
+      if (currentMatch.status !== 'PAUSED') updatePayload.started_at = nowISO;
     } else if (status === 'AWAITING_RESULT') {
       updatePayload.ended_at = nowISO;
     }

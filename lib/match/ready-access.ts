@@ -52,6 +52,53 @@ export function isReadyDeadlinePassed(forfeitDeadlineAt: string | null | undefin
   return nowMs >= deadlineMs;
 }
 
+// ช่วงยืนยันความพร้อม 15 นาที — เลขนี้อยู่ที่เดียว ห้ามใส่ 15 * 60 * 1000 ที่อื่น
+export const READY_WINDOW_MS = 15 * 60 * 1000;
+
+function parseMs(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+// เวลานัดที่ใช้จริง = scheduled_at หรือ created_at อันไหนช้ากว่า (แมตช์ที่เพิ่งสร้างหลังเวลานัดนับจากตอนสร้าง)
+// scheduled_at ว่างหรืออ่านไม่ออก = ไม่มีเวลานัดที่ใช้จริง
+export function scheduleBaseMs(scheduledAt: string | null | undefined, createdAt: string | null | undefined): number | null {
+  const scheduledMs = parseMs(scheduledAt);
+  if (scheduledMs === null) return null;
+  const createdMs = parseMs(createdAt);
+  return createdMs !== null && createdMs > scheduledMs ? createdMs : scheduledMs;
+}
+
+export interface EffectiveReadyDeadlineInput {
+  forfeitDeadlineAt: string | null | undefined;
+  scheduledAt: string | null | undefined;
+  createdAt: string | null | undefined;
+  teamAReadyAt: string | null | undefined;
+  teamBReadyAt: string | null | undefined;
+}
+
+// เส้นตายยืนยันความพร้อมที่ใช้จริง (ISO) — ใช้ร่วม API กดพร้อม / Lobby / cron
+// มี forfeit_deadline_at = ใช้ค่านั้น · ยังไม่มีทีมกดและไม่มีค่า = เวลานัดที่ใช้จริง + 15 นาที · ไม่เข้าเงื่อนไข = null
+export function effectiveReadyDeadline(input: EffectiveReadyDeadlineInput): string | null {
+  const forfeitMs = parseMs(input.forfeitDeadlineAt);
+  if (forfeitMs !== null) return new Date(forfeitMs).toISOString();
+  if (input.teamAReadyAt || input.teamBReadyAt) return null;
+  const baseMs = scheduleBaseMs(input.scheduledAt, input.createdAt);
+  if (baseMs === null) return null;
+  return new Date(baseMs + READY_WINDOW_MS).toISOString();
+}
+
+// เส้นตายตอนทีมแรกกดพร้อม = (เวลากด หรือ เวลานัดที่ใช้จริง อันไหนช้ากว่า) + 15 นาที
+export function firstPressDeadlineMs(
+  nowMs: number,
+  scheduledAt: string | null | undefined,
+  createdAt: string | null | undefined,
+): number {
+  const baseMs = scheduleBaseMs(scheduledAt, createdAt);
+  return Math.max(nowMs, baseMs ?? nowMs) + READY_WINDOW_MS;
+}
+
 export function decideReadyAccess(input: ReadyAccessInput): ReadyAccessResult {
   const requested = parseSide(input.rawSide);
   if (requested === 'INVALID') {

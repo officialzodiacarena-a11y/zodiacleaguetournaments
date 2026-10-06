@@ -31,6 +31,7 @@ const LIVE_SOURCE_OPTIONS: { mode: LiveSourceMode; title: string; hint: string }
 import React, { useEffect, useState, useCallback, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import MatchTimeControl from "@/components/broadcast/MatchTimeControl";
 
 // หน้า Broadcast Control — ห้องคุมการถ่ายทอด (รีโมตของ Stream Hub + ฉาก Overlay + สกอร์/แมพ + สถานะแมตช์)
 // ส่วน "ข้อมูลจากในเกม" (รหัสห้อง / Observer Token / OCR) ย้ายไปอยู่แผง Spectator Link ในหน้า Stream Hub แล้ว
@@ -1488,6 +1489,7 @@ export default function SpectatorHUDControlPanel({
         <section className="col-span-12 lg:col-span-3 space-y-6">
           <div className="bg-[#12121A] border border-white/5 rounded-xl p-5 h-full flex flex-col justify-between">
             <div>
+              <MatchTimeControl matchId={matchId} teamATag={match?.team_a?.tag} teamBTag={match?.team_b?.tag} />
               <h2 className="font-mono text-sm font-black text-rose-500 uppercase tracking-wider mb-4 border-b border-white/5 pb-2">
                 ⚠️ Match State Machine
               </h2>
@@ -1496,29 +1498,6 @@ export default function SpectatorHUDControlPanel({
               </p>
 
               <div className="space-y-2.5">
-                {match?.status === "LIVE" ? (
-                  <button
-                    onClick={() => updateMatchDatabaseStatus("PAUSED")}
-                    className="w-full py-2.5 bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:bg-amber-500/20 rounded font-mono text-xs font-bold transition uppercase"
-                  >
-                    ⏸️ Pause Match
-                  </button>
-                ) : match?.status === "PAUSED" ? (
-                  <button
-                    onClick={() => updateMatchDatabaseStatus("LIVE")}
-                    className="w-full py-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/20 rounded font-mono text-xs font-bold transition uppercase"
-                  >
-                    ▶️ Resume Match
-                  </button>
-                ) : (
-                  <button
-                    disabled
-                    className="w-full py-2.5 bg-neutral-800/50 border border-white/5 text-gray-500 cursor-not-allowed rounded font-mono text-xs transition"
-                  >
-                    Match Pause Locked
-                  </button>
-                )}
-
                 <button
                   onClick={() => updateMatchDatabaseStatus("AWAITING_RESULT")}
                   disabled={match?.status !== "LIVE" && match?.status !== "PAUSED"}
