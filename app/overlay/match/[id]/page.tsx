@@ -106,6 +106,29 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholde
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 
+interface OverlayTimeout {
+  type: "TACTICAL" | "TECHNICAL";
+  team: "A" | "B" | null;
+  reason: string | null;
+  started_at: string;
+  ends_at: string | null;
+}
+
+function resolvePauseBadge(
+  info: OverlayTimeout | null,
+  nowMs: number,
+  teamAName: string | undefined,
+  teamBName: string | undefined,
+): string | null {
+  if (info?.type === "TACTICAL" && info.ends_at) {
+    const left = Math.ceil((new Date(info.ends_at).getTime() - nowMs) / 1000);
+    if (left <= 0) return null;
+    const name = (info.team === "B" ? teamBName : teamAName) ?? (info.team === "B" ? "B" : "A");
+    return `TACTICAL TIMEOUT · ${name} · ${String(left).padStart(2, "0")}`;
+  }
+  return "TECHNICAL PAUSE";
+}
+
 export default function MatchBroadcastOverlay({
   params,
 }: {
@@ -135,11 +158,42 @@ export default function MatchBroadcastOverlay({
   const [vetoConfig, setVetoConfig] = useState<VetoConfig>(() => parseVetoFormat(null));
   const [seriesStats, setSeriesStats] = useState<OverlayGameStats[]>([]);
   const [roundHistory, setRoundHistory] = useState<RoundResult[]>([]);
+  // Time out ที่กำลังหยุดอยู่ (จาก GET /api/v1/matches/[id]/timeout และสัญญาณ match_status_changed)
+  const [timeoutInfo, setTimeoutInfo] = useState<OverlayTimeout | null>(null);
+  const [timeoutNowMs, setTimeoutNowMs] = useState<number>(() => Date.now());
   const statusRef = useRef<MatchStatus | null>(null);
   const matchRef = useRef<MatchData | null>(null);
   useEffect(() => {
     matchRef.current = match;
   }, [match]);
+
+  // ป้าย Time out: โหลดข้อมูลเมื่อสถานะเป็น PAUSED (รวมตอน OBS รีเฟรชกลางคัน) · เวลาที่เหลือนับจาก ends_at ทุกวินาที
+  const currentStatus = match?.status ?? null;
+  useEffect(() => {
+    if (currentStatus !== "PAUSED") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear timeout badge when match leaves PAUSED
+      setTimeoutInfo(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/v1/matches/${matchId}/timeout`, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { active?: OverlayTimeout | null } | null) => {
+        if (!cancelled) setTimeoutInfo(body?.active ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setTimeoutInfo(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStatus, matchId]);
+
+  useEffect(() => {
+    if (currentStatus !== "PAUSED") return;
+    const t = setInterval(() => setTimeoutNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [currentStatus]);
 
   // บังคับพื้นหลังโปร่งใสให้ OBS Browser Source ดึงไปใช้ได้จริง
   useEffect(() => {
@@ -476,6 +530,12 @@ export default function MatchBroadcastOverlay({
         setRosterA((prev) => applyTelemetry(prev));
         setRosterB((prev) => applyTelemetry(prev));
       })
+      .on("broadcast", { event: "match_status_changed" }, (payload) => {
+        const data = payload.payload as { status?: string; timeout?: OverlayTimeout | null };
+        if (!isMounted) return;
+        if (data?.status === "PAUSED") setTimeoutInfo(data.timeout ?? null);
+        else if (data?.status) setTimeoutInfo(null);
+      })
       .on("broadcast", { event: "scene_change" }, (payload) => {
         const scene = (payload.payload as { scene?: string })?.scene;
         if (scene === "VETO" || scene === "LIVE" || scene === "AWAITING_RESULT" || scene === "COMPLETED") {
@@ -551,6 +611,8 @@ export default function MatchBroadcastOverlay({
   const completedGames = games.filter((g) => isGameDone(g)).length;
   const displayStatus = resolveDisplayScene({ status, broadcastScene, formatConfig: match.format_config, completedGames });
   const showScoreboard = displayStatus === "LIVE" || status === "PAUSED";
+  // ป้ายหยุด: Tactical ที่ยังไม่ครบเวลา = ชื่อทีม + วินาทีที่เหลือ · Tactical ครบเวลาแล้ว = ไม่ขึ้นป้าย · อื่น ๆ = TECHNICAL PAUSE เหมือนเดิม
+  const pauseBadgeText = status === "PAUSED" ? resolvePauseBadge(timeoutInfo, timeoutNowMs, team_a?.name, team_b?.name) : null;
   // แมพที่กำลังแข่ง: match_games ถูกสร้างเมื่อเกมจบเท่านั้น จึงหาจากลำดับ Veto (PICK/DECIDER) — เกมที่ LIVE ก่อน ถ้าไม่มีใช้เกมถัดไปที่ยังไม่จบ
   const { totalGames, seriesGames, nextGameNumber } = buildSeriesGames(match.best_of ?? 3, vetoes, games);
   const liveGame = seriesGames.find((g) => g.gameStatus === "LIVE") ?? seriesGames.find((g) => g.gameNumber === nextGameNumber);
@@ -641,9 +703,9 @@ export default function MatchBroadcastOverlay({
       {/* 2. DYNAMIC BROADCAST EVENT BADGES */}
       {showScoreboard && (
         <section className="absolute top-[64px] left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-40">
-          {status === "PAUSED" && (
-            <div className="animate-pulse px-4 py-1 bg-amber-500/10 border border-amber-500/50 rounded-full shadow-[0_0_10px_rgba(245,158,11,0.2)]">
-              <span className="font-mono text-[10px] font-black text-amber-400 uppercase tracking-[3px]">TECHNICAL PAUSE</span>
+          {status === "PAUSED" && pauseBadgeText && (
+            <div data-testid="overlay-pause-badge" className="animate-pulse px-4 py-1 bg-amber-500/10 border border-amber-500/50 rounded-full shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+              <span className="font-mono text-[10px] font-black text-amber-400 uppercase tracking-[3px]">{pauseBadgeText}</span>
             </div>
           )}
           {isOvertime && (
