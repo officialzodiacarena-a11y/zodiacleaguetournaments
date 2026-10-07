@@ -12,6 +12,7 @@ import { LiveScoreboard } from "@/components/overlay/LiveScoreboard";
 import { LastManStandingScene } from "@/components/overlay/LastManStandingScene";
 import { resolveDisplayScene } from "@/lib/overlay/series-flow";
 import { resolvePauseBadge, type OverlayTimeout } from "@/lib/overlay/pause-badge";
+import { detectRoundWin, gamesFingerprint } from "@/lib/overlay/live-sync";
 import { currentDeadlineMs, parseVetoFormat, vetoStartMsFromMatch, type VetoConfig } from "@/lib/veto/engine";
 import { SponsorBadge } from "@/components/overlay/SponsorBadge";
 import { buildSeriesGames, countSeriesWins, isGameDone, type OverlayGameStats, type OverlayParticipantStat } from "@/components/overlay/series";
@@ -142,6 +143,9 @@ export default function MatchBroadcastOverlay({
   // true เมื่อได้คำตอบข้อมูล Time out ของการหยุดครั้งนี้แล้ว (GET ตอบ หรือได้ timeout จากสัญญาณ) · ออกจาก PAUSED = กลับเป็น false
   const [timeoutLoaded, setTimeoutLoaded] = useState<boolean>(false);
   const statusRef = useRef<MatchStatus | null>(null);
+  // สกอร์รอบล่าสุดที่จอรู้ (null = ยังไม่โหลด) · ลายนิ้วมือแถวเกมล่าสุด (null = ตัวตรวจยังไม่เคยอ่าน)
+  const roundsRef = useRef<{ a: number; b: number } | null>(null);
+  const gamesKeyRef = useRef<string | null>(null);
   const matchRef = useRef<MatchData | null>(null);
   useEffect(() => {
     matchRef.current = match;
@@ -177,6 +181,10 @@ export default function MatchBroadcastOverlay({
 
   useEffect(() => {
     if (currentStatus !== "PAUSED") return;
+    // นาฬิกาตั้งค่าตอนเปิดจอ: ตั้งใหม่ทันทีที่เข้า PAUSED ไม่งั้นวินาทีแรกใช้เวลาเก่า
+    /* eslint-disable react-hooks/set-state-in-effect -- refresh stale clock when entering PAUSED */
+    setTimeoutNowMs(Date.now());
+    /* eslint-enable react-hooks/set-state-in-effect */
     const t = setInterval(() => setTimeoutNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, [currentStatus]);
@@ -293,6 +301,8 @@ export default function MatchBroadcastOverlay({
 
         setMatch(refinedMatch);
         statusRef.current = refinedMatch.status;
+        // โหลดทั้งก้อน: จำสกอร์รอบไว้เทียบรอบถัดไป (ไม่ยิงป้าย ROUND WIN)
+        roundsRef.current = { a: refinedMatch.rounds_won_a ?? 0, b: refinedMatch.rounds_won_b ?? 0 };
 
         // ชื่อทัวร์นาเมนต์ / Stage สำหรับแถบรายละเอียดแมตช์ (ดึงแยก: ถ้าพลาดจะแสดง "—" และไม่กระทบ Overlay)
         try {
@@ -354,6 +364,7 @@ export default function MatchBroadcastOverlay({
 
         if (!gamesError && gamesData && isMounted) {
           setGames(gamesData);
+          gamesKeyRef.current = gamesFingerprint(gamesData);
         }
 
         try {
@@ -435,18 +446,58 @@ export default function MatchBroadcastOverlay({
       fetchInitialData();
     };
 
+    // สกอร์รอบเปลี่ยนจริง (จาก postgres_changes · ตรวจเองทุก 5 วินาที): ทางเข้าเดียวกันทั้งสองทาง · ไม่ดึงข้อมูลใหม่ทั้งหมด
+    const applyRoundScore = (a: number, b: number) => {
+      const prev = roundsRef.current;
+      if (!isMounted || (prev && prev.a === a && prev.b === b)) return;
+      const side = detectRoundWin(prev, { a, b });
+      roundsRef.current = { a, b };
+      setMatch((m) => (m ? { ...m, rounds_won_a: a, rounds_won_b: b } : m));
+      if (side) {
+        setRoundWinBanner(side);
+        setTimeout(() => setRoundWinBanner(null), 5000);
+      }
+    };
+
     fetchInitialData();
 
-    // ตรวจสถานะเอง (กันสัญญาณหลุด): อ่านเฉพาะคอลัมน์ status ขณะ LIVE / PAUSED · อ่านพลาด = ข้ามรอบเงียบ ๆ
+    // ตรวจเอง (กันสัญญาณหลุด) ขณะ LIVE / PAUSED / AWAITING_RESULT: สถานะ + สกอร์รอบ แล้วแถวเกม · อ่านพลาดส่วนใด = ข้ามส่วนนั้นเงียบ ๆ
     const statusPoll = setInterval(async () => {
       const current = statusRef.current;
-      if (current !== "LIVE" && current !== "PAUSED") return;
+      if (current !== "LIVE" && current !== "PAUSED" && current !== "AWAITING_RESULT") return;
       try {
-        const { data, error } = await supabase.from("matches").select("status").eq("id", matchId).maybeSingle();
-        if (error || !data?.status) return;
-        applyStatusChange(data.status as MatchStatus);
+        const { data, error } = await supabase
+          .from("matches")
+          .select("status, rounds_won_a, rounds_won_b")
+          .eq("id", matchId)
+          .maybeSingle();
+        if (!error && data?.status) {
+          if (data.status !== statusRef.current) {
+            applyStatusChange(data.status as MatchStatus);
+            return;
+          }
+          applyRoundScore(data.rounds_won_a ?? 0, data.rounds_won_b ?? 0);
+        }
       } catch {
-        // ข้ามรอบนี้
+        // ข้ามส่วนนี้
+      }
+      try {
+        const { data, error } = await supabase
+          .from("match_games")
+          .select("id, status, updated_at")
+          .eq("match_id", matchId);
+        if (error || !data || !isMounted) return;
+        const key = gamesFingerprint(data);
+        if (gamesKeyRef.current === null) {
+          gamesKeyRef.current = key;
+          return;
+        }
+        if (key !== gamesKeyRef.current) {
+          gamesKeyRef.current = key;
+          fetchInitialData();
+        }
+      } catch {
+        // ข้ามส่วนนี้
       }
     }, 5000);
 
@@ -457,22 +508,7 @@ export default function MatchBroadcastOverlay({
         { event: "*", schema: "public", table: "matches", filter: `id=eq.${matchId}` },
         (payload) => {
           const updatedMatch = payload.new as MatchData;
-          const oldMatch = payload.old as Partial<MatchData>;
-          
-          if (oldMatch && Object.keys(oldMatch).length > 0) {
-            const newScoreA = updatedMatch.rounds_won_a ?? 0;
-            const newScoreB = updatedMatch.rounds_won_b ?? 0;
-            const oldScoreA = oldMatch.rounds_won_a ?? newScoreA;
-            const oldScoreB = oldMatch.rounds_won_b ?? newScoreB;
-            
-            if (newScoreA > oldScoreA) {
-              setRoundWinBanner("A");
-              setTimeout(() => setRoundWinBanner(null), 5000);
-            } else if (newScoreB > oldScoreB) {
-              setRoundWinBanner("B");
-              setTimeout(() => setRoundWinBanner(null), 5000);
-            }
-          }
+          applyRoundScore(updatedMatch.rounds_won_a ?? 0, updatedMatch.rounds_won_b ?? 0);
 
           setMatch((prev) => (prev ? { ...prev, ...updatedMatch } : updatedMatch));
           // สกอร์รอบ/ผู้ชนะเปลี่ยน (สถานะเดิม): อัปเดตทันทีจาก payload โดยไม่รีเซ็ตฉากที่แอดมินสลับไว้ และไม่ดึงข้อมูลใหม่ทั้งหมด
@@ -643,7 +679,7 @@ export default function MatchBroadcastOverlay({
     <main className="relative w-[1920px] h-[1080px] bg-transparent text-white overflow-hidden font-sans select-none">
       {/* 0. ROUND WIN BANNER */}
       {roundWinBanner && team_a && team_b && (
-        <section className="absolute top-[200px] left-1/2 -translate-x-1/2 z-[70] animate-in fade-in zoom-in duration-500">
+        <section data-testid="overlay-roundwin-banner" className="absolute top-[200px] left-1/2 -translate-x-1/2 z-[70] animate-in fade-in zoom-in duration-500">
           <div className={`px-12 py-4 rounded-xl border-2 backdrop-blur-xl shadow-2xl flex flex-col items-center justify-center ${
             roundWinBanner === "A" 
               ? "bg-[#00D4FF]/20 border-[#00D4FF]/80 shadow-[0_0_40px_rgba(0,212,255,0.4)]" 
