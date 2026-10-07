@@ -140,7 +140,10 @@ export async function POST(
     if (!siblingsFetchError && siblingReports && siblingReports.length === 2) {
       const [report1, report2] = siblingReports;
 
-      if (
+      if (!report1.winner_team_id || !report2.winner_team_id) {
+        // ใบรายงานที่ไม่มีผู้ชนะ (ผลเสมอ) ไม่ใช่เรื่องของสายแพ้ตกรอบ — ไม่ปิดแมตช์เอง ปล่อยค้างให้แอดมิน
+        needsAdminResult = true;
+      } else if (
         report1.winner_team_id === report2.winner_team_id &&
         report1.score_a === report2.score_a &&
         report1.score_b === report2.score_b

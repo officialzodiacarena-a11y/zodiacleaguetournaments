@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { cleanIds } from '@/types/supabase-helpers';
+import { classifySeriesResult, isPointsFormat } from '@/lib/tournament/drawRule';
 
 const TeamResultReportSchema = z.object({
   winnerTeamId: z.string().uuid({ message: 'winnerTeamId ต้องเป็น UUID ที่ถูกต้อง' }).nullable().optional(),
@@ -105,6 +106,33 @@ export async function POST(
       );
     }
 
+    // ผลเสมอได้เฉพาะสายเก็บคะแนน — กติกาอยู่ที่ lib/tournament/drawRule.ts ที่เดียว
+    const { data: stageRow } = match.stage_id
+      ? await supabase.from('tournament_stages').select('format').eq('id', match.stage_id).maybeSingle()
+      : { data: null };
+    const stageFormat = stageRow?.format ?? null;
+    if (!isPointsFormat(stageFormat)) {
+      return NextResponse.json(
+        { error: { code: 'NOT_POINTS_STAGE', message: 'แมตช์นี้อยู่ในสายที่ต้องมีผู้ชนะ ให้รายงานผลทางปกติ' } },
+        { status: 422 }
+      );
+    }
+
+    const classified = classifySeriesResult(stageFormat, match.best_of, scoreA, scoreB);
+    if (!winnerTeamId) {
+      if (classified !== 'DRAW') {
+        return NextResponse.json(
+          { error: { code: 'DRAW_NOT_ALLOWED', message: 'แมตช์นี้จบเสมอไม่ได้ หรือสกอร์ไม่ใช่ผลเสมอ' } },
+          { status: 422 }
+        );
+      }
+    } else if (classified !== (winnerTeamId === match.team_a_id ? 'A' : 'B')) {
+      return NextResponse.json(
+        { error: { code: 'WINNER_SCORE_MISMATCH', message: 'ผู้ชนะกับสกอร์ไม่ตรงกัน' } },
+        { status: 422 }
+      );
+    }
+
     const adminSupabase = createAdminClient();
     const nowISO = new Date().toISOString();
 
@@ -114,7 +142,6 @@ export async function POST(
         match_id: matchId,
         reported_by_team: callerTeamId,
         reported_by_user: player.id,
-        // @ts-expect-error - DB may be altered on prod
         winner_team_id: winnerTeamId || null,
         score_a: scoreA,
         score_b: scoreB,
@@ -124,6 +151,13 @@ export async function POST(
       }, { onConflict: 'match_id,reported_by_team' });
 
     if (reportError) {
+      // 23502 = คอลัมน์ winner_team_id ในฐานข้อมูลยังห้ามว่าง (ยังไม่รัน SQL เปิดรับผลเสมอ)
+      if (reportError.code === '23502' && !winnerTeamId) {
+        return NextResponse.json(
+          { error: { code: 'DRAW_STORAGE_NOT_READY', message: 'ระบบยังไม่เปิดรับผลเสมอจากทีม แจ้งกรรมการให้ปิดผลแทน' } },
+          { status: 409 }
+        );
+      }
       return NextResponse.json(
         { error: { code: 'UPSERT_REPORT_FAILED', message: reportError.message } },
         { status: 500 }
@@ -137,6 +171,7 @@ export async function POST(
 
     let autoConfirmTriggered = false;
     let needsAdminResult = false;
+    let completedOutcome: 'DRAW' | 'NORMAL' | null = null;
     if (!siblingsFetchError && siblingReports && siblingReports.length === 2) {
       const [report1, report2] = siblingReports;
 
@@ -145,94 +180,48 @@ export async function POST(
         report1.score_a === report2.score_a &&
         report1.score_b === report2.score_b
       ) {
-        // เลื่อนสายก่อนปิดแมตช์ (ตรรกะกลางเดียวกับ /result) — ถ้าเลื่อนไม่สำเร็จให้ปล่อยแมตช์ไว้ที่ AWAITING_RESULT
-        // เพื่อให้แอดมินสรุปผ่าน /result ได้ ไม่ปล่อยให้แมตช์ COMPLETED แต่ผู้ชนะไม่ขึ้นรอบถัดไป
-                // ลบ advanceBracketFromMatch ตามใบงาน 1610 (ระบบลีกไม่มีการดันทีมเลื่อนสาย)
-        // เพิ่ม Logic การคำนวณแต้ม VLP และอัปเดต season_standings
-        let updateOk = true;
-        try {
-          const { data: tourney } = await adminSupabase.from('tournaments').select('season_id').eq('id', match.tournament_id as string).single();
-          const seasonId = tourney?.season_id;
-          
-          if (seasonId) {
-            const isDraw = !report1.winner_team_id;
-            const teamAId = match.team_a_id as string;
-            const teamBId = match.team_b_id as string;
-            
-            // ดึงข้อมูลปัจจุบัน
-            const { data: standings } = await adminSupabase
-              .from('season_standings')
-              .select('team_id, total_zp, wins, losses')
-              .eq('season_id', seasonId)
-              .in('team_id', [teamAId as string, teamBId as string]);
-              
-            const getStanding = (tid: string) => standings?.find(s => s.team_id === tid) || { total_zp: 0, wins: 0, losses: 0 };
-            
-            const stdA = getStanding(teamAId || "");
-            const stdB = getStanding(teamBId || "");
-            
-            if (isDraw) {
-              await adminSupabase.from('season_standings').upsert({ season_id: seasonId, team_id: teamAId as string, total_zp: stdA.total_zp + 1, updated_at: nowISO });
-              await adminSupabase.from('season_standings').upsert({ season_id: seasonId, team_id: teamBId as string, total_zp: stdB.total_zp + 1, updated_at: nowISO });
-            } else {
-              const winnerId = report1.winner_team_id as string;
-              const loserId = (winnerId === teamAId ? teamBId : teamAId) as string;
-              const stdWinner = getStanding(winnerId as string);
-              const stdLoser = getStanding(loserId as string);
-              
-              await adminSupabase.from('season_standings').upsert({ season_id: seasonId, team_id: winnerId as string, total_zp: stdWinner.total_zp + 3, wins: stdWinner.wins + 1, updated_at: nowISO });
-              await adminSupabase.from('season_standings').upsert({ season_id: seasonId, team_id: loserId as string, total_zp: stdLoser.total_zp + 0, losses: stdLoser.losses + 1, updated_at: nowISO });
-            }
-          }
-        } catch (e) {
-          console.error('Failed to update standings', e);
-          updateOk = false;
-        }
+        // ระบบลีกไม่มีการดันทีมเลื่อนสาย และไม่เขียนแต้ม/ZP จากการรายงานผล (ตารางคะแนนของสายเป็นงานใบ B)
+        const reportedOutcome = report1.winner_team_id ? 'NORMAL' : 'DRAW';
+        const { error: matchCompletedError } = await adminSupabase
+          .from('matches')
+          .update({
+            status: 'COMPLETED',
+            winner_team_id: report1.winner_team_id,
+            score_a: report1.score_a,
+            score_b: report1.score_b,
+            outcome: reportedOutcome,
+            result_source: 'PLAYER_REPORT',
+            result_confirmed_at: nowISO,
+            ended_at: nowISO,
+            updated_at: nowISO,
+          })
+          .eq('id', matchId);
 
-        if (!updateOk) {
-          console.error('[matches/report-league] update standings failed — left AWAITING_RESULT for admin');
+        if (matchCompletedError) {
+          console.error('[matches/report] complete match failed — left AWAITING_RESULT for admin', {
+            matchId,
+            error: matchCompletedError.message,
+          });
           needsAdminResult = true;
         } else {
-          const { error: matchCompletedError } = await adminSupabase
-            .from('matches')
-            .update({
-              status: 'COMPLETED',
-              winner_team_id: report1.winner_team_id as string,
-              score_a: report1.score_a,
-              score_b: report1.score_b,
-              outcome: 'NORMAL',
-              result_source: 'PLAYER_REPORT',
-              result_confirmed_at: nowISO,
-              ended_at: nowISO,
-              updated_at: nowISO,
-            })
-            .eq('id', matchId);
+          autoConfirmTriggered = true;
+          completedOutcome = reportedOutcome;
 
-          if (matchCompletedError) {
-            console.error('[matches/report] complete match failed — left AWAITING_RESULT for admin', {
-              matchId,
-              error: matchCompletedError.message,
-            });
-            needsAdminResult = true;
-          } else {
-            autoConfirmTriggered = true;
+          await adminSupabase.from('match_state_transitions').insert({
+            match_id: matchId,
+            from_status: 'AWAITING_RESULT',
+            to_status: 'COMPLETED',
+            trigger_source: 'PLAYER',
+            actor_id: player.id,
+            reason: 'Auto-confirmed: both teams reported matching scores',
+            state_snapshot: { winner_team_id: report1.winner_team_id, outcome: reportedOutcome, score_a: report1.score_a, score_b: report1.score_b },
+          });
 
-            await adminSupabase.from('match_state_transitions').insert({
-              match_id: matchId,
-              from_status: 'AWAITING_RESULT',
-              to_status: 'COMPLETED',
-              trigger_source: 'PLAYER',
-              actor_id: player.id,
-              reason: 'Auto-confirmed: both teams reported matching scores',
-              state_snapshot: { winner_team_id: report1.winner_team_id as string, score_a: report1.score_a, score_b: report1.score_b },
-            });
-
-            await adminSupabase.channel(`match-realtime-${matchId}`).send({
-              type: 'broadcast',
-              event: 'match_completed',
-              payload: { match_id: matchId, winner_team_id: report1.winner_team_id },
-            });
-          }
+          await adminSupabase.channel(`match-realtime-${matchId}`).send({
+            type: 'broadcast',
+            event: 'match_completed',
+            payload: { match_id: matchId, winner_team_id: report1.winner_team_id },
+          });
         }
       }
     }
@@ -243,6 +232,7 @@ export async function POST(
       reported_at: nowISO,
       both_teams_reported: Boolean(siblingReports && siblingReports.length === 2),
       auto_confirmed: autoConfirmTriggered,
+      outcome: completedOutcome,
       next_status: autoConfirmTriggered ? 'COMPLETED' : needsAdminResult ? 'AWAITING_ADMIN_RESULT' : 'AWAITING_OPPONENT_REPORT',
     }, { status: 200 });
 

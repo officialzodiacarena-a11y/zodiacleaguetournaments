@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/database.types';
 import { asInsert, toJson } from '@/types/supabase-helpers';
 import { resolveStageVetoConfig } from '@/lib/veto/stageConfig';
+import { bestOfConfigAllowedForFormat } from '@/lib/tournament/drawRule';
 
 interface BracketSummary {
   total_nodes: number;
@@ -137,6 +138,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json(
       { error: { code: 'VALIDATION_ERROR', message: `format must be one of: ${VALID_FORMATS.join(', ')}` } },
       { status: 400 }
+    );
+  }
+  if (!bestOfConfigAllowedForFormat(format, best_of_config)) {
+    return NextResponse.json(
+      { error: { code: 'BO2_NOT_ALLOWED_FOR_FORMAT', message: 'Bo2 ใช้ได้เฉพาะสายแบบเก็บคะแนน (Round Robin · Group Stage · Swiss · Zodiac Arena System)' } },
+      { status: 422 }
     );
   }
   if (teams_in !== undefined && teams_in !== null && (typeof teams_in !== 'number' || teams_in <= 0)) {

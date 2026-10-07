@@ -1,6 +1,7 @@
 // lib/tournament/bracketBuilder.ts
 // ตรรกะล้วนของหน้า "จัดสายการแข่งขัน" (/admin/tournaments/[id]/bracket) — แยกออกมาให้ทดสอบได้โดยไม่ต้องมี DB
 import { hasAnyRole } from '@/lib/auth/hasAnyRole';
+import { bestOfConfigAllowedForFormat } from '@/lib/tournament/drawRule';
 
 // role ที่ตัดสินข้อพิพาทได้ = role เดียวกับ is_admin() ใน DB และ /dispute/resolve (Q7/Q14 ของแอนดี้)
 export const BRACKET_ADMIN_ROLES: readonly string[] = ['SUPER_ADMIN', 'ADMIN', 'REFEREE'];
@@ -46,6 +47,13 @@ export function bestOfConfigForPreset(preset: BestOfPreset): Record<string, numb
       return { default: 1 };
   }
 }
+
+// Bo2 เลือกได้เฉพาะสายแบบเก็บคะแนน (กติกาเสมอได้อยู่ที่ lib/tournament/drawRule.ts)
+export function presetAllowedForFormat(preset: BestOfPreset, format: unknown): boolean {
+  return bestOfConfigAllowedForFormat(format, bestOfConfigForPreset(preset));
+}
+
+export const BO2_NOT_ALLOWED_MESSAGE = 'Bo2 ใช้ได้เฉพาะสายแบบเก็บคะแนน (Round Robin · Group Stage · Swiss · Zodiac Arena System)';
 
 export function presetFromBestOfConfig(config: unknown): BestOfPreset | null {
   if (!config || typeof config !== 'object') return null;
@@ -123,6 +131,7 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   BRACKET_GENERATION_FAILED: 'สร้างสายไม่สำเร็จ กรุณาลองใหม่',
   INVALID_STATUS_TRANSITION: 'เปลี่ยนสถานะสายข้ามขั้นไม่ได้',
   VALIDATION_ERROR: 'ข้อมูลที่กรอกไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง',
+  BO2_NOT_ALLOWED_FOR_FORMAT: BO2_NOT_ALLOWED_MESSAGE,
   MAP_POOL_REQUIRED: 'ต้องใส่รายชื่อแมพของรอบนี้ก่อนสร้าง',
   INVALID_VETO_CONFIG: 'รายชื่อแมพหรือการตั้งค่า Veto ไม่ถูกต้อง (แมพซ้ำ หรือแมพน้อยกว่าจำนวนขั้น Veto)',
   INTERNAL_ERROR: 'เกิดข้อผิดพลาดที่ระบบ กรุณาลองใหม่',

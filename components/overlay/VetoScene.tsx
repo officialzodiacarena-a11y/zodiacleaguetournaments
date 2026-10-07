@@ -190,7 +190,7 @@ export function VetoScene({
           <span className="text-[10px] font-mono font-black tracking-[0.2em] text-[#C9A84C]">SERIES MAP ORDER</span>
           <span className="flex-1 h-px bg-white/10" />
           <span className="text-[10px] font-mono tracking-[0.14em] text-neutral-500">
-            FIRST TO {Math.floor(totalGames / 2) + 1} MAP WINS
+            {totalGames % 2 === 0 ? `${totalGames} MAPS` : `FIRST TO ${Math.floor(totalGames / 2) + 1} MAP WINS`}
           </span>
         </div>
         <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${totalGames}, minmax(0, 1fr))` }}>

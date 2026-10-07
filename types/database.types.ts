@@ -2260,7 +2260,7 @@ export type Database = {
           score_a: number
           score_b: number
           updated_at: string
-          winner_team_id: string
+          winner_team_id: string | null
         }
         Insert: {
           created_at?: string
@@ -2273,7 +2273,7 @@ export type Database = {
           score_a: number
           score_b: number
           updated_at?: string
-          winner_team_id: string
+          winner_team_id: string | null
         }
         Update: {
           created_at?: string
@@ -2286,7 +2286,7 @@ export type Database = {
           score_a?: number
           score_b?: number
           updated_at?: string
-          winner_team_id?: string
+          winner_team_id?: string | null
         }
         Relationships: [
           {

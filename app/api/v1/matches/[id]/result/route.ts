@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { playerHasAnyRole } from '@/lib/auth/hasAnyRole';
 import { advanceBracketFromMatch } from '@/lib/bracket/advanceBracketFromMatch';
+import { loadSeriesState } from '@/lib/overlay/match-series';
+import { classifySeriesResult } from '@/lib/tournament/drawRule';
 import type { Database } from '@/types/database.types';
 
 type MatchUpdate = Database['public']['Tables']['matches']['Update'];
@@ -52,10 +54,11 @@ export async function POST(
   }
 
   const body = (await request.json()) as Record<string, unknown>;
-  const winner_team_id = typeof body.winner_team_id === 'string' ? body.winner_team_id : null;
-  const outcome = (typeof body.outcome === 'string' ? body.outcome : 'NORMAL') as unknown as MatchOutcome;
-  const score_a = typeof body.score_a === 'number' ? body.score_a : 0;
-  const score_b = typeof body.score_b === 'number' ? body.score_b : 0;
+  const useSeriesScore = body.use_series_score === true;
+  let winner_team_id = typeof body.winner_team_id === 'string' ? body.winner_team_id : null;
+  let outcome = (typeof body.outcome === 'string' ? body.outcome : 'NORMAL') as unknown as MatchOutcome;
+  let score_a = typeof body.score_a === 'number' ? body.score_a : 0;
+  let score_b = typeof body.score_b === 'number' ? body.score_b : 0;
   const rounds_won_a = typeof body.rounds_won_a === 'number' ? body.rounds_won_a : 0;
   const rounds_won_b = typeof body.rounds_won_b === 'number' ? body.rounds_won_b : 0;
   const result_source = typeof body.result_source === 'string' ? body.result_source : 'REFEREE';
@@ -95,18 +98,52 @@ export async function POST(
     return NextResponse.json(alreadyFinalized);
   }
 
-  // 4. ตรวจสอบ Consistency กับ Best-of
-  const winThreshold = Math.floor(match.best_of / 2) + 1;
-  const winnerScore = winner_team_id === match.team_a_id ? score_a : score_b;
-  if (outcome === 'NORMAL' && winnerScore < winThreshold) {
-    return NextResponse.json(
-      { error: 'RESULT_INCONSISTENT_WITH_GAMES: Winner must win majority of best_of games' },
-      { status: 422 }
-    );
-  }
-
   const adminSupabase = await createAdminClient();
   const nowIso = new Date().toISOString();
+
+  // 4. ตรวจสอบ Consistency กับ Best-of — กติกาเสมอได้อยู่ที่ lib/tournament/drawRule.ts ที่เดียว
+  const { data: stageRow } = match.stage_id
+    ? await adminSupabase.from('tournament_stages').select('format').eq('id', match.stage_id).maybeSingle()
+    : { data: null };
+  const stageFormat = stageRow?.format ?? null;
+  const SERIES_NOT_DECIDED = 'SERIES_NOT_DECIDED: ซีรีส์ยังไม่ตัดสิน หรือแมตช์นี้ต้องมีผู้ชนะ';
+  const DRAW_NOT_ALLOWED = 'DRAW_NOT_ALLOWED: แมตช์นี้จบเสมอไม่ได้ หรือสกอร์ไม่ใช่ผลเสมอ';
+
+  if (useSeriesScore) {
+    // ปิดผลจากสกอร์แมพของซีรีส์ที่ห้องคุมบันทึกไว้ (ค่า winner/outcome/score ที่ส่งมาไม่ใช้)
+    const series = await loadSeriesState(adminSupabase, matchId);
+    if (!series || !series.seriesOver) {
+      return NextResponse.json({ error: SERIES_NOT_DECIDED }, { status: 422 });
+    }
+    const classified = classifySeriesResult(stageFormat, match.best_of, series.winsA, series.winsB);
+    if (classified === 'INVALID') {
+      return NextResponse.json({ error: SERIES_NOT_DECIDED }, { status: 422 });
+    }
+    score_a = series.winsA;
+    score_b = series.winsB;
+    if (classified === 'DRAW') {
+      winner_team_id = null;
+      outcome = 'DRAW' as unknown as MatchOutcome;
+    } else {
+      winner_team_id = classified === 'A' ? match.team_a_id : match.team_b_id;
+      outcome = 'NORMAL' as unknown as MatchOutcome;
+    }
+  } else if ((outcome as unknown as string) === 'NORMAL') {
+    if (winner_team_id !== match.team_a_id && winner_team_id !== match.team_b_id) {
+      return NextResponse.json({ error: 'WINNER_REQUIRED: ผลปกติต้องระบุทีมผู้ชนะ' }, { status: 422 });
+    }
+    const classified = classifySeriesResult(stageFormat, match.best_of, score_a, score_b);
+    if (classified !== (winner_team_id === match.team_a_id ? 'A' : 'B')) {
+      return NextResponse.json(
+        { error: 'RESULT_INCONSISTENT_WITH_GAMES: Winner must win majority of best_of games' },
+        { status: 422 }
+      );
+    }
+  } else if ((outcome as unknown as string) === 'DRAW') {
+    if (winner_team_id !== null || classifySeriesResult(stageFormat, match.best_of, score_a, score_b) !== 'DRAW') {
+      return NextResponse.json({ error: DRAW_NOT_ALLOWED }, { status: 422 });
+    }
+  }
 
   // 5. ปิด Match เป็น COMPLETED
   const matchUpdatePayload: MatchUpdate = {
