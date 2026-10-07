@@ -5,6 +5,9 @@ import { TournamentBracketView } from '@/components/tournament-bracket-view';
 import { createClient } from '@/lib/supabase/server';
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
+import { StageStandingsTable } from '@/components/tournament/StageStandingsTable';
+import { isPointsFormat } from '@/lib/tournament/drawRule';
+import { computeStageStandings, type StageStandingRow, type StandingMatchInput } from '@/lib/tournament/stageStandings';
 
 // ด้านใน return:
 <main className="min-h-screen bg-[#0D0E1A] relative">
@@ -57,10 +60,11 @@ export default async function TournamentBracketPage({ params }: PageProps) {
   const stage = stages?.[0] ?? null;
 
   let matches: BracketMatchNode[] = [];
+  let standingsRows: StageStandingRow[] | null = null;
   if (stage) {
     const { data: nodes } = await supabase
       .from('bracket_nodes')
-      .select('id, bracket_type, round_number, position_in_round, label, team_a_id, team_b_id, status, is_bye, best_of, matches(id, score_a, score_b, winner_team_id, status)')
+      .select('id, bracket_type, round_number, position_in_round, label, team_a_id, team_b_id, status, is_bye, best_of, matches(id, score_a, score_b, winner_team_id, status, outcome)')
       .eq('stage_id', stage.id)
       .order('bracket_type', { ascending: true })
       .order('round_number', { ascending: true })
@@ -95,6 +99,27 @@ export default async function TournamentBracketPage({ params }: PageProps) {
       teamA: toParticipant(n.team_a_id),
       teamB: toParticipant(n.team_b_id),
     }; });
+
+    // ตารางคะแนน 3/1/0 เฉพาะสายแบบเก็บคะแนน (ผลคำนวณจากแมตช์ที่ปิดผลแล้ว ไม่เขียนฐานข้อมูล)
+    if (isPointsFormat(stage.format)) {
+      const standingTeams = Array.from(teamById.values()).map((t) => ({ id: t.id, name: t.name, tag: t.tag }));
+      const standingMatches: StandingMatchInput[] = [];
+      for (const n of nodes ?? []) {
+        const m = n.matches && n.matches.length > 0 ? n.matches[0] : null;
+        if (!m) continue;
+        standingMatches.push({
+          id: m.id,
+          status: m.status,
+          outcome: m.outcome,
+          team_a_id: n.team_a_id,
+          team_b_id: n.team_b_id,
+          winner_team_id: m.winner_team_id,
+          score_a: m.score_a,
+          score_b: m.score_b,
+        });
+      }
+      standingsRows = computeStageStandings(standingTeams, standingMatches);
+    }
   }
 
   const teamCount = stage?.teams_in
@@ -114,5 +139,14 @@ export default async function TournamentBracketPage({ params }: PageProps) {
     matches,
   };
 
-  return <TournamentBracketView data={data} />;
+  return (
+    <>
+      <TournamentBracketView data={data} />
+      {standingsRows !== null && (
+        <div className="max-w-7xl mx-auto p-6 bg-[#0D0E1A]">
+          <StageStandingsTable rows={standingsRows} />
+        </div>
+      )}
+    </>
+  );
 }
