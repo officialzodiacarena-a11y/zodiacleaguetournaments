@@ -1544,10 +1544,10 @@ export default function SpectatorHUDControlPanel({
 
                 <button
                   data-testid="sc-confirm-result"
-                  onClick={() => (seriesState ? confirmSeriesResult() : updateMatchDatabaseStatus("COMPLETED"))}
-                  disabled={match?.status !== "AWAITING_RESULT"}
+                  onClick={confirmSeriesResult}
+                  disabled={match?.status !== "AWAITING_RESULT" || !seriesState}
                   className={`w-full py-2 rounded font-mono text-[11px] font-bold transition uppercase border ${
-                    match?.status === "AWAITING_RESULT"
+                    match?.status === "AWAITING_RESULT" && seriesState
                       ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25"
                       : "bg-neutral-800/30 border-white/5 text-gray-600 cursor-not-allowed"
                   }`}

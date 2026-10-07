@@ -307,7 +307,7 @@ export function IntermissionScene({
               <span className="text-sm font-black tracking-[0.2em] text-[#C9A84C]">
                 SERIES WINNER • <span className={seriesWinner.id === teamA.id ? TEAM_A_TEXT : TEAM_B_TEXT}>{seriesWinner.name.toUpperCase()}</span>
               </span>
-            ) : isFinal && !seriesWinner && winsA === winsB ? (
+            ) : isFinal && !seriesWinner && winsA === winsB && winsA > 0 ? (
               <span className="text-sm font-black tracking-[0.2em] text-[#C9A84C]">SERIES DRAW • {winsA}–{winsB}</span>
             ) : isFinal ? (
               <span className="text-sm font-black tracking-[0.2em] text-[#C9A84C]">MATCH COMPLETE • FINAL RESULT</span>
