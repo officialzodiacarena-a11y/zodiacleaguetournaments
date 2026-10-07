@@ -24,7 +24,10 @@ export function resolvePauseBadge({ status, loaded, info, nowMs, teamAName, team
   if (status !== "PAUSED") return null;
   if (!loaded) return null;
   if (info?.type === "TACTICAL" && info.ends_at) {
-    const left = Math.ceil((new Date(info.ends_at).getTime() - nowMs) / 1000);
+    // เวลาที่ใช้คิดต้องไม่เก่ากว่าเวลาเริ่มหยุด ไม่งั้นเลขนับถอยหลังเกินความยาวจริงช่วงแรก
+    const startedMs = new Date(info.started_at).getTime();
+    const effectiveNow = Number.isFinite(startedMs) ? Math.max(nowMs, startedMs) : nowMs;
+    const left = Math.ceil((new Date(info.ends_at).getTime() - effectiveNow) / 1000);
     if (left <= 0) return null;
     const name = (info.team === "B" ? teamBName : teamAName) ?? (info.team === "B" ? "B" : "A");
     return `TACTICAL TIMEOUT · ${name} · ${String(left).padStart(2, "0")}`;

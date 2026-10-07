@@ -107,7 +107,7 @@ export function LiveScoreboard({
       {/* Top Banner Bar — โปร่งใส เหลือแค่เส้นคมๆ ด้านล่างแทนกล่องทึบ (ตัวเกมจริงมีพื้นหลังของมันเองอยู่แล้ว) */}
       <div className="w-[1400px] h-[32px] flex items-center justify-between px-6 text-xs font-bold text-white/80 font-sans tracking-wide uppercase"
            style={{ borderBottom: "1px solid rgba(255,255,255,0.25)", textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}>
-        <div className="flex items-center gap-6">
+        <div data-testid="overlay-map-strip" className="flex items-center gap-6">
           {mapStrip.length > 0 ? (
             mapStrip.map((item) => (
               <span key={item.label} className="opacity-90">
@@ -134,7 +134,7 @@ export function LiveScoreboard({
             <span className="text-3xl font-black text-white leading-none">{teamA.tag}</span>
           </div>
           <div className="flex flex-col items-center justify-center w-[50px]">
-            <span className="text-[40px] font-black text-white leading-none">{roundsA}</span>
+            <span data-testid="overlay-rounds-a" data-wins={winsA} className="text-[40px] font-black text-white leading-none">{roundsA}</span>
             <SeriesDots total={winsNeeded} filled={winsA} hex={TEAM_A_HEX} />
           </div>
         </div>
@@ -152,7 +152,7 @@ export function LiveScoreboard({
         <div className="w-[300px] h-full bg-[#13161c] border-b-[3px] flex items-center justify-between px-6 shadow-xl"
              style={{ borderColor: TEAM_B_HEX, clipPath: 'polygon(0 0, 100% 0, 95% 100%, 5% 100%)' }}>
           <div className="flex flex-col items-center justify-center w-[50px]">
-            <span className="text-[40px] font-black text-white leading-none">{roundsB}</span>
+            <span data-testid="overlay-rounds-b" data-wins={winsB} className="text-[40px] font-black text-white leading-none">{roundsB}</span>
             <SeriesDots total={winsNeeded} filled={winsB} hex={TEAM_B_HEX} />
           </div>
           <div className="flex flex-col items-start">
