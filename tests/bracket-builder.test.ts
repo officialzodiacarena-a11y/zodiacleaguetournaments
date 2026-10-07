@@ -10,6 +10,7 @@ import {
   canManageBrackets,
   isoToThaiParts,
   moveItem,
+  presetAllowedForFormat,
   presetFromBestOfConfig,
   seedCountProblem,
   shuffled,
@@ -105,4 +106,18 @@ test('ข้อความ error เป็นไทยตาม code · code �
   assert.equal(bracketApiErrorMessage('SOMETHING_NEW'), BRACKET_API_FALLBACK_MESSAGE);
   assert.equal(bracketApiErrorMessage(undefined), BRACKET_API_FALLBACK_MESSAGE);
   assert.equal(bracketApiErrorMessage('relation "x" does not exist'), BRACKET_API_FALLBACK_MESSAGE);
+});
+
+test('Bo2 เลือกได้เฉพาะสายเก็บคะแนน · Bo อื่นเลือกได้ทุกสาย', () => {
+  assert.equal(presetAllowedForFormat('BO2_ALL', 'SINGLE_ELIMINATION'), false);
+  assert.equal(presetAllowedForFormat('BO2_ALL', 'ROUND_ROBIN'), true);
+  assert.equal(presetAllowedForFormat('BO2_ALL', 'SWISS'), true);
+  assert.equal(presetAllowedForFormat('BO3_ALL', 'SINGLE_ELIMINATION'), true);
+});
+
+test('BO2_NOT_ALLOWED_FOR_FORMAT → ข้อความไทยของ D2', () => {
+  assert.equal(
+    bracketApiErrorMessage('BO2_NOT_ALLOWED_FOR_FORMAT'),
+    'Bo2 ใช้ได้เฉพาะสายแบบเก็บคะแนน (Round Robin · Group Stage · Swiss · Zodiac Arena System)',
+  );
 });

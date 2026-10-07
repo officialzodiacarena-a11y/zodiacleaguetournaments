@@ -15,11 +15,13 @@ import type { BracketMatchNode } from '@/types/bracket';
 import {
   BEST_OF_PRESETS,
   BRACKET_API_FALLBACK_MESSAGE,
+  BO2_NOT_ALLOWED_MESSAGE,
   BRACKET_FORMATS,
   bestOfConfigForPreset,
   bracketApiErrorMessage,
   isoToThaiParts,
   moveItem,
+  presetAllowedForFormat,
   presetFromBestOfConfig,
   seedCountProblem,
   shuffled,
@@ -27,6 +29,7 @@ import {
   type BestOfPreset,
   type BracketFormat,
 } from '@/lib/tournament/bracketBuilder';
+import { isPointsFormat } from '@/lib/tournament/drawRule';
 
 export interface TournamentSummary {
   id: string;
@@ -235,6 +238,7 @@ export function BracketBuilder({ tournament, approvedTeams, stages, selectedStag
     const startAt = thaiLocalToIso(date, time);
     if (!startAt) return fail('กรุณาเลือกวันที่และเวลาเริ่มแข่ง (เวลาไทย)');
     if (mapBlockReason) return fail(mapBlockReason);
+    if (!presetAllowedForFormat(preset, format)) return fail(BO2_NOT_ALLOWED_MESSAGE);
 
     await run('create', async () => {
       const res = await callApi(`/api/v1/tournaments/${tournament.id}/stages`, 'POST', {
@@ -260,6 +264,7 @@ export function BracketBuilder({ tournament, approvedTeams, stages, selectedStag
     if (!Number.isInteger(teams) || teams < 2) return fail('จำนวนทีมต้องเป็นจำนวนเต็มตั้งแต่ 2 ขึ้นไป');
     const startAt = thaiLocalToIso(editDate, editTime);
     if (!startAt) return fail('กรุณาเลือกวันที่และเวลาเริ่มแข่ง (เวลาไทย)');
+    if (!bracketGenerated && !presetAllowedForFormat(editPreset, stage.format)) return fail(BO2_NOT_ALLOWED_MESSAGE);
 
     await run('edit', async () => {
       // Bo ถูกคัดลอกลงโหนดตอน seed แล้วแก้ทีหลังไม่ย้อนไปโหนด → ส่งเฉพาะตอนยังไม่ได้จัดสาย
@@ -378,7 +383,11 @@ export function BracketBuilder({ tournament, approvedTeams, stages, selectedStag
                 id="stage-format"
                 className={inputCls}
                 value={format}
-                onChange={(e) => setFormat(e.target.value as BracketFormat)}
+                onChange={(e) => {
+                  const next = e.target.value as BracketFormat;
+                  setFormat(next);
+                  if (!presetAllowedForFormat(preset, next)) setPreset('BO1_ALL');
+                }}
               >
                 {BRACKET_FORMATS.map((f) => (
                   <option key={f.value} value={f.value}>{f.label}</option>
@@ -400,9 +409,16 @@ export function BracketBuilder({ tournament, approvedTeams, stages, selectedStag
               <label className={labelCls} htmlFor="stage-bo">Bo (จำนวนเกมต่อแมตช์)</label>
               <select id="stage-bo" className={inputCls} value={preset} onChange={(e) => setPreset(e.target.value as BestOfPreset)}>
                 {BEST_OF_PRESETS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
+                  <option key={p.value} value={p.value} disabled={!presetAllowedForFormat(p.value, format)}>{p.label}</option>
                 ))}
               </select>
+              {(preset === 'BO2_ALL' && isPointsFormat(format)) || !isPointsFormat(format) ? (
+                <p data-testid="stage-bo-hint" className="text-[11px] text-[#75798c] mt-1">
+                  {isPointsFormat(format)
+                    ? 'Bo2: จบ 1–1 = เสมอ ได้ทีมละ 1 แต้ม (ชนะ 3 · แพ้ 0)'
+                    : 'Bo2 เลือกได้เฉพาะสายแบบเก็บคะแนน (Round Robin · Group Stage · Swiss · Zodiac Arena System)'}
+                </p>
+              ) : null}
             </div>
             <div>
               <label className={labelCls} htmlFor="stage-date">วันที่แข่ง (เวลาไทย)</label>
@@ -509,7 +525,7 @@ export function BracketBuilder({ tournament, approvedTeams, stages, selectedStag
                     onChange={(e) => setEditPreset(e.target.value as BestOfPreset)}
                   >
                     {BEST_OF_PRESETS.map((p) => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
+                      <option key={p.value} value={p.value} disabled={!presetAllowedForFormat(p.value, stage.format)}>{p.label}</option>
                     ))}
                   </select>
                 </div>

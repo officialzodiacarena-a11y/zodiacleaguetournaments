@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { Database, Json } from '@/types/database.types';
 import { resolveStageVetoConfig } from '@/lib/veto/stageConfig';
+import { bestOfConfigAllowedForFormat } from '@/lib/tournament/drawRule';
 
 type TournamentStageInsert = Database['public']['Tables']['tournament_stages']['Insert'];
 type StageFormat = Database['public']['Tables']['tournament_stages']['Row']['format'];
@@ -84,6 +85,13 @@ export async function POST(
       return NextResponse.json(
         { error: { code: 'VALIDATION_ERROR', message: `format must be one of: ${VALID_FORMATS.join(', ')}` } },
         { status: 400 }
+      );
+    }
+
+    if (!bestOfConfigAllowedForFormat(body.format, body.best_of_config)) {
+      return NextResponse.json(
+        { error: { code: 'BO2_NOT_ALLOWED_FOR_FORMAT', message: 'Bo2 ใช้ได้เฉพาะสายแบบเก็บคะแนน (Round Robin · Group Stage · Swiss · Zodiac Arena System)' } },
+        { status: 422 }
       );
     }
 

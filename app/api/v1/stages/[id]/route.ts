@@ -7,6 +7,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { Json } from '@/types/database.types';
 import { resolveStageVetoConfig } from '@/lib/veto/stageConfig';
+import { bestOfConfigAllowedForFormat } from '@/lib/tournament/drawRule';
 
 const VALID_FORMATS = [
   'SINGLE_ELIMINATION',
@@ -61,7 +62,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const { data: stage } = await supabase
     .from('tournament_stages')
-    .select('id, status, veto_format, map_pool')
+    .select('id, status, veto_format, map_pool, format, best_of_config')
     .eq('id', stageId)
     .maybeSingle();
 
@@ -128,6 +129,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     if ('map_pool' in body) patch.map_pool = vetoConfig.map_pool;
     if ('veto_format' in body) patch.veto_format = vetoConfig.veto_format;
+  }
+  if ('format' in body || 'best_of_config' in body) {
+    // ตรวจค่ารวมหลังแก้ (ค่าที่ส่งมาทับค่าเดิม)
+    const mergedFormat = typeof body.format === 'string' ? body.format : stage.format;
+    const mergedBestOf = 'best_of_config' in body ? body.best_of_config : stage.best_of_config;
+    if (!bestOfConfigAllowedForFormat(mergedFormat, mergedBestOf)) {
+      return NextResponse.json(
+        { error: { code: 'BO2_NOT_ALLOWED_FOR_FORMAT', message: 'Bo2 ใช้ได้เฉพาะสายแบบเก็บคะแนน (Round Robin · Group Stage · Swiss · Zodiac Arena System)' } },
+        { status: 422 }
+      );
+    }
   }
   if ('start_at' in body) patch.start_at = typeof body.start_at === 'string' ? body.start_at : null;
   if ('end_at' in body) patch.end_at = typeof body.end_at === 'string' ? body.end_at : null;
