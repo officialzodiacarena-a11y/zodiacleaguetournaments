@@ -94,7 +94,7 @@ export default function ReportResultForm({ matchId, teamA, teamB, bestOf, isPoin
             min={0}
             max={bestOf}
             step={1}
-            className="text-black ml-2 w-16"
+            className="ml-2 w-16 rounded border border-white/30 bg-[#12121A] px-2 py-1 text-white"
             value={scoreA}
             onChange={(e) => setScoreA(e.target.value)}
           />
@@ -107,7 +107,7 @@ export default function ReportResultForm({ matchId, teamA, teamB, bestOf, isPoin
             min={0}
             max={bestOf}
             step={1}
-            className="text-black ml-2 w-16"
+            className="ml-2 w-16 rounded border border-white/30 bg-[#12121A] px-2 py-1 text-white"
             value={scoreB}
             onChange={(e) => setScoreB(e.target.value)}
           />
@@ -117,7 +117,7 @@ export default function ReportResultForm({ matchId, teamA, teamB, bestOf, isPoin
           <input
             data-testid="report-evidence"
             type="text"
-            className="text-black ml-2 w-full"
+            className="mt-1 block w-full rounded border border-white/30 bg-[#12121A] px-2 py-1 text-white placeholder:text-gray-500"
             value={evidence}
             onChange={(e) => setEvidence(e.target.value)}
             placeholder="https://..."
