@@ -530,6 +530,33 @@ export default function SpectatorHUDControlPanel({
     setFeedback({ type: "info", msg: "ทำการล้างกล่อง HUD บน OBS เรียบร้อยแล้ว" });
   };
 
+  // ปิดผลซีรีส์ผ่าน API ผลการแข่ง (ตรวจกติกาเสมอ/ผู้ชนะ + เลื่อนสาย ที่ฝั่งเซิร์ฟเวอร์) — ไม่เขียนตาราง matches ตรงจากเบราว์เซอร์
+  const confirmSeriesResult = async () => {
+    if (!match || !seriesState || match.status !== "AWAITING_RESULT") return;
+    const tagA = match.team_a?.tag ?? "A";
+    const tagB = match.team_b?.tag ?? "B";
+    if (!window.confirm(`ยืนยันผลซีรีส์ ${tagA} ${seriesState.maps_won_a} - ${seriesState.maps_won_b} ${tagB} ใช่หรือไม่?`)) return;
+    try {
+      const res = await fetch(`/api/v1/matches/${matchId}/result`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({ use_series_score: true }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg = typeof json?.error === "string" ? json.error : json?.error?.message || `ปิดผลไม่สำเร็จ (${res.status})`;
+        setFeedback({ type: "error", msg });
+        return;
+      }
+      setFeedback({ type: "info", msg: "ปิดผลซีรีส์แล้ว" });
+      setMatch((prev) => (prev ? { ...prev, status: "COMPLETED" as MatchStatus } : null));
+    } catch {
+      setFeedback({ type: "error", msg: "ปิดผลไม่สำเร็จ (เครือข่าย)" });
+    } finally {
+      refreshSeriesState();
+    }
+  };
+
   const updateMatchDatabaseStatus = async (targetStatus: MatchStatus) => {
     if (!match) return;
 
@@ -1511,7 +1538,8 @@ export default function SpectatorHUDControlPanel({
                 </button>
 
                 <button
-                  onClick={() => updateMatchDatabaseStatus("COMPLETED")}
+                  data-testid="sc-confirm-result"
+                  onClick={() => (seriesState ? confirmSeriesResult() : updateMatchDatabaseStatus("COMPLETED"))}
                   disabled={match?.status !== "AWAITING_RESULT"}
                   className={`w-full py-2 rounded font-mono text-[11px] font-bold transition uppercase border ${
                     match?.status === "AWAITING_RESULT"
@@ -1519,7 +1547,11 @@ export default function SpectatorHUDControlPanel({
                       : "bg-neutral-800/30 border-white/5 text-gray-600 cursor-not-allowed"
                   }`}
                 >
-                  🏆 Complete Series
+                  {seriesState
+                    ? seriesState.maps_won_a === seriesState.maps_won_b
+                      ? `🤝 ยืนยันผลเสมอ ${seriesState.maps_won_a}–${seriesState.maps_won_b}`
+                      : `🏆 ยืนยันผล ${seriesState.maps_won_a > seriesState.maps_won_b ? match?.team_a?.tag ?? "A" : match?.team_b?.tag ?? "B"} ${seriesState.maps_won_a}–${seriesState.maps_won_b}`
+                    : "🏆 Complete Series"}
                 </button>
               </div>
             </div>

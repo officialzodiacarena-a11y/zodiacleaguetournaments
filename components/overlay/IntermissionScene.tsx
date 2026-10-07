@@ -209,7 +209,7 @@ export function IntermissionScene({
             <DetailCell label="Tournament" value={tournamentName || "—"} />
             <DetailCell label="Stage / Round" value={stageLine} />
             <DetailCell label="Match" value={`#${matchCode}`} valueClass="text-[#C9A84C] tracking-wider" />
-            <DetailCell label="Format" value={`BO${totalGames} • FIRST TO ${winsNeeded}`} />
+            <DetailCell label="Format" value={totalGames % 2 === 0 ? `BO${totalGames} • ${totalGames} MAPS` : `BO${totalGames} • FIRST TO ${winsNeeded}`} />
           </div>
 
           {/* ALL GAMES OF THE SERIES */}
@@ -302,11 +302,13 @@ export function IntermissionScene({
           )}
 
           {/* NEXT UP / SERIES WINNER */}
-          <div className={`${compact ? "mt-4" : "mt-6"} rounded-xl border border-[#C9A84C]/30 bg-[#C9A84C]/5 px-6 py-3 text-center font-mono`}>
+          <div data-testid="overlay-final-line" className={`${compact ? "mt-4" : "mt-6"} rounded-xl border border-[#C9A84C]/30 bg-[#C9A84C]/5 px-6 py-3 text-center font-mono`}>
             {seriesOver && seriesWinner ? (
               <span className="text-sm font-black tracking-[0.2em] text-[#C9A84C]">
                 SERIES WINNER • <span className={seriesWinner.id === teamA.id ? TEAM_A_TEXT : TEAM_B_TEXT}>{seriesWinner.name.toUpperCase()}</span>
               </span>
+            ) : isFinal && !seriesWinner && winsA === winsB ? (
+              <span className="text-sm font-black tracking-[0.2em] text-[#C9A84C]">SERIES DRAW • {winsA}–{winsB}</span>
             ) : isFinal ? (
               <span className="text-sm font-black tracking-[0.2em] text-[#C9A84C]">MATCH COMPLETE • FINAL RESULT</span>
             ) : nextGame ? (

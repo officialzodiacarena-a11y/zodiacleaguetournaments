@@ -244,6 +244,14 @@ test('Veto 5 สเต็ป (ค่าจริงใน Stage) ให้แม
   }
 });
 
+test('แมตช์ Bo2: สกอร์รอบเท่ากัน (12–12) สั่งจบแมพไม่ได้ — ทุกแมพต้องมีผู้ชนะ', () => {
+  const sim = new Sim(2);
+  sim.setRounds(12, 12);
+  const r = sim.endMap();
+  assert.equal(!r.ok && r.code, 'TIED_ROUNDS');
+  assert.equal(sim.games.length, 0, 'ต้องไม่บันทึกเกมเมื่อเสมอ');
+});
+
 test('ตัวกันพลาด: เสมอ, 0-0, สถานะไม่ใช่ LIVE/AWAITING_RESULT', () => {
   const tied = new Sim(3);
   tied.setRounds(12, 12);
