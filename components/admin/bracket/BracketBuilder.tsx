@@ -30,6 +30,7 @@ import {
   type BracketFormat,
 } from '@/lib/tournament/bracketBuilder';
 import { isPointsFormat } from '@/lib/tournament/drawRule';
+import { VALORANT_MAPS, normalizeMapPool, toggleMap, extraMaps } from '@/lib/veto/valorant-maps';
 
 export interface TournamentSummary {
   id: string;
@@ -144,8 +145,7 @@ function StepCard({
 }
 
 // เหตุผลที่ยังสร้างรอบไม่ได้เพราะรายชื่อแมพ (null = ใช้ได้) · จำนวนขั้น Veto ตามค่าเริ่มต้นที่ฟอร์มนี้ส่ง (ฟอร์มนี้ไม่ได้ส่ง veto_format)
-function mapPoolBlockReason(maps: string[], pendingInput: string, stepCount: number): string | null {
-  if (pendingInput.trim() !== '') return 'มีชื่อแมพที่พิมพ์ค้างอยู่ — กด "เพิ่มแมพ" ก่อน หรือลบข้อความในช่อง';
+function mapPoolBlockReason(maps: string[], stepCount: number): string | null {
   if (maps.length === 0) return `ยังไม่มีรายชื่อแมพ — ต้องมีอย่างน้อย ${stepCount} แมพ`;
   const seen = new Set<string>();
   for (const m of maps) {
@@ -174,17 +174,9 @@ export function BracketBuilder({ tournament, approvedTeams, stages, selectedStag
   const [preset, setPreset] = useState<BestOfPreset>('BO1_ALL');
   const [date, setDate] = useState(tournament.defaultDate);
   const [time, setTime] = useState('20:00');
-  const [maps, setMaps] = useState<string[]>(suggestedMapPool.maps);
-  const [mapInput, setMapInput] = useState('');
+  const [maps, setMaps] = useState<string[]>(() => normalizeMapPool(suggestedMapPool.maps));
   const vetoStepCount = defaultVetoFormat().sequence.length;
-  const mapBlockReason = mapPoolBlockReason(maps, mapInput, vetoStepCount);
-
-  function addMap() {
-    const value = mapInput.trim();
-    if (!value) return;
-    setMaps((prev) => [...prev, value]);
-    setMapInput('');
-  }
+  const mapBlockReason = mapPoolBlockReason(maps, vetoStepCount);
 
   // ฟอร์มแก้สายที่ยัง PENDING
   const stageParts = isoToThaiParts(stage?.startAt);
@@ -430,21 +422,43 @@ export function BracketBuilder({ tournament, approvedTeams, stages, selectedStag
               <p className="text-[11px] text-[#75798c] mt-1">รอบถัดไปจะ +1 ชั่วโมงอัตโนมัติ</p>
             </div>
             <div className="sm:col-span-2" data-testid="map-pool-field">
-              <label className={labelCls} htmlFor="stage-map-input">รายชื่อแมพของรอบนี้</label>
-              {maps.length > 0 && (
-                <ul className="flex flex-wrap gap-2 mb-2" aria-label="รายชื่อแมพของรอบนี้">
-                  {maps.map((m, i) => (
-                    <li
-                      key={`${m}-${i}`}
-                      className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#0D0E1A] pl-3 pr-1 py-1 text-xs text-white"
+              <span className={labelCls} id="stage-map-label">รายชื่อแมพของรอบนี้ (ติ๊กเลือก)</span>
+              <div role="group" aria-labelledby="stage-map-label" className="grid grid-cols-2 sm:grid-cols-4 gap-2" data-testid="map-pool-options">
+                {VALORANT_MAPS.map((m) => {
+                  const checked = maps.some((x) => x.toLowerCase() === m.toLowerCase());
+                  return (
+                    <label
+                      key={m}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs cursor-pointer ${
+                        checked ? 'border-[#00D4FF]/60 bg-[#00D4FF]/10 text-white' : 'border-white/10 bg-[#0D0E1A] text-[#9397ab]'
+                      }`}
                     >
+                      <input
+                        type="checkbox"
+                        data-testid={`map-option-${m}`}
+                        checked={checked}
+                        disabled={busy !== null}
+                        onChange={() => setMaps((prev) => toggleMap(prev, m))}
+                      />
                       <span>{m}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              {extraMaps(maps).length > 0 && (
+                <ul className="flex flex-wrap gap-2 mt-2" aria-label="ชื่อแมพที่ไม่อยู่ในรายการมาตรฐาน" data-testid="map-pool-extra">
+                  {extraMaps(maps).map((m) => (
+                    <li
+                      key={m}
+                      className="flex items-center gap-2 rounded-lg border border-[#E8B429]/40 bg-[#0D0E1A] pl-3 pr-1 py-1 text-xs text-white"
+                    >
+                      <span>{m} (ไม่อยู่ในรายการมาตรฐาน)</span>
                       <button
                         type="button"
                         className="rounded px-2 py-0.5 text-[#9397ab] hover:text-white disabled:opacity-40"
                         aria-label={`ลบแมพ ${m}`}
                         disabled={busy !== null}
-                        onClick={() => setMaps((prev) => prev.filter((_, idx) => idx !== i))}
+                        onClick={() => setMaps((prev) => prev.filter((x) => x !== m))}
                       >
                         ✕
                       </button>
@@ -452,30 +466,11 @@ export function BracketBuilder({ tournament, approvedTeams, stages, selectedStag
                   ))}
                 </ul>
               )}
-              <div className="flex gap-2">
-                <input
-                  id="stage-map-input"
-                  className={inputCls}
-                  placeholder="ชื่อแมพ"
-                  value={mapInput}
-                  disabled={busy !== null}
-                  onChange={(e) => setMapInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addMap();
-                    }
-                  }}
-                />
-                <button type="button" className={ghostBtn} disabled={busy !== null || mapInput.trim() === ''} onClick={addMap}>
-                  เพิ่มแมพ
-                </button>
-              </div>
               <p className="text-[11px] text-[#75798c] mt-1" data-testid="map-pool-summary">
                 {maps.length} แมพ · {vetoStepCount} ขั้น Veto ·{' '}
                 {suggestedMapPool.sourceStageName
                   ? `คัดลอกจากรอบ ${suggestedMapPool.sourceStageName} ของทัวร์ ${suggestedMapPool.sourceTournamentName ?? ''}`
-                  : 'ยังไม่มีรอบก่อนหน้า กรุณาใส่รายชื่อแมพ'}
+                  : 'ยังไม่มีรอบก่อนหน้า กรุณาติ๊กเลือกแมพ'}
               </p>
               <p className="text-[11px] font-bold text-[#E8B429] mt-1">ตรวจรายชื่อให้ตรงกับแมพที่เปิดในแพทช์ล่าสุดของเกมก่อนกดสร้าง</p>
             </div>
