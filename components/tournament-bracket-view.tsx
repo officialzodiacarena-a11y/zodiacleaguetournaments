@@ -251,6 +251,28 @@ export function TournamentBracketView({ data }: TournamentBracketViewProps) {
                   </div>
                 </div>
               </div>
+
+              {/* MVP OF THE MATCH (จาก match_participants) */}
+              {selectedMatch.mvp && (
+                <div className="mb-5" data-testid="match-mvp">
+                  <div className="text-[10px] font-bold tracking-widest text-[#75798c] uppercase mb-2">
+                    MVP OF THE MATCH
+                  </div>
+                  <div className="flex items-center gap-3 rounded-xl border border-[#E8B429]/30 bg-gradient-to-r from-[#E8B429]/15 to-transparent p-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-[#E8B429] to-[#9184d9] font-black text-xs text-[#0D0E1A]">
+                      ★
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate text-xs font-extrabold text-[#E8B429]">{selectedMatch.mvp.name}</div>
+                      <div className="flex items-center gap-3 text-[11px] text-[#9397ab] mt-0.5">
+                        <span><strong className="text-white">{Math.round(selectedMatch.mvp.acs)}</strong> ACS</span>
+                        <span>K/D <strong className="text-white">{selectedMatch.mvp.kd === null ? '—' : selectedMatch.mvp.kd.toFixed(2)}</strong></span>
+                      </div>
+                    </div>
+                    <span className="rounded-full border border-[#E8B429]/30 bg-[#E8B429]/15 px-2 py-0.5 text-[9px] font-extrabold tracking-widest text-[#E8B429]">MVP</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {selectedMatch.matchId ? (

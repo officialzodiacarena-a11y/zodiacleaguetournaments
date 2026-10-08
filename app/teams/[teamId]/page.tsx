@@ -6,6 +6,7 @@ import { lockRosterAction } from '@/actions/team';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { InvitePlayerModal } from '@/components/team/InvitePlayerModal';
+import { mostPlayedRole, GAME_ROLE_STYLE } from '@/lib/team/gameRole';
 import { pickCardStats, formatKd, formatAdr, isStrongKd, type PlayerStatRow } from '@/lib/team/playerCardStats';
 
 interface PageProps {
@@ -93,6 +94,11 @@ async function getTeamProfileData(teamIdParam: string): Promise<(TeamProfileData
           .in('player_id', memberPlayerIds)
       : { data: [] as PlayerStatRow[] };
 
+  const { data: roleRows } =
+    memberPlayerIds.length > 0
+      ? await supabase.from('match_participants').select('player_id, role_played').in('player_id', memberPlayerIds)
+      : { data: [] as { player_id: string; role_played: string | null }[] };
+
   const circuitIds = (circuits ?? []).map((c) => c.id);
   const { data: activeSeasons } =
     circuitIds.length > 0
@@ -143,6 +149,7 @@ async function getTeamProfileData(teamIdParam: string): Promise<(TeamProfileData
         isSubstitute: m.role === 'SUBSTITUTE',
         jerseyNumber: m.jersey_number,
         isVerified,
+        valorantRole: mostPlayedRole((roleRows ?? []) as { player_id: string; role_played: string | null }[], player.id) ?? undefined,
         ...pickCardStats((statRows ?? []) as PlayerStatRow[], player.id, team.game_id),
       };
       return slot;
@@ -319,7 +326,9 @@ export default async function TeamProfilePage({ params }: PageProps) {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-5">
             {data.startingRoster.map((player) => {
-              const role = roleStyles[player.role] || roleStyles.PLAYER;
+              const teamRole = roleStyles[player.role] || roleStyles.PLAYER;
+              const gameRole = player.valorantRole ? GAME_ROLE_STYLE[player.valorantRole] : null;
+              const role = gameRole ? { stripe: gameRole.stripe, badge: gameRole.badge, text: player.valorantRole as string } : teamRole;
               return (
                 <div
                   key={player.id}

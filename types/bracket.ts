@@ -20,10 +20,17 @@ export interface BracketGameResult {
   status: string;
 }
 
+export interface BracketMatchMvp {
+  name: string;
+  acs: number;
+  kd: number | null;
+}
+
 export interface BracketMatchNode {
   id: string; // bracket_node_id
   matchId?: string; // matches.id (ใช้ลิงก์ไปหน้าผล)
   games?: BracketGameResult[]; // ผลรายแมพจาก match_games
+  mvp?: BracketMatchMvp;      // ACS เฉลี่ยสูงสุดของแมตช์ (match_participants)
   stageId: string;
   matchNumber: number;
   bracketType: 'UPPER' | 'LOWER' | 'GRAND_FINAL';
