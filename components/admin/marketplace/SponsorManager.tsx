@@ -296,7 +296,7 @@ export function SponsorManager() {
                   required
                   value={formData.company_name}
                   onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-                  placeholder="เช่น Luminary Global"
+                  placeholder="ชื่อบริษัทสปอนเซอร์"
                   className="w-full bg-[#121424] border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#E8B429]"
                 />
               </div>
@@ -320,7 +320,7 @@ export function SponsorManager() {
                   required
                   value={formData.contact_email}
                   onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-                  placeholder="sponsorships@luminaryglobal.com"
+                  placeholder="sponsor@company.com"
                   className="w-full bg-[#121424] border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#E8B429]"
                 />
               </div>

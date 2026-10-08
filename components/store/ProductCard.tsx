@@ -3,6 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ExternalLink, Sparkles } from 'lucide-react';
 import { ShippingAddressPicker } from './ShippingAddressPicker';
+import { brandBadge, brandPageHref, type StoreBrand } from '@/lib/store/brand-display';
 
 interface Variant {
   id: string;
@@ -19,6 +20,7 @@ interface StoreItem {
   description: string | null;
   item_type: string | null;
   partner_brand: string | null;
+  brand?: StoreBrand | null;
   image_url: string | null;
   variants: Variant[];
 }
@@ -65,8 +67,8 @@ export function ProductCard({ item }: { item: StoreItem }) {
     }
   }
 
-  const isLuminary = item.partner_brand?.toUpperCase().includes('LUMINARY') || !item.partner_brand || item.partner_brand === 'SINOPEC';
-  const partnerSlug = 'luminary';
+  const badge = brandBadge(item.brand, item.partner_brand);
+  const brandHref = brandPageHref(item.brand);
 
   return (
     <div className="flex flex-col rounded-xl bg-[#1A1C2E] p-4 border border-white/5 hover:border-[#E8B429]/40 transition-all shadow-lg">
@@ -84,15 +86,18 @@ export function ProductCard({ item }: { item: StoreItem }) {
 
       <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
         <div className="flex items-center gap-1.5 flex-wrap">
-          {isLuminary ? (
-            <span className="rounded-full bg-[#E8B429]/15 border border-[#E8B429]/40 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#E8B429]">
-              LUMINARY GLOBAL
+          {badge && (
+            <span
+              className={
+                badge.tone === 'SPONSOR'
+                  ? 'rounded-full bg-[#E8B429]/15 border border-[#E8B429]/40 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#E8B429]'
+                  : 'rounded-full bg-[#00D4FF]/15 border border-[#00D4FF]/40 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#00D4FF]'
+              }
+            >
+              {badge.icon ? `${badge.icon} ` : ''}
+              {badge.label}
             </span>
-          ) : item.partner_brand ? (
-            <span className="rounded-full bg-[#00D4FF]/15 border border-[#00D4FF]/40 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#00D4FF]">
-              {item.partner_brand}
-            </span>
-          ) : null}
+          )}
 
           {item.item_type && (
             <span className="rounded bg-white/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#94A3B8]">
@@ -138,17 +143,19 @@ export function ProductCard({ item }: { item: StoreItem }) {
             </button>
           )}
 
-          {/* Link ใต้สินค้า ไปยังหน้าสปอนเซอร์ */}
-          <div className="pt-1 text-center">
-            <Link
-              href={`/sponsor/${partnerSlug}`}
-              className="inline-flex items-center gap-1 text-[10px] font-mono text-zinc-400 hover:text-[#E8B429] transition-colors"
-            >
-              <Sparkles className="w-2.5 h-2.5 text-[#E8B429]" />
-              <span>ดูข้อมูลแบรนด์ & สิทธิพิเศษ</span>
-              <ExternalLink className="w-2.5 h-2.5" />
-            </Link>
-          </div>
+          {/* Link ใต้สินค้า ไปยังหน้าสปอนเซอร์ (เฉพาะแบรนด์ที่ผูกสปอนเซอร์) */}
+          {brandHref && (
+            <div className="pt-1 text-center">
+              <Link
+                href={brandHref}
+                className="inline-flex items-center gap-1 text-[10px] font-mono text-zinc-400 hover:text-[#E8B429] transition-colors"
+              >
+                <Sparkles className="w-2.5 h-2.5 text-[#E8B429]" />
+                <span>ดูข้อมูลแบรนด์ & สิทธิพิเศษ</span>
+                <ExternalLink className="w-2.5 h-2.5" />
+              </Link>
+            </div>
+          )}
 
           {result && (
             <p className={`text-[11px] ${result.ok ? 'text-[#4CAF50]' : 'text-red-400'}`}>{result.message}</p>

@@ -8,7 +8,7 @@ export default function ChatbotPage() {
           <h1 className="text-xl font-black text-[#F9EDD8]">
             ZODIAC ORACLE <span className="text-[#E8B429]">AI Assistant</span>
           </h1>
-          <p className="text-xs text-[#94A3B8]">ถามเรื่อง AP, สินค้า SINOPEC, ทัวร์นาเมนต์ และ Watch-to-Earn</p>
+          <p className="text-xs text-[#94A3B8]">ถามเรื่อง AP, สินค้าในร้าน, ทัวร์นาเมนต์ และ Watch-to-Earn</p>
         </div>
         <ChatWindow />
       </div>

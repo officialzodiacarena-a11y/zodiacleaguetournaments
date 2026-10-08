@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { toStoreBrand, type StoreBrand } from '@/lib/store/brand-display';
 
 interface CategoryRow {
   id: string;
@@ -9,14 +10,16 @@ interface CategoryRow {
   partner_brand: string | null;
   icon_url: string | null;
   display_order: number;
+  brand: { slug: string; name: string; badge_icon: string | null; sponsor_id: string | null } | null;
 }
 
-interface CategoryNode extends CategoryRow {
+interface CategoryNode extends Omit<CategoryRow, 'brand'> {
+  brand: StoreBrand | null;
   children: CategoryNode[];
 }
 
 function buildTree(rows: CategoryRow[]): CategoryNode[] {
-  const nodes = new Map<string, CategoryNode>(rows.map((r) => [r.id, { ...r, children: [] }]));
+  const nodes = new Map<string, CategoryNode>(rows.map((r) => [r.id, { ...r, brand: toStoreBrand(r.brand), children: [] }]));
   const roots: CategoryNode[] = [];
 
   for (const row of rows) {
@@ -37,7 +40,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from('store_categories')
-      .select('id, name, slug, parent_id, partner_brand, icon_url, display_order')
+      .select('id, name, slug, parent_id, partner_brand, icon_url, display_order, brand:brand_id(slug, name, badge_icon, sponsor_id)')
       .eq('is_active', true)
       .order('display_order', { ascending: true });
 
@@ -45,7 +48,7 @@ export async function GET() {
       return NextResponse.json({ error: { code: 'QUERY_FAILED', message: error.message } }, { status: 500 });
     }
 
-    const rows = (data ?? []) as CategoryRow[];
+    const rows = (data ?? []) as unknown as CategoryRow[];
     return NextResponse.json({ data: buildTree(rows) });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';

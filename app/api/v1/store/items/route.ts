@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { toStoreBrand } from '@/lib/store/brand-display';
 
 interface VariantRow {
   id: string;
@@ -21,8 +22,12 @@ interface ItemRow {
   item_type: string | null;
   partner_brand: string | null;
   image_url: string | null;
+  brand: { slug: string; name: string; badge_icon: string | null; sponsor_id: string | null } | null;
   store_item_variants: VariantRow[];
 }
+
+// ร้านเริ่มต้น (Master Spec Commerce Hub หมวด 4) · ?storefront=<slug> เปลี่ยนร้านได้
+const DEFAULT_STOREFRONT = 'zodiac-esports';
 
 export async function GET(req: Request) {
   try {
@@ -30,16 +35,34 @@ export async function GET(req: Request) {
     const typeFilter = searchParams.get('type');
     const categorySlug = searchParams.get('category');
     const brandFilter = searchParams.get('brand');
+    const explicitStorefront = searchParams.get('storefront');
 
     const supabase = await createClient();
 
     let query = supabase
       .from('store_items')
       .select(
-        'id, name, type, description, max_per_player, category_id, item_type, partner_brand, image_url, store_item_variants(id, name, price_ap, price_thb, stock, reserved_stock, available_until)'
+        'id, name, type, description, max_per_player, category_id, item_type, partner_brand, image_url, brand:brand_id(slug, name, badge_icon, sponsor_id), store_item_variants(id, name, price_ap, price_thb, stock, reserved_stock, available_until)'
       )
       .eq('is_active', true)
       .order('created_at', { ascending: false });
+
+    // กรองตามร้าน: สินค้าที่ยังไม่มี storefront_id (เพิ่มก่อน K4) นับเป็นร้านเริ่มต้น
+    const storefrontSlug = explicitStorefront ?? DEFAULT_STOREFRONT;
+    const { data: storefront } = await supabase
+      .from('storefronts')
+      .select('id')
+      .eq('slug', storefrontSlug)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (storefront) {
+      query =
+        storefrontSlug === DEFAULT_STOREFRONT
+          ? query.or(`storefront_id.eq.${storefront.id},storefront_id.is.null`)
+          : query.eq('storefront_id', storefront.id);
+    } else if (explicitStorefront) {
+      return NextResponse.json({ data: [] });
+    }
 
     if (typeFilter) {
       query = query.eq('type', typeFilter);
@@ -80,6 +103,7 @@ export async function GET(req: Request) {
         category_id: item.category_id,
         item_type: item.item_type,
         partner_brand: item.partner_brand,
+        brand: toStoreBrand(item.brand),
         image_url: item.image_url,
         variants: (item.store_item_variants ?? [])
           .filter((v) => !v.available_until || new Date(v.available_until).getTime() > now)

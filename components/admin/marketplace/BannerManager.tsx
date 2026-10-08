@@ -393,7 +393,7 @@ export function BannerManager() {
                   required
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="เช่น SINOPEC Lubricants Header"
+                  placeholder="เช่น ชื่อแคมเปญ Header"
                   className="w-full bg-[#121424] border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#E8B429]"
                 />
               </div>
@@ -407,7 +407,7 @@ export function BannerManager() {
                     type="text"
                     value={formData.brand_name || ''}
                     onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
-                    placeholder="เช่น SINOPEC"
+                    placeholder="ชื่อแบรนด์"
                     className="w-full bg-[#121424] border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#E8B429]"
                   />
                 </div>

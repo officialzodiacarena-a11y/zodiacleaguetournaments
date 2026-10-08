@@ -74,7 +74,7 @@ export function ChatWindow() {
               animation: 'zodiacMarquee 15s linear infinite'
             }}
           >
-            🔥 SINOPEC x ZODIAC เติม AP รับโบนัส x2 วันนี้! • 12 SIGNS ONE DESTINY • แลกของรางวัลพิเศษใน Store ได้แล้ว
+            🔥 ZODIAC ARENA เติม AP รับโบนัส x2 วันนี้! • 12 SIGNS ONE DESTINY • แลกของรางวัลพิเศษใน Store ได้แล้ว
           </div>
           <style jsx>{`
             @keyframes zodiacMarquee {

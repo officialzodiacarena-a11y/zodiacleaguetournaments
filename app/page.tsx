@@ -415,7 +415,7 @@ export default async function LandingPage() {
                   ZODIAC MARKETPLACE
                 </h4>
                 <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
-                  นำแต้ม AP ที่สะสมได้มาแลกรับของรางวัลพาร์ตเนอร์ SINOPEC และสินค้าพรีเมียมลิขสิทธิ์
+                  นำแต้ม AP ที่สะสมได้มาแลกรับของรางวัลจากพาร์ตเนอร์และสินค้าพรีเมียมลิขสิทธิ์
                 </p>
               </div>
               <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-[#4CAF50]">

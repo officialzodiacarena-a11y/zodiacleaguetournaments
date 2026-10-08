@@ -31,7 +31,7 @@ export default async function AdminBannersPage() {
             SPONSOR BANNER <span className="text-[#E8B429]">MANAGEMENT PORTAL</span>
           </h1>
           <p className="text-xs text-[#94A3B8] mt-1">
-            จัดการแบนเนอร์โฆษณาพาร์ตเนอร์ SINOPEC, ควบคุมการหมุนเวียน (Flight Rotation) และติดตาม ROI Metrics
+            จัดการแบนเนอร์โฆษณาพาร์ตเนอร์, ควบคุมการหมุนเวียน (Flight Rotation) และติดตาม ROI Metrics
           </p>
         </div>
 

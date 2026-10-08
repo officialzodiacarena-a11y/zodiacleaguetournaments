@@ -5,6 +5,7 @@ import { StoreHeader } from '@/components/store/StoreHeader';
 import { CategoryFilter } from '@/components/store/CategoryFilter';
 import { SINOPECBanner } from '@/components/store/SINOPECBanner';
 import { ProductCard } from '@/components/store/ProductCard';
+import type { StoreBrand } from '@/lib/store/brand-display';
 import { OfficialSponsorsBar } from '@/components/sponsor/OfficialSponsorsBar';
 
 interface Variant {
@@ -22,6 +23,7 @@ interface StoreItem {
   description: string | null;
   item_type: string | null;
   partner_brand: string | null;
+  brand: StoreBrand | null;
   image_url: string | null;
   variants: Variant[];
 }
