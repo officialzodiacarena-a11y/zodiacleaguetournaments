@@ -1,6 +1,6 @@
 // app/tournament/[tournamentId]/bracket/page.tsx
 import { notFound } from 'next/navigation';
-import type { TournamentBracketPageData, BracketMatchNode, BracketTeamParticipant } from '@/types/bracket';
+import type { TournamentBracketPageData, BracketMatchNode, BracketTeamParticipant, BracketGameResult } from '@/types/bracket';
 import { TournamentBracketView } from '@/components/tournament-bracket-view';
 import { createClient } from '@/lib/supabase/server';
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
@@ -37,6 +37,7 @@ interface TournamentRecord {
   type?: string | null;
   start_at?: string | null;
   starts_at?: string | null;
+  prize_zp?: number | null;
 }
 
 export default async function TournamentBracketPage({ params }: PageProps) {
@@ -86,7 +87,23 @@ export default async function TournamentBracketPage({ params }: PageProps) {
       return { id: t.id, name: t.name, tag: t.tag, logoUrl: t.logo_url };
     };
 
-    matches = (nodes ?? []).map((n, idx) => { const m = n.matches && n.matches.length > 0 ? n.matches[0] : null; return { scoreA: m?.score_a ?? undefined, scoreB: m?.score_b ?? undefined, winnerTeamId: m?.winner_team_id ?? undefined,
+    const matchIds = (nodes ?? []).flatMap((n) => (n.matches && n.matches.length > 0 ? [n.matches[0].id] : []));
+    const gamesByMatch = new Map<string, BracketGameResult[]>();
+    if (matchIds.length > 0) {
+      const { data: gameRows } = await supabase
+        .from('match_games')
+        .select('match_id, game_number, map_name, score_a, score_b, status')
+        .in('match_id', matchIds)
+        .neq('status', 'CANCELLED')
+        .order('game_number', { ascending: true });
+      for (const g of gameRows ?? []) {
+        const list = gamesByMatch.get(g.match_id) ?? [];
+        list.push({ gameNumber: g.game_number, mapName: g.map_name ?? undefined, scoreA: g.score_a, scoreB: g.score_b, status: g.status });
+        gamesByMatch.set(g.match_id, list);
+      }
+    }
+
+    matches = (nodes ?? []).map((n, idx) => { const m = n.matches && n.matches.length > 0 ? n.matches[0] : null; return { matchId: m?.id, games: m ? gamesByMatch.get(m.id) : undefined, scoreA: m?.score_a ?? undefined, scoreB: m?.score_b ?? undefined, winnerTeamId: m?.winner_team_id ?? undefined,
       id: n.id,
       stageId: stage.id,
       matchNumber: idx + 1,
@@ -135,7 +152,8 @@ export default async function TournamentBracketPage({ params }: PageProps) {
     tournamentId: tournament.id,
     tournamentName: tournament.name,
     subMetaText: `${dateText} · ${formatText} · ${teamCount}`,
-    prizeZpText: '—',
+    prizeZpText: tournament.prize_zp ? `${tournament.prize_zp.toLocaleString('en-US')} ZP` : '—',
+    prizeZp: tournament.prize_zp ?? undefined,
     matches,
   };
 

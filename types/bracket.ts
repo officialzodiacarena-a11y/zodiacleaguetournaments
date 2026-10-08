@@ -12,8 +12,18 @@ export interface BracketTeamParticipant {
   seed?: number;
 }
 
+export interface BracketGameResult {
+  gameNumber: number;
+  mapName?: string;
+  scoreA: number;
+  scoreB: number;
+  status: string;
+}
+
 export interface BracketMatchNode {
   id: string; // bracket_node_id
+  matchId?: string; // matches.id (ใช้ลิงก์ไปหน้าผล)
+  games?: BracketGameResult[]; // ผลรายแมพจาก match_games
   stageId: string;
   matchNumber: number;
   bracketType: 'UPPER' | 'LOWER' | 'GRAND_FINAL';
@@ -42,7 +52,8 @@ export interface TournamentBracketPageData {
   tournamentId: string;
   tournamentName: string; // e.g. "ZODIAC VALORANT CHALLENGER #1"
   subMetaText: string; // e.g. "14–16 มิ.ย. 2026 · 5v5 DOUBLE ELIMINATION · 12 TEAMS"
-  prizeZpText: string; // e.g. "10,000 ZP + 1,000 CP"
+  prizeZpText: string; // e.g. "10,000 ZP"
+  prizeZp?: number; // รางวัลแชมป์ (ZP) จาก tournaments.prize_zp
   matches: BracketMatchNode[];
   mvpPlayer?: MvpPlayerSummary;
 }
