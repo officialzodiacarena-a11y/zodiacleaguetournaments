@@ -6,6 +6,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import type { TeamRoleType } from '@/types/team';
 import { submitRegistrationAction } from '@/actions/registration';
 import { registrationErrorMessage } from '@/lib/tournament/registrationErrors';
+import { RegistrationStepper } from '@/components/tournament/RegistrationStepper';
+import { registrationStepStates } from '@/lib/tournament/registrationSteps';
 
 interface PageProps {
   params: Promise<{ tournamentId: string }>;
@@ -274,6 +276,9 @@ export default async function TournamentRegistrationPage({ params, searchParams 
   return (
     <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 select-none">
       <main className="max-w-[1100px] mx-auto px-6 pt-9">
+        {/* 2. STEP INDICATOR (ใช้ร่วมกับหน้า /pay) */}
+        <RegistrationStepper states={registrationStepStates(existingRegistration?.status ?? null)} />
+
         {/* 3. TOURNAMENT INFO BAR */}
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#E8B429]/25 bg-gradient-to-r from-[#E8B429]/10 to-[#9184d9]/10 px-5 py-3 mb-7">
           <span className="text-xs font-extrabold tracking-widest text-[#E8B429] uppercase">{tournament.name}</span>
@@ -482,6 +487,20 @@ export default async function TournamentRegistrationPage({ params, searchParams 
                     </div>
                   </div>
                 )}
+
+                {/* ผู้เล่นที่ยังไม่ผ่านการตรวจ: กติกาเดิม = สมัครไม่ได้จนกว่าจะผ่านทุกคน (ปุ่มสมัครถูกปิดไว้) */}
+                {unverified.length > 0 && (
+                  <div
+                    className="flex gap-2.5 rounded-xl border border-[#eab308]/20 bg-[#eab308]/[0.06] p-3.5"
+                    data-testid="unverified-notice"
+                  >
+                    <span aria-hidden="true" className="mt-0.5 text-sm text-[#fbbf24]">⚠</span>
+                    <div className="text-[11px] leading-relaxed text-[#fbbf24]/85">
+                      <strong className="text-[#fbbf24]">{unverified.map((p) => p.handle).join(', ')}</strong>{' '}
+                      {rosterMode === 'LINKED' ? 'ยังไม่ได้เชื่อมบัญชีเกม' : 'ยังไม่ได้ยืนยันตัวตน'} · ต้องผ่านการตรวจก่อนจึงจะกดสมัครได้
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -492,7 +511,7 @@ export default async function TournamentRegistrationPage({ params, searchParams 
                   <span>
                     <span className="font-bold text-[#cfd3e5]">ค่าสมัคร {entryFeeThb.toFixed(2)} บาท</span>
                     <span className="mx-2 text-white/20">·</span>
-                    <span>ชำระหลังกดสมัคร</span>
+                    <span>โอนเข้าบัญชีบริษัทแล้วกรอกชื่อบัญชีผู้โอนและแนบสลิปในขั้นตอนถัดไป</span>
                   </span>
                 ) : entryFeeAp > 0 ? (
                   <span>
