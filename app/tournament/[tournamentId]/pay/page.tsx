@@ -7,6 +7,8 @@ import { CopyAccountButton } from '@/components/tournament/CopyAccountButton';
 import { PaymentCountdown } from '@/components/tournament/PaymentCountdown';
 import { EntrySlipUploader } from '@/components/tournament/EntrySlipUploader';
 import { PaymentTransferArtwork } from '@/components/entry-fee/PaymentTransferArtwork';
+import { RegistrationStepper } from '@/components/tournament/RegistrationStepper';
+import { registrationStepStates } from '@/lib/tournament/registrationSteps';
 
 interface PageProps {
   params: Promise<{ tournamentId: string }>;
@@ -109,6 +111,8 @@ export default async function TournamentPayPage({ params }: PageProps) {
   return (
     <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20 select-none">
       <main className="max-w-[640px] mx-auto px-6 pt-9">
+        <RegistrationStepper states={registrationStepStates(registration.status, payment.status)} />
+
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#E8B429]/25 bg-gradient-to-r from-[#E8B429]/10 to-[#9184d9]/10 px-5 py-3 mb-7">
           <span className="text-xs font-extrabold tracking-widest text-[#E8B429] uppercase">{tournament.name}</span>
           <span className="text-[#E8B429]/30">·</span>
