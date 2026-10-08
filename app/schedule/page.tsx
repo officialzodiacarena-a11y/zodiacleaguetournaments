@@ -16,10 +16,20 @@ import { pickRelevantSeason, SeasonLike } from '@/lib/season/pickRelevantSeason'
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
 import { pointUnitLabel, type PointUnit } from '@/lib/league/pointUnit';
+import {
+  parseScheduleFilter,
+  filterScheduleMatches,
+  scheduleFilterHref,
+  liveMapLabel,
+  SCHEDULE_FILTERS,
+  type ScheduleFilter,
+} from '@/lib/schedule/scheduleFilter';
 
 interface MatchSchedulePageDataWithUnit extends MatchSchedulePageData {
   pointUnit: PointUnit;
   circuitId: string | null;
+  /** ข้อความเกมปัจจุบันของแมตช์ LIVE เช่น "Map 2/3 · Haven" (จาก match_games) */
+  liveMapText?: string;
 }
 
 // ด้านใน return:
@@ -111,6 +121,7 @@ async function getScheduleData(): Promise<MatchSchedulePageDataWithUnit> {
 
   let matches: ScheduleMatch[] = [];
   let liveBannerMatch: ScheduleMatch | undefined;
+  let liveMapText: string | undefined;
 
   if (tournamentIds.length > 0) {
     const admin = createAdminClient();
@@ -130,7 +141,7 @@ async function getScheduleData(): Promise<MatchSchedulePageDataWithUnit> {
         .in('stage_id', stageIds)
         .neq('status', 'CANCELLED')
         .order('scheduled_at', { ascending: true, nullsFirst: false })
-        .limit(20);
+        .limit(60);
 
       matches = ((matchRows ?? []) as unknown as MatchRow[]).map((m) => {
         const teamA = one<TeamJoinedRef>(m.team_a);
@@ -171,6 +182,15 @@ async function getScheduleData(): Promise<MatchSchedulePageDataWithUnit> {
       });
 
       liveBannerMatch = matches.find((m) => m.status === 'LIVE');
+
+      if (liveBannerMatch) {
+        const { data: games } = await supabase
+          .from('match_games')
+          .select('game_number, map_name, status')
+          .eq('match_id', liveBannerMatch.id)
+          .order('game_number', { ascending: true });
+        liveMapText = liveMapLabel(games ?? [], liveBannerMatch.bestOf);
+      }
     }
   }
 
@@ -214,6 +234,7 @@ async function getScheduleData(): Promise<MatchSchedulePageDataWithUnit> {
     }),
     pointUnit: pointUnitLabel(circuit?.point_unit),
     circuitId: circuit?.id ?? null,
+    liveMapText,
   };
 }
 
@@ -247,9 +268,17 @@ function renderMatchStatusBadge(status: ScheduleMatchDisplayStatus) {
   );
 }
 
-export default async function MatchSchedulePage() {
+export default async function MatchSchedulePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ f?: string | string[] }>;
+}) {
+  const sp = (await searchParams) ?? {};
+  const filter: ScheduleFilter = parseScheduleFilter(sp.f);
   const data = await getScheduleData();
   const live = data.liveBannerMatch;
+  const visibleMatches = filterScheduleMatches(data.todayMatches, filter, new Date());
+  const seedByTeam = new Map(data.standings.map((st) => [st.teamId, st.rank]));
 
   return (
     <div className="min-h-screen bg-[#0D0E1A] text-[#e9e9ed] font-sans pb-20">
@@ -268,6 +297,33 @@ export default async function MatchSchedulePage() {
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-wider text-white mb-6">
             {data.seasonTitle}
           </h1>
+
+          {/* FILTER TABS */}
+          <nav aria-label="กรองตารางแข่ง" className="flex flex-wrap gap-1.5" data-testid="schedule-filters">
+            {SCHEDULE_FILTERS.map((f) => {
+              const active = f.key === filter;
+              const base = 'rounded-md px-4 py-1.5 text-xs font-bold tracking-wider transition-colors flex items-center gap-1.5';
+              const tone = active
+                ? f.key === 'live'
+                  ? 'bg-[#dc3232]/20 border border-[#dc3232]/60 text-[#ff6b6b]'
+                  : 'bg-[#E8B429] text-[#0D0E1A] border border-[#E8B429]'
+                : f.key === 'live'
+                  ? 'bg-[#dc3232]/10 border border-[#dc3232]/40 text-[#ff6b6b] hover:bg-[#dc3232]/20'
+                  : 'border border-[#E8B429]/25 text-[#b2b6ca] hover:border-[#E8B429]/60 hover:text-white';
+              return (
+                <Link
+                  key={f.key}
+                  href={scheduleFilterHref(f.key)}
+                  aria-current={active ? 'page' : undefined}
+                  data-filter={f.key}
+                  className={`${base} ${tone}`}
+                >
+                  {f.key === 'live' && <span className="h-1.5 w-1.5 rounded-full bg-[#ff4444] animate-pulse" />}
+                  {f.label}
+                </Link>
+              );
+            })}
+          </nav>
         </div>
 
         {/* 3. LIVE MATCH BANNER */}
@@ -281,7 +337,10 @@ export default async function MatchSchedulePage() {
                     LIVE NOW
                   </span>
                   <span className="text-white/20 text-xs">|</span>
-                  <span className="text-xs text-[#9397ab]">{live.stageRoundLabel}</span>
+                  <span className="text-xs text-[#9397ab]">
+                    {live.stageRoundLabel}
+                    {data.liveMapText ? ` · ${data.liveMapText}` : ''}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-5 md:gap-7 flex-wrap">
@@ -289,6 +348,9 @@ export default async function MatchSchedulePage() {
                     <div className="text-xl md:text-2xl font-black tracking-wider text-[#E8B429]">
                       {live.teamA.name}
                     </div>
+                    {live.teamA.id && seedByTeam.has(live.teamA.id) && (
+                      <div className="mt-0.5 text-[10px] tracking-wider text-[#75798c]">#{seedByTeam.get(live.teamA.id)} SEED</div>
+                    )}
                   </div>
 
                   <div className="text-center px-2">
@@ -306,9 +368,20 @@ export default async function MatchSchedulePage() {
                     <div className="text-xl md:text-2xl font-black tracking-wider text-[#cfd3e5]">
                       {live.teamB.name}
                     </div>
+                    {live.teamB.id && seedByTeam.has(live.teamB.id) && (
+                      <div className="mt-0.5 text-[10px] tracking-wider text-[#75798c]">#{seedByTeam.get(live.teamB.id)} SEED</div>
+                    )}
                   </div>
                 </div>
               </div>
+
+              <Link
+                href={`/spectate/${live.id}`}
+                className="flex flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#cc2828] px-6 py-3 text-sm font-extrabold tracking-wider text-white hover:bg-[#b02222]"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="white" aria-hidden="true"><polygon points="3,1 13,7 3,13" /></svg>
+                ดูสด / WATCH LIVE
+              </Link>
             </div>
           </div>
         )}
@@ -326,13 +399,13 @@ export default async function MatchSchedulePage() {
             <div className="h-[1px] flex-1 bg-gradient-to-r from-[#E8B429]/25 to-transparent" />
           </div>
 
-          {data.todayMatches.length === 0 ? (
+          {visibleMatches.length === 0 ? (
             <div className="rounded-xl border border-white/10 bg-[#1A1C2E] p-8 text-center text-sm text-[#75798c]">
-              ยังไม่มีตารางแข่งขันในซีซันนี้
+              {filter === 'all' ? 'ยังไม่มีตารางแข่งขันในซีซันนี้' : 'ไม่มีแมตช์ในหมวดนี้'}
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {data.todayMatches.map((m) => (
+              {visibleMatches.map((m) => (
                 <div
                   key={m.id}
                   className={`flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-xl border p-4 transition-all ${
