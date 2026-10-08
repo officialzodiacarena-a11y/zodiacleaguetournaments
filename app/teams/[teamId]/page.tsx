@@ -6,6 +6,7 @@ import { lockRosterAction } from '@/actions/team';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { InvitePlayerModal } from '@/components/team/InvitePlayerModal';
+import { pickCardStats, formatKd, formatAdr, isStrongKd, type PlayerStatRow } from '@/lib/team/playerCardStats';
 
 interface PageProps {
   params: Promise<{ teamId: string }>;
@@ -82,6 +83,16 @@ async function getTeamProfileData(teamIdParam: string): Promise<(TeamProfileData
     supabase.from('circuits').select('id, name').eq('game_id', team.game_id),
   ]);
 
+  const memberPlayerIds = ((members ?? []) as unknown as MemberRow[]).map((m) => m.player_id);
+  const { data: statRows } =
+    memberPlayerIds.length > 0
+      ? await supabase
+          .from('player_stats')
+          .select('player_id, game_id, season_id, avg_kd, avg_adr, updated_at')
+          .eq('game_id', team.game_id)
+          .in('player_id', memberPlayerIds)
+      : { data: [] as PlayerStatRow[] };
+
   const circuitIds = (circuits ?? []).map((c) => c.id);
   const { data: activeSeasons } =
     circuitIds.length > 0
@@ -132,6 +143,7 @@ async function getTeamProfileData(teamIdParam: string): Promise<(TeamProfileData
         isSubstitute: m.role === 'SUBSTITUTE',
         jerseyNumber: m.jersey_number,
         isVerified,
+        ...pickCardStats((statRows ?? []) as PlayerStatRow[], player.id, team.game_id),
       };
       return slot;
     })
@@ -347,15 +359,22 @@ export default async function TeamProfilePage({ params }: PageProps) {
                     >
                       <div className="text-base font-bold text-white tracking-wide truncate cursor-pointer hover:text-[#00D4FF] transition-colors underline decoration-dashed decoration-zinc-600 underline-offset-4">{player.handle}</div>
                     </AthleteQuickPopover>
-                    <div className="text-[11px] text-[#9397ab] mb-2.5 truncate">{player.fullNameTh}</div>
-                    <div className="flex items-center justify-between border-t border-white/5 pt-2 text-center">
+                    <div className="text-[11px] text-[#9397ab] mb-2.5 truncate">
+                      {player.fullNameTh}
+                      {player.jerseyNumber !== null ? ` · #${player.jerseyNumber}` : ''}
+                    </div>
+                    <div className="flex items-center justify-between border-t border-white/5 pt-2 text-center" data-testid="player-card-stats">
                       <div>
-                        <div className="text-sm font-bold text-[#cfd3e5]">
-                          {player.jerseyNumber !== null ? `#${player.jerseyNumber}` : '—'}
+                        <div className={`text-sm font-bold ${isStrongKd(player.avgKd ?? null) ? 'text-[#4AE38F]' : 'text-[#E8B429]'}`}>
+                          {formatKd(player.avgKd ?? null)}
                         </div>
-                        <div className="text-[9px] text-[#75798c]">JERSEY</div>
+                        <div className="text-[9px] text-[#75798c]">K/D</div>
                       </div>
-                      <div className="flex items-center gap-1.5">
+                      <div>
+                        <div className="text-sm font-bold text-[#E8B429]">{formatAdr(player.avgAdr ?? null)}</div>
+                        <div className="text-[9px] text-[#75798c]">ADR</div>
+                      </div>
+                      <div className="flex items-center gap-1.5" title={player.isVerified ? 'ยืนยันตัวตนแล้ว' : 'ยังไม่ยืนยันตัวตน'}>
                         <span className={`h-2 w-2 rounded-full ${player.isVerified ? 'bg-[#4AE38F]' : 'bg-[#E35A5A]'}`} />
                         <span className={`text-[9px] font-bold ${player.isVerified ? 'text-[#4AE38F]' : 'text-[#E35A5A]'}`}>
                           {player.isVerified ? 'VERIFIED' : 'UNVERIFIED'}
