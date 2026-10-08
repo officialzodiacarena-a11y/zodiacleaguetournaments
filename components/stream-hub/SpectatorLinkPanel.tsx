@@ -56,7 +56,23 @@ export function SpectatorLinkPanel({
     let active = true;
     const load = async () => {
       const { data } = await createClient().from('matches').select('format_config').eq('id', matchId).maybeSingle();
-      if (active) setFormatConfig((data?.format_config as Record<string, unknown>) ?? {});
+      // รหัสห้องไม่อยู่ใน format_config แล้ว (anon อ่านได้) — ดึงจาก match_lobby_secrets ผ่านเซิร์ฟเวอร์
+      let lobbyCodeFromServer: string | undefined;
+      try {
+        const codeRes = await fetch(`/api/v1/matches/lobby-codes?ids=${matchId}`, { cache: 'no-store' });
+        if (codeRes.ok) {
+          const codeJson = (await codeRes.json()) as { codes?: Record<string, string> };
+          lobbyCodeFromServer = codeJson.codes?.[matchId];
+        }
+      } catch {
+        // ใช้ค่าเดิม
+      }
+      if (active) {
+        setFormatConfig({
+          ...((data?.format_config as Record<string, unknown>) ?? {}),
+          ...(lobbyCodeFromServer ? { lobby_code: lobbyCodeFromServer } : {}),
+        });
+      }
       try {
         const res = await fetch(`/api/v1/matches/${matchId}/rounds`, { cache: 'no-store' });
         if (res.ok && active) {

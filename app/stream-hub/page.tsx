@@ -38,6 +38,20 @@ import {
 import type { BuyPhasePlayer } from '@/components/overlay/BuyPhaseHud';
 import { TEAM_A_TEXT, TEAM_B_TEXT, DetailCell, isGameDone, type OverlayTeam, type OverlayVeto, type OverlayGame } from '@/components/overlay/series';
 
+// รหัสห้องเกมอยู่ในตาราง match_lobby_secrets (anon อ่านไม่ได้) — ดึงผ่านเซิร์ฟเวอร์ที่ตรวจสิทธิ์ผู้คุมการถ่ายทอด
+async function fetchLobbyCodes(matchIds: string[]): Promise<Record<string, string>> {
+  if (matchIds.length === 0) return {};
+  try {
+    const res = await fetch(`/api/v1/matches/lobby-codes?ids=${matchIds.join(',')}`, { cache: 'no-store' });
+    if (!res.ok) return {};
+    const json = (await res.json()) as { codes?: Record<string, string> };
+    return json.codes ?? {};
+  } catch {
+    return {};
+  }
+}
+
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yjygevsdfebdyzywbpdr.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_Y3j6k9biGK8YsBiHkaibkw_IcAFbWQj';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -351,8 +365,8 @@ export default function StreamHubMainPage({
         .limit(30);
 
       if (!error && matchesData) {
+        const lobbyCodes = await fetchLobbyCodes(matchesData.map((m) => m.id));
         const formatted: SqlMatchOption[] = matchesData.map((m) => {
-          const cfg = m.format_config as Record<string, unknown> | null;
           const tour = m.tournaments as unknown as { id: string; name: string; status: string } | null;
           const teamAObj = m.team_a as unknown as { id: string; name: string; tag: string } | null;
           const teamBObj = m.team_b as unknown as { id: string; name: string; tag: string } | null;
@@ -363,7 +377,7 @@ export default function StreamHubMainPage({
             tournament_name: tour?.name || (m.tournament_id ? 'Tournament Match' : null),
             stage_id: m.stage_id,
             best_of: m.best_of ?? 1,
-            lobby_code: (cfg?.lobby_code as string) || null,
+            lobby_code: lobbyCodes[m.id] || null,
             rounds_won_a: m.rounds_won_a ?? 0,
             rounds_won_b: m.rounds_won_b ?? 0,
             team_a_ready_at: m.team_a_ready_at,
@@ -398,7 +412,7 @@ export default function StreamHubMainPage({
         .single();
 
       if (matchData) {
-        const cfg = matchData.format_config as Record<string, unknown> | null;
+        const detailLobbyCode = (await fetchLobbyCodes([matchData.id]))[matchData.id] || null;
         const tour = matchData.tournaments as { id: string; name: string; status: string } | null;
 
         setActiveMatchData({
@@ -408,7 +422,7 @@ export default function StreamHubMainPage({
           tournament_name: tour?.name || null,
           stage_id: matchData.stage_id,
           best_of: matchData.best_of ?? 1,
-          lobby_code: (cfg?.lobby_code as string) || null,
+          lobby_code: detailLobbyCode,
           rounds_won_a: matchData.rounds_won_a ?? 0,
           rounds_won_b: matchData.rounds_won_b ?? 0,
           team_a_ready_at: matchData.team_a_ready_at,
