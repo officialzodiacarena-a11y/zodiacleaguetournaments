@@ -4,10 +4,11 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireBroadcastRole } from '@/lib/auth/require-broadcast-role';
 import { asUpdate } from '@/types/supabase-helpers';
+import { readLobbyCodes, saveLobbyCode } from '@/lib/match/lobby-secret';
 
 // ตั้งค่าการถ่ายทอดของแมตช์ใน matches.format_config (merge — ไม่ทับคีย์อื่นเช่น overlay_scene / observer_token_hash)
 //   live_source : แหล่งภาพของ Stream Hub (OFF / A / B / C) — ดู lib/stream-hub/live-source.ts
-//   lobby_code  : รหัสห้องในเกม
+//   lobby_code  : รหัสห้องในเกม — เก็บในตาราง match_lobby_secrets (ไม่ใช่ format_config ที่ anon อ่านได้)
 // เดิมหน้าเว็บเขียน format_config ตรงจากเบราว์เซอร์ ซึ่ง RLS บล็อกเงียบๆ (ไม่ error แต่ไม่บันทึก) — ย้ายมาทำฝั่งเซิร์ฟเวอร์ที่ตรวจสิทธิ์
 const PlaylistItemSchema = z.object({
   id: z.string().optional(),
@@ -89,17 +90,28 @@ export async function PATCH(
               muted: typeof muted === 'boolean' ? muted : (curLive.muted ?? false),
             };
     }
-    if (parsed.data.lobby_code) next.lobby_code = parsed.data.lobby_code.toUpperCase();
-
-    const { error } = await admin
-      .from('matches')
-      .update(asUpdate<'matches'>({ format_config: next, updated_at: new Date().toISOString() }))
-      .eq('id', matchId);
-    if (error) {
-      return NextResponse.json({ error: { code: 'TRANSACTION_FAILED', message: error.message } }, { status: 500 });
+    if (parsed.data.live_source) {
+      const { error } = await admin
+        .from('matches')
+        .update(asUpdate<'matches'>({ format_config: next, updated_at: new Date().toISOString() }))
+        .eq('id', matchId);
+      if (error) {
+        return NextResponse.json({ error: { code: 'TRANSACTION_FAILED', message: error.message } }, { status: 500 });
+      }
     }
 
-    return NextResponse.json({ live_source: next.live_source ?? null, lobby_code: next.lobby_code ?? null });
+    let lobbyCode: string | null = null;
+    if (parsed.data.lobby_code) {
+      lobbyCode = parsed.data.lobby_code.toUpperCase();
+      const saved = await saveLobbyCode(admin, matchId, lobbyCode, auth.playerId);
+      if (saved.error) {
+        return NextResponse.json({ error: { code: 'TRANSACTION_FAILED', message: saved.error } }, { status: 500 });
+      }
+    } else {
+      lobbyCode = (await readLobbyCodes(admin, [matchId]))[matchId] ?? null;
+    }
+
+    return NextResponse.json({ live_source: next.live_source ?? null, lobby_code: lobbyCode });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     return NextResponse.json({ error: { code: 'SERVER_ERROR', message } }, { status: 500 });

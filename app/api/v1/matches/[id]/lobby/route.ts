@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { readLobbyCodes } from '@/lib/match/lobby-secret';
 import { effectiveReadyDeadline, isStaffRole } from '@/lib/match/ready-access';
 import { decideLobbyAccess } from '@/lib/match/lobby-access';
 import { cleanIds } from '@/types/supabase-helpers';
@@ -144,7 +146,8 @@ export async function GET(req: Request, { params }: PageProps) {
       created_at: m.created_at,
     }));
 
-    const formatConfig = match.format_config as { lobby_code?: string } | null;
+    // รหัสห้องอยู่ใน match_lobby_secrets (ผ่านการตรวจสิทธิ์ด้านบนแล้ว จึงอ่านด้วย admin client)
+    const lobbyCodes = await readLobbyCodes(createAdminClient(), [match.id]);
 
     return NextResponse.json({
       match_id: match.id,
@@ -158,7 +161,7 @@ export async function GET(req: Request, { params }: PageProps) {
         teamAReadyAt: match.team_a_ready_at,
         teamBReadyAt: match.team_b_ready_at,
       }),
-      lobby_code: formatConfig?.lobby_code ?? null,
+      lobby_code: lobbyCodes[match.id] ?? null,
       team_a: teamAData ? {
         id: teamAData.id,
         name: teamAData.name,

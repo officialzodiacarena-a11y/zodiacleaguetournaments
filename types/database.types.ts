@@ -2019,6 +2019,35 @@ export type Database = {
           },
         ]
       }
+      match_lobby_secrets: {
+        Row: {
+          lobby_code: string
+          match_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          lobby_code: string
+          match_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          lobby_code?: string
+          match_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_lobby_secrets_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_rounds: {
         Row: {
           created_at: string
