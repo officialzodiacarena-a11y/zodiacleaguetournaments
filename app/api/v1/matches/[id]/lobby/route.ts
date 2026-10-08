@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { effectiveReadyDeadline } from '@/lib/match/ready-access';
+import { effectiveReadyDeadline, isStaffRole } from '@/lib/match/ready-access';
+import { decideLobbyAccess } from '@/lib/match/lobby-access';
+import { cleanIds } from '@/types/supabase-helpers';
 
 interface PageProps {
   params: Promise<{ id: string }> | { id: string };
@@ -51,6 +53,40 @@ export async function GET(req: Request, { params }: PageProps) {
 
     const teamAId = teamAData?.id;
     const teamBId = teamBData?.id;
+
+    // ตรวจสิทธิ์: ต้องล็อกอิน และเป็นสตาฟ/กรรมการของแมตช์นี้ หรือสมาชิก ACTIVE ของทีม A/B (เดิมไม่ตรวจเลย · คืนรหัสห้องเกมให้ทุกคน)
+    const { data: { user } } = await supabase.auth.getUser();
+    let isStaff = false;
+    let memberships: { team_id: string }[] = [];
+    if (user) {
+      const { data: player } = await supabase.from('players').select('id').eq('user_id', user.id).maybeSingle();
+      if (player) {
+        const { data: userRoles } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('player_id', player.id)
+          .is('revoked_at', null);
+        isStaff = isStaffRole((userRoles ?? []).map((r) => r.role)) || refereeData?.id === player.id;
+
+        const { data: teamMemberships } = await supabase
+          .from('team_members')
+          .select('team_id')
+          .eq('player_id', player.id)
+          .eq('status', 'ACTIVE')
+          .in('team_id', cleanIds(teamAId ?? null, teamBId ?? null));
+        memberships = teamMemberships ?? [];
+      }
+    }
+    const access = decideLobbyAccess({
+      isAuthenticated: !!user,
+      isStaff,
+      teamAId: teamAId ?? null,
+      teamBId: teamBId ?? null,
+      memberships,
+    });
+    if (!access.ok) {
+      return NextResponse.json({ error: { code: access.code, message: access.message } }, { status: access.httpStatus });
+    }
 
     let teamARoster: { id: string | null; display_name: string; role: string }[] = [];
     let teamBRoster: { id: string | null; display_name: string; role: string }[] = [];
