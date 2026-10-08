@@ -3,7 +3,7 @@ import type { createClient } from '@/lib/supabase/server';
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
-// MARKETPLACE_ADMIN (Patch V1.01) can manage the SINOPEC catalog/categories/
+// MARKETPLACE_ADMIN (Patch V1.01) can manage the store catalog/categories/
 // shipments but must stay isolated from Command Room powers (void match,
 // settle pools, KYC) — never add it to an allow-list outside lib/admin/marketplace/*
 // and the routes/pages under app/admin/marketplace/.

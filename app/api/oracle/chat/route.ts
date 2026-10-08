@@ -95,23 +95,40 @@ async function buildLiveContext(
     }
   }
 
-  if (/sinopec|สินค้า|แลก|น้ำมัน|คูปอง/i.test(message)) {
-    const { data: items } = await supabase
+  if (/สินค้า|แลก|คูปอง|ร้านค้า|ของรางวัล/i.test(message)) {
+    // สินค้าที่เปิดขายในร้านเริ่มต้น (ไม่ผูกแบรนด์ใดแบรนด์หนึ่ง) · สินค้าที่ยังไม่มี storefront_id นับเป็นร้านเริ่มต้น
+    const { data: storefront } = await supabase
+      .from('storefronts')
+      .select('id')
+      .eq('slug', 'zodiac-esports')
+      .eq('is_active', true)
+      .maybeSingle();
+
+    let itemsQuery = supabase
       .from('store_items')
-      .select('name, store_item_variants(name, price_ap)')
-      .eq('partner_brand', 'SINOPEC')
+      .select('name, brand:brand_id(name), store_item_variants(name, price_ap)')
       .eq('is_active', true)
       .limit(5);
+    if (storefront) {
+      itemsQuery = itemsQuery.or(`storefront_id.eq.${storefront.id},storefront_id.is.null`);
+    }
+    const { data: items } = await itemsQuery;
 
     if (items?.length) {
       const itemList = (
-        items as unknown as { name: string; store_item_variants: { name: string; price_ap: number }[] }[]
+        items as unknown as {
+          name: string;
+          brand: { name: string } | null;
+          store_item_variants: { name: string; price_ap: number }[];
+        }[]
       )
         .flatMap((item) =>
-          (item.store_item_variants ?? []).map((v) => `${item.name} - ${v.name} (${v.price_ap} AP)`)
+          (item.store_item_variants ?? []).map(
+            (v) => `${item.name}${item.brand ? ` [${item.brand.name}]` : ''} - ${v.name} (${v.price_ap} AP)`
+          )
         )
         .join(', ');
-      if (itemList) context.push(`[Live Data] สินค้า SINOPEC ที่พร้อมแลก: ${itemList}`);
+      if (itemList) context.push(`[Live Data] สินค้าในร้านที่พร้อมแลก: ${itemList}`);
     }
   }
 

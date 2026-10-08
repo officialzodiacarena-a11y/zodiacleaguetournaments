@@ -162,7 +162,7 @@ export default async function AdminMasterHubPage() {
               ZODIAC <span className="text-[#E8B429]">OPERATIONS COMMAND HUB</span>
             </h1>
             <p className="text-xs text-[#94A3B8] mt-0.5">
-              ศูนย์บัญชาการควบคุมการแข่งขัน ตรวจสอบสถิตินักกีฬา และจัดการระบบร้านค้า SINOPEC
+              ศูนย์บัญชาการควบคุมการแข่งขัน ตรวจสอบสถิตินักกีฬา และจัดการระบบร้านค้า
             </p>
           </div>
 
@@ -353,7 +353,7 @@ export default async function AdminMasterHubPage() {
                   <Store className="w-5 h-5" />
                 </div>
                 <span className="rounded-full bg-[#4CAF50]/15 px-2.5 py-0.5 text-[10px] font-mono font-bold text-[#4CAF50]">
-                  SINOPEC PARTNER
+                  STORE PARTNERS
                 </span>
               </div>
               <h3 className="text-lg font-black text-white group-hover:text-[#4CAF50] transition-colors">
@@ -414,7 +414,7 @@ export default async function AdminMasterHubPage() {
                 Category Tree
               </h3>
               <p className="text-xs text-[#94A3B8] mt-1 line-clamp-2">
-                จัดหมวดหมู่สินค้าโครงสร้างแม่-ลูก (Parent-Child) และจัดสรรสินค้าแบรนด์ SINOPEC
+                จัดหมวดหมู่สินค้าโครงสร้างแม่-ลูก (Parent-Child) และจัดสรรสินค้าตามแบรนด์
               </p>
               <div className="mt-4 flex items-center gap-1.5 text-[11px] font-bold text-[#94A3B8] group-hover:text-white">
                 <span>จัดการหมวดหมู่</span>

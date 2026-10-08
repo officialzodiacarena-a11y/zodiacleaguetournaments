@@ -127,7 +127,7 @@ export function CreateItemForm({ categories, onCreated, onCancel }: CreateItemFo
         <input
           value={partnerBrand}
           onChange={(e) => setPartnerBrand(e.target.value)}
-          placeholder="partner_brand (เว้นว่างได้) เช่น SINOPEC"
+          placeholder="partner_brand (เว้นว่างได้) ชื่อแบรนด์"
           className="w-full rounded-lg bg-[#12142A] px-3 py-2 text-sm text-[#F9EDD8] md:col-span-2"
         />
       </div>

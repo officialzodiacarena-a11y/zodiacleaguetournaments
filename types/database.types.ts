@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      brands: {
+        Row: {
+          badge_icon: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          logo_url: string | null
+          name: string
+          slug: string
+          sponsor_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          badge_icon?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name: string
+          slug: string
+          sponsor_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          badge_icon?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name?: string
+          slug?: string
+          sponsor_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brands_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sponsor_banners: {
         Row: {
           brand_name: string | null
@@ -4115,6 +4159,8 @@ export type Database = {
       }
       store_categories: {
         Row: {
+          brand_id: string | null
+          storefront_id: string | null
           created_at: string | null
           display_order: number | null
           icon_url: string | null
@@ -4126,6 +4172,8 @@ export type Database = {
           slug: string
         }
         Insert: {
+          brand_id?: string | null
+          storefront_id?: string | null
           created_at?: string | null
           display_order?: number | null
           icon_url?: string | null
@@ -4137,6 +4185,8 @@ export type Database = {
           slug: string
         }
         Update: {
+          brand_id?: string | null
+          storefront_id?: string | null
           created_at?: string | null
           display_order?: number | null
           icon_url?: string | null
@@ -4148,6 +4198,20 @@ export type Database = {
           slug?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "store_categories_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_categories_storefront_id_fkey"
+            columns: ["storefront_id"]
+            isOneToOne: false
+            referencedRelation: "storefronts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "store_categories_parent_id_fkey"
             columns: ["parent_id"]
@@ -4203,6 +4267,8 @@ export type Database = {
       }
       store_items: {
         Row: {
+          brand_id: string | null
+          storefront_id: string | null
           category_id: string | null
           created_at: string
           description: string | null
@@ -4218,6 +4284,8 @@ export type Database = {
           type: string
         }
         Insert: {
+          brand_id?: string | null
+          storefront_id?: string | null
           category_id?: string | null
           created_at?: string
           description?: string | null
@@ -4233,6 +4301,8 @@ export type Database = {
           type: string
         }
         Update: {
+          brand_id?: string | null
+          storefront_id?: string | null
           category_id?: string | null
           created_at?: string
           description?: string | null
@@ -4249,6 +4319,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "store_items_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_items_storefront_id_fkey"
+            columns: ["storefront_id"]
+            isOneToOne: false
+            referencedRelation: "storefronts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "store_items_category_id_fkey"
             columns: ["category_id"]
             isOneToOne: false
@@ -4256,6 +4340,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      storefronts: {
+        Row: {
+          allow_ap_payment: boolean
+          allow_fiat_payment: boolean
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          require_athlete_profile: boolean
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          allow_ap_payment?: boolean
+          allow_fiat_payment?: boolean
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          require_athlete_profile?: boolean
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          allow_ap_payment?: boolean
+          allow_fiat_payment?: boolean
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          require_athlete_profile?: boolean
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       stream_sessions: {
         Row: {

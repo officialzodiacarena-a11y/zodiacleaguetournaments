@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { categoryTabLabel, type StoreBrand } from '@/lib/store/brand-display';
 
 interface CategoryNode {
   id: string;
   name: string;
   slug: string;
   partner_brand: string | null;
+  brand?: StoreBrand | null;
   children: CategoryNode[];
 }
 
@@ -53,7 +55,7 @@ export function CategoryFilter({ activeSlug, onSelect }: CategoryFilterProps) {
             activeSlug === tab.slug ? 'bg-[#E8B429] text-[#0D0E1A]' : 'bg-[#1A1C2E] text-[#94A3B8] hover:text-[#F9EDD8]'
           }`}
         >
-          {tab.partner_brand === 'SINOPEC' ? `🛢️ ${tab.name}` : tab.name}
+          {categoryTabLabel(tab.name, tab.brand)}
         </button>
       ))}
     </div>

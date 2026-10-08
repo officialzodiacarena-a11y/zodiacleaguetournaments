@@ -226,7 +226,7 @@ export default async function LandingPage() {
           </div>
 
           <p className="max-w-2xl mx-auto text-sm md:text-base text-[#94A3B8] leading-relaxed">
-            เวทีประลองอีสปอร์ตระดับมืออาชีพ ผสานระบบพาสปอร์ตนักกีฬา การสะสมแต้ม VLP ชิงตั๋ว Grand Finals และระบบ Watch-to-Earn แลกของรางวัลพาร์ตเนอร์ SINOPEC
+            เวทีประลองอีสปอร์ตระดับมืออาชีพ ผสานระบบพาสปอร์ตนักกีฬา การสะสมแต้ม VLP ชิงตั๋ว Grand Finals และระบบ Watch-to-Earn แลกของรางวัลพาร์ตเนอร์
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
@@ -419,7 +419,7 @@ export default async function LandingPage() {
               </div>
             </Link>
 
-            {/* Pillar 4: SINOPEC Store */}
+            {/* Pillar 4: Partner Store */}
             <Link
               href="/store"
               className="group relative overflow-hidden rounded-xl border border-white/5 bg-[#101223] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#4CAF50]/40 hover:shadow-[0_10px_30px_rgba(76,175,80,0.12)]"
@@ -431,10 +431,10 @@ export default async function LandingPage() {
                 <span className="text-[10px] font-mono text-zinc-500">04 / REWARDS</span>
               </div>
               <h4 className="text-base font-black text-white group-hover:text-[#4CAF50] transition-colors">
-                SINOPEC MARKETPLACE
+                PARTNER MARKETPLACE
               </h4>
               <p className="text-xs text-[#94A3B8] mt-2 leading-relaxed">
-                นำแต้ม AP ที่สะสมได้มาแลกรับของรางวัลพาร์ตเนอร์ SINOPEC และสินค้าพรีเมียมลิขสิทธิ์
+                นำแต้ม AP ที่สะสมได้มาแลกรับของรางวัลจากพาร์ตเนอร์และสินค้าพรีเมียมลิขสิทธิ์
               </p>
               <div className="mt-4 flex items-center gap-1 text-[11px] font-bold text-[#4CAF50]">
                 <span>เข้าสู่ร้านค้าแลกของรางวัล</span>

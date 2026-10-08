@@ -10,7 +10,7 @@ interface VoucherDeliveryProps {
 
 // Shows the digital voucher QR right after a successful redeem. The QR
 // encodes a 5-minute signed token (lib/store/voucherToken.ts) proving
-// ownership of this player_inventory row — SINOPEC scans it at the pump.
+// ownership of this player_inventory row — the partner scans it to honor the voucher.
 // Note: there's no partner-facing scan/redeem endpoint yet (player_inventory
 // has no status/redeemed_at column to flip — see the token route's comment),
 // so this component covers issuance + display only.
@@ -52,7 +52,7 @@ export function VoucherDelivery({ inventoryId, onClose }: VoucherDeliveryProps) 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
       <div className="w-full max-w-sm rounded-2xl bg-[#1A1C2E] p-6 text-center">
         <h3 className="mb-1 text-sm font-black text-[#F9EDD8]">Digital Voucher QR</h3>
-        <p className="mb-4 text-xs text-[#94A3B8]">แสดง QR นี้ที่ปั๊ม SINOPEC เพื่อใช้สิทธิ์</p>
+        <p className="mb-4 text-xs text-[#94A3B8]">แสดง QR นี้กับร้านพาร์ตเนอร์เพื่อใช้สิทธิ์</p>
 
         {error && <p className="mb-4 text-xs text-red-400">{error}</p>}
 
