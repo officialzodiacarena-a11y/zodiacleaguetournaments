@@ -19,6 +19,8 @@ export interface PlayerSlot {
   isSubstitute: boolean;    // role === 'SUBSTITUTE'
   jerseyNumber: number | null;
   isVerified: boolean;      // มี game_account ที่ verification_status = VERIFIED
+  avgKd?: number | null;    // จาก player_stats (null = ยังไม่มีสถิติ)
+  avgAdr?: number | null;   // จาก player_stats
 }
 
 export interface TeamProfileData {
