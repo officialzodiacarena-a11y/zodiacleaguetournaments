@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { planSingleEliminationBracket, type SeededTeam } from '@/lib/tournament/generateSingleEliminationBracket';
 import { planDoubleEliminationBracket, type PlannedDENode } from '@/lib/tournament/generateDoubleEliminationBracket';
 import { planRoundRobinBracket } from '@/lib/tournament/generateRoundRobinBracket';
+import { recordTournamentSeeds, type SeedWriterClient } from '@/lib/tournament/recordSeeds';
 
 interface SingleElimNodePatch {
   winner_to_node_id?: string | null;
@@ -224,6 +225,15 @@ export async function POST(
     return NextResponse.json({ error: { code: 'BRACKET_GENERATION_FAILED', message } }, { status: 500 });
   }
 
+  // สร้างสายสำเร็จแล้วค่อยบันทึกซีด (หลังผ่านสิทธิ์ของผู้ใช้ผ่านการ insert โหนดแล้ว) · best-effort ไม่ทำให้ response เปลี่ยน
+  async function recordSeedsBestEffort(): Promise<void> {
+    try {
+      await recordTournamentSeeds(admin as unknown as SeedWriterClient, stage!.tournament_id, seededTeams);
+    } catch {
+      /* ข้าม: ซีดเป็นข้อมูลแสดงผล ไม่ใช่ส่วนจำเป็นของสาย */
+    }
+  }
+
   async function moveStageToSeeding(): Promise<{ id: string; status: string }> {
     const { data: stageUpdateData, error: stageUpdateError } = await supabase
       .from('tournament_stages')
@@ -308,6 +318,7 @@ export async function POST(
       return cleanupAndFail(insertedIds, err);
     }
 
+    await recordSeedsBestEffort();
     return NextResponse.json(
       {
         data: {
@@ -400,6 +411,7 @@ export async function POST(
       return cleanupAndFail(insertedIds, err);
     }
 
+    await recordSeedsBestEffort();
     return NextResponse.json(
       {
         data: {
@@ -465,6 +477,7 @@ export async function POST(
     return cleanupAndFail(insertedIds, err);
   }
 
+  await recordSeedsBestEffort();
   return NextResponse.json(
     {
       data: {
