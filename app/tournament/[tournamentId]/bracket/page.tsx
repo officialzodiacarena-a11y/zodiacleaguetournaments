@@ -1,8 +1,10 @@
 // app/tournament/[tournamentId]/bracket/page.tsx
 import { notFound } from 'next/navigation';
-import type { TournamentBracketPageData, BracketMatchNode, BracketTeamParticipant, BracketGameResult } from '@/types/bracket';
+import type { TournamentBracketPageData, BracketMatchNode, BracketTeamParticipant, BracketGameResult, BracketMatchMvp } from '@/types/bracket';
 import { TournamentBracketView } from '@/components/tournament-bracket-view';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { pickMatchMvp, groupParticipantsByMatch, type ParticipantRow } from '@/lib/tournament/matchMvp';
 import { SponsorSlot } from '@/components/sponsor/SponsorSlot';
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
 import { StageStandingsTable } from '@/components/tournament/StageStandingsTable';
@@ -84,7 +86,7 @@ export default async function TournamentBracketPage({ params }: PageProps) {
       if (!id) return undefined;
       const t = teamById.get(id);
       if (!t) return undefined;
-      return { id: t.id, name: t.name, tag: t.tag, logoUrl: t.logo_url };
+      return { id: t.id, name: t.name, tag: t.tag, logoUrl: t.logo_url, seed: seedByTeam.get(t.id) };
     };
 
     const matchIds = (nodes ?? []).flatMap((n) => (n.matches && n.matches.length > 0 ? [n.matches[0].id] : []));
@@ -103,7 +105,41 @@ export default async function TournamentBracketPage({ params }: PageProps) {
       }
     }
 
-    matches = (nodes ?? []).map((n, idx) => { const m = n.matches && n.matches.length > 0 ? n.matches[0] : null; return { matchId: m?.id, games: m ? gamesByMatch.get(m.id) : undefined, scoreA: m?.score_a ?? undefined, scoreB: m?.score_b ?? undefined, winnerTeamId: m?.winner_team_id ?? undefined,
+    // ซีดของทีมในทัวร์นี้ (tournament_registrations.seed · ยังไม่มีคอลัมน์/ค่า = ไม่แสดง)
+    const seedByTeam = new Map<string, number>();
+    {
+      const { data: seedRows, error: seedErr } = await createAdminClient()
+        .from('tournament_registrations')
+        .select('team_id, seed')
+        .eq('tournament_id', tournament.id);
+      if (!seedErr) {
+        for (const r of (seedRows ?? []) as unknown as { team_id: string; seed: number | null }[]) {
+          if (typeof r.seed === 'number') seedByTeam.set(r.team_id, r.seed);
+        }
+      }
+    }
+
+    // MVP รายแมตช์จาก match_participants
+    const mvpByMatch = new Map<string, BracketMatchMvp>();
+    if (matchIds.length > 0) {
+      const { data: partRows } = await supabase
+        .from('match_participants')
+        .select('match_id, player_id, kills, deaths, acs')
+        .in('match_id', matchIds);
+      const grouped = groupParticipantsByMatch((partRows ?? []) as unknown as ParticipantRow[]);
+      const picks = new Map<string, ReturnType<typeof pickMatchMvp>>();
+      for (const [mid, rows] of grouped) picks.set(mid, pickMatchMvp(rows));
+      const playerIds = Array.from(new Set(Array.from(picks.values()).flatMap((p) => (p ? [p.playerId] : []))));
+      if (playerIds.length > 0) {
+        const { data: players } = await supabase.from('players').select('id, display_name').in('id', playerIds);
+        const nameById = new Map((players ?? []).map((pl) => [pl.id, pl.display_name as string]));
+        for (const [mid, p] of picks) {
+          if (p) mvpByMatch.set(mid, { name: nameById.get(p.playerId) ?? 'ATHLETE', acs: p.acs, kd: p.kd });
+        }
+      }
+    }
+
+    matches = (nodes ?? []).map((n, idx) => { const m = n.matches && n.matches.length > 0 ? n.matches[0] : null; return { matchId: m?.id, games: m ? gamesByMatch.get(m.id) : undefined, mvp: m ? mvpByMatch.get(m.id) : undefined, scoreA: m?.score_a ?? undefined, scoreB: m?.score_b ?? undefined, winnerTeamId: m?.winner_team_id ?? undefined,
       id: n.id,
       stageId: stage.id,
       matchNumber: idx + 1,
