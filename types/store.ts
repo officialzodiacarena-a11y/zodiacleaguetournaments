@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { HIGH_GRADE_MIN, MAX_SHOP_GRADE, MIN_SHOP_GRADE } from '@/lib/store/grades';
 
 export const CreateOrderSchema = z.object({
   shippingAddressId: z.string().uuid({ message: 'shippingAddressId ต้องเป็น UUID ที่สมบูรณ์' }).optional(),
@@ -29,6 +30,13 @@ export const CreateShippingAddressSchema = z.object({
 // itemTypeToType() mapping used by the POST /items route.
 export const StoreItemTypeEnum = z.enum(['PHYSICAL', 'DIGITAL', 'VOUCHER']);
 
+// เกรดสินค้า 1-8 (store_items.shop_grade) · เกรด >= 6 ต้องมีจำนวนผลิตทั้งหมดหรือหลักฐาน (ฐานข้อมูลบังคับซ้ำอีกชั้น)
+const GradeFields = {
+  shopGrade: z.number().int().min(MIN_SHOP_GRADE).max(MAX_SHOP_GRADE).optional(),
+  gradeLimitTotal: z.number().int().positive().nullable().optional(),
+  gradeReference: z.string().trim().max(500).nullable().optional(),
+};
+
 export const CreateStoreItemSchema = z.object({
   name: z.string().min(2).max(150),
   // Optional: the admin UI only collects itemType (PHYSICAL/DIGITAL/VOUCHER)
@@ -40,6 +48,7 @@ export const CreateStoreItemSchema = z.object({
   categoryId: z.string().uuid().nullable().optional(),
   itemType: StoreItemTypeEnum.nullable().optional().default('PHYSICAL'),
   partnerBrand: z.string().max(50).nullable().optional(),
+  ...GradeFields,
   variants: z
     .array(
       z.object({
@@ -51,6 +60,22 @@ export const CreateStoreItemSchema = z.object({
       })
     )
     .min(1, { message: 'ต้องมีอย่างน้อย 1 variant' }),
+}).superRefine((data, ctx) => {
+  const grade = data.shopGrade ?? 1;
+  if (grade >= HIGH_GRADE_MIN && !data.gradeLimitTotal && !data.gradeReference?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['gradeLimitTotal'],
+      message: 'เกรด 6 ขึ้นไปต้องใส่จำนวนผลิตทั้งหมดหรือหลักฐาน',
+    });
+  }
+  if (grade >= HIGH_GRADE_MIN && data.variants.length > 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['variants'],
+      message: 'สินค้าเกรด 6 ขึ้นไปสร้างได้รุ่นย่อยเดียว (เพิ่มรุ่นย่อยภายหลังไม่ได้)',
+    });
+  }
 });
 
 export const UpdateStoreItemSchema = z
@@ -59,6 +84,7 @@ export const UpdateStoreItemSchema = z
     description: z.string().nullable().optional(),
     maxPerPlayer: z.number().int().positive().nullable().optional(),
     isActive: z.boolean().optional(),
+    ...GradeFields,
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'ต้องระบุอย่างน้อย 1 ฟิลด์ที่ต้องการอัปเดต' });
 
@@ -153,6 +179,9 @@ export interface StoreItem {
   partner_brand: string | null;
   category_id: string | null;
   created_at: string;
+  shop_grade: number;
+  grade_limit_total: number | null;
+  grade_reference: string | null;
   store_item_variants: StoreItemVariant[];
 }
 

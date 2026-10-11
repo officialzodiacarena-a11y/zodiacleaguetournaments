@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdminRole, MARKETPLACE_ADMIN_ROLES } from '@/lib/admin/requireAdminRole';
 import { UpdateStoreItemSchema } from '@/types/store';
 import { asUpdate } from '@/types/supabase-helpers';
+import { mapGradeDbError } from '@/lib/store/grades';
 
 export async function PATCH(
   req: Request,
@@ -33,13 +34,16 @@ export async function PATCH(
       );
     }
 
-    const { name, description, maxPerPlayer, isActive } = parseResult.data;
+    const { name, description, maxPerPlayer, isActive, shopGrade, gradeLimitTotal, gradeReference } = parseResult.data;
 
     const updatePayload: Record<string, unknown> = {};
     if (name !== undefined) updatePayload.name = name;
     if (description !== undefined) updatePayload.description = description;
     if (maxPerPlayer !== undefined) updatePayload.max_per_player = maxPerPlayer;
     if (isActive !== undefined) updatePayload.is_active = isActive;
+    if (shopGrade !== undefined) updatePayload.shop_grade = shopGrade;
+    if (gradeLimitTotal !== undefined) updatePayload.grade_limit_total = gradeLimitTotal;
+    if (gradeReference !== undefined) updatePayload.grade_reference = gradeReference?.trim() || null;
 
     const adminSupabase = createAdminClient();
     const { data: item, error: updateError } = await adminSupabase
@@ -50,6 +54,8 @@ export async function PATCH(
       .single();
 
     if (updateError) {
+      const gradeErr = mapGradeDbError(updateError.message);
+      if (gradeErr) return NextResponse.json({ error: gradeErr }, { status: 409 });
       return NextResponse.json({ error: { code: 'UPDATE_FAILED', message: updateError.message } }, { status: 500 });
     }
 

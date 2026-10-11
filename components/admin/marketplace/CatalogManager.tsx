@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { StoreItem, StoreCategory, StoreItemVariant } from '@/types/store';
 import { CreateItemForm } from './CreateItemForm';
+import { SHOP_GRADES, gradeInfo, isHighGrade } from '@/lib/store/grades';
 
 interface NewVariantDraft {
   name: string;
@@ -30,6 +31,11 @@ export function CatalogManager() {
   const [newVariant, setNewVariant] = useState<NewVariantDraft>(EMPTY_NEW_VARIANT);
   const [addVariantError, setAddVariantError] = useState<string | null>(null);
   const [addingVariantBusy, setAddingVariantBusy] = useState(false);
+
+  const [gradeEditFor, setGradeEditFor] = useState<string | null>(null);
+  const [gradeDraft, setGradeDraft] = useState({ grade: 1, limit: '', ref: '' });
+  const [gradeBusy, setGradeBusy] = useState(false);
+  const [gradeError, setGradeError] = useState<string | null>(null);
 
   const [deletingItem, setDeletingItem] = useState<StoreItem | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -85,6 +91,41 @@ export function CatalogManager() {
       await loadItems();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด');
+    }
+  }
+
+  function startEditGrade(item: StoreItem) {
+    setGradeEditFor(item.id);
+    setGradeDraft({
+      grade: item.shop_grade ?? 1,
+      limit: item.grade_limit_total ? String(item.grade_limit_total) : '',
+      ref: item.grade_reference ?? '',
+    });
+    setGradeError(null);
+  }
+
+  async function saveGrade(item: StoreItem) {
+    setGradeBusy(true);
+    setGradeError(null);
+    try {
+      const high = gradeDraft.grade >= 6;
+      const res = await fetch(`/api/v1/admin/store/items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shopGrade: gradeDraft.grade,
+          gradeLimitTotal: high && Number(gradeDraft.limit) > 0 ? Number(gradeDraft.limit) : null,
+          gradeReference: high && gradeDraft.ref.trim() ? gradeDraft.ref.trim() : null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message ?? 'บันทึกเกรดไม่สำเร็จ');
+      setGradeEditFor(null);
+      await loadItems();
+    } catch (err: unknown) {
+      setGradeError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด');
+    } finally {
+      setGradeBusy(false);
     }
   }
 
@@ -215,6 +256,68 @@ export function CatalogManager() {
                 {item.partner_brand ? ` · ${item.partner_brand}` : ''}
                 {` · หมวดหมู่: ${categoryName(item.category_id)}`}
               </p>
+              <p className="mt-0.5 text-[11px]" style={{ color: gradeInfo(item.shop_grade).color }}>
+                เกรด {item.shop_grade ?? 1} · {gradeInfo(item.shop_grade).name}
+                {item.grade_limit_total ? ` · จำกัด ${item.grade_limit_total.toLocaleString()} ชิ้น` : ''}
+                {item.grade_reference ? ` · หลักฐาน: ${item.grade_reference}` : ''}
+                <button type="button" onClick={() => startEditGrade(item)} className="ml-2 rounded bg-white/10 px-2 py-0.5 text-[10px] text-[#F9EDD8]">
+                  แก้เกรด
+                </button>
+              </p>
+              {gradeEditFor === item.id && (
+                <div className="mt-2 grid grid-cols-1 gap-2 rounded-lg bg-[#12142A] p-3 md:grid-cols-2">
+                  <select
+                    value={gradeDraft.grade}
+                    onChange={(e) => setGradeDraft((d) => ({ ...d, grade: Number(e.target.value) }))}
+                    aria-label="เกรดสินค้า"
+                    className="rounded bg-[#0D0E1A] px-2 py-1.5 text-xs text-[#F9EDD8] md:col-span-2"
+                  >
+                    {SHOP_GRADES.map((g) => (
+                      <option key={g.grade} value={g.grade} disabled={isHighGrade(item.shop_grade) && g.grade < 6}>
+                        เกรด {g.grade} · {g.name}
+                      </option>
+                    ))}
+                  </select>
+                  {isHighGrade(item.shop_grade) && (
+                    <p className="text-[10px] text-[#F59E0B] md:col-span-2">ลดเกรดทำได้เฉพาะพี่หยัดผ่าน SQL</p>
+                  )}
+                  {gradeDraft.grade >= 6 && (
+                    <>
+                      <input
+                        type="number"
+                        min={1}
+                        value={gradeDraft.limit}
+                        onChange={(e) => setGradeDraft((d) => ({ ...d, limit: e.target.value }))}
+                        placeholder="จำนวนผลิตทั้งหมด (ชิ้น)"
+                        className="rounded bg-[#0D0E1A] px-2 py-1.5 text-xs text-[#F9EDD8]"
+                      />
+                      <input
+                        value={gradeDraft.ref}
+                        onChange={(e) => setGradeDraft((d) => ({ ...d, ref: e.target.value }))}
+                        placeholder="หลักฐาน เช่น ลิงก์ประกาศ / เลขใบรับรอง"
+                        className="rounded bg-[#0D0E1A] px-2 py-1.5 text-xs text-[#F9EDD8]"
+                      />
+                      <p className="text-[10px] text-[#F59E0B] md:col-span-2">
+                        เกรด 6 ขึ้นไปต้องใส่จำนวนผลิตทั้งหมดหรือหลักฐานอย่างน้อยหนึ่งช่อง
+                      </p>
+                    </>
+                  )}
+                  {gradeError && <p className="text-[11px] text-red-400 md:col-span-2">{gradeError}</p>}
+                  <div className="flex gap-2 md:col-span-2">
+                    <button
+                      type="button"
+                      disabled={gradeBusy || (gradeDraft.grade >= 6 && !(Number(gradeDraft.limit) > 0) && !gradeDraft.ref.trim())}
+                      onClick={() => saveGrade(item)}
+                      className="rounded bg-[#E8B429] px-3 py-1.5 text-[10px] font-bold text-[#0D0E1A] disabled:opacity-40"
+                    >
+                      {gradeBusy ? '...' : 'บันทึกเกรด'}
+                    </button>
+                    <button type="button" onClick={() => setGradeEditFor(null)} className="rounded bg-white/10 px-3 py-1.5 text-[10px] text-[#94A3B8]">
+                      ยกเลิก
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -364,7 +467,9 @@ export function CatalogManager() {
             <button
               type="button"
               onClick={() => startAddVariant(item.id)}
-              className="mt-3 rounded bg-white/10 px-3 py-1.5 text-xs text-[#F9EDD8]"
+              disabled={isHighGrade(item.shop_grade) && item.store_item_variants.length > 0}
+              title={isHighGrade(item.shop_grade) ? 'สินค้าเกรด 6 ขึ้นไปเพิ่มรุ่นย่อยไม่ได้' : undefined}
+              className="mt-3 rounded bg-white/10 px-3 py-1.5 text-xs text-[#F9EDD8] disabled:opacity-30"
             >
               + เพิ่ม variant
             </button>

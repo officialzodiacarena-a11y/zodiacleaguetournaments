@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdminRole, MARKETPLACE_ADMIN_ROLES } from '@/lib/admin/requireAdminRole';
 import { CreateStoreItemSchema, itemTypeToType } from '@/types/store';
+import { mapGradeDbError } from '@/lib/store/grades';
 
 // Admin catalog listing — includes inactive items, unlike the public
 // GET /api/v1/store/items (which also hides items with zero live variants).
@@ -15,7 +16,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('store_items')
       .select(
-        'id, name, type, description, max_per_player, is_active, category_id, item_type, partner_brand, created_at, store_item_variants(id, item_id, name, price_ap, price_thb, stock, reserved_stock, is_active, available_until)'
+        'id, name, type, description, max_per_player, is_active, category_id, item_type, partner_brand, created_at, shop_grade, grade_limit_total, grade_reference, store_item_variants(id, item_id, name, price_ap, price_thb, stock, reserved_stock, is_active, available_until)'
       )
       .order('created_at', { ascending: false });
 
@@ -54,7 +55,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const { name, type, description, maxPerPlayer, categoryId, itemType, partnerBrand, variants } = parseResult.data;
+    const { name, type, description, maxPerPlayer, categoryId, itemType, partnerBrand, shopGrade, gradeLimitTotal, gradeReference, variants } =
+      parseResult.data;
 
     const adminSupabase = createAdminClient();
 
@@ -68,11 +70,16 @@ export async function POST(req: Request) {
         category_id: categoryId ?? null,
         item_type: itemType ?? null,
         partner_brand: partnerBrand ?? null,
+        shop_grade: shopGrade ?? 1,
+        grade_limit_total: gradeLimitTotal ?? null,
+        grade_reference: gradeReference?.trim() || null,
       })
       .select()
       .single();
 
     if (itemError || !item) {
+      const gradeErr = mapGradeDbError(itemError?.message);
+      if (gradeErr) return NextResponse.json({ error: gradeErr }, { status: 409 });
       return NextResponse.json(
         { error: { code: 'INSERT_FAILED', message: itemError?.message ?? 'สร้างไอเทมไม่สำเร็จ' } },
         { status: 500 }
@@ -94,6 +101,10 @@ export async function POST(req: Request) {
       .select();
 
     if (variantError) {
+      // ไม่ปล่อยให้สินค้าค้างโดยไม่มีรุ่นย่อย (สร้างสินค้าแล้วรุ่นย่อยพัง)
+      await adminSupabase.from('store_items').delete().eq('id', item.id);
+      const gradeErr = mapGradeDbError(variantError.message);
+      if (gradeErr) return NextResponse.json({ error: gradeErr }, { status: 409 });
       return NextResponse.json({ error: { code: 'INSERT_FAILED', message: variantError.message } }, { status: 500 });
     }
 
