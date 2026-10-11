@@ -8,6 +8,7 @@ const ROLES = ['GLOBAL', 'DUELIST', 'CONTROLLER', 'INITIATOR', 'SENTINEL'];
 import { SkyscraperTower } from '@/components/sponsor/SkyscraperTower';
 import { OfficialSponsorsBar } from '@/components/sponsor/OfficialSponsorsBar';
 import { AthleteQuickPopover } from '@/components/profile/AthleteQuickPopover';
+import { RankLeaderboard } from '@/components/lv/RankLeaderboard';
 interface LeaderboardPlayer {
   id: string;
   athlete_id: string;
@@ -24,6 +25,7 @@ interface LeaderboardPlayer {
 
 export default function LeaderboardPage() {
   const [activeTab, setActiveTab] = useState('GLOBAL');
+  const [view, setView] = useState<'ATHLETES' | 'RANK'>('ATHLETES');
   const [players, setPlayers] = useState<LeaderboardPlayer[]>([]);
   const [prizePool, setPrizePool] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -153,8 +155,29 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
+      {/* View switch: Athletes (เดิม) / Rank (ตามเลเวลและ EXP) */}
+      <div className="flex items-center justify-center gap-2 mb-4">
+        {(['ATHLETES', 'RANK'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            data-testid={`leaderboard-view-${v.toLowerCase()}`}
+            onClick={() => setView(v)}
+            className={`px-4 py-1.5 text-[11px] font-black border uppercase tracking-widest transition-all ${
+              view === v
+                ? 'border-[#9184D9] text-[#9184D9] bg-[#9184D9]/10'
+                : 'border-white/10 text-neutral-400 hover:text-white bg-[#1A1C2E]/50'
+            }`}
+          >
+            {v === 'RANK' ? 'Rank' : 'Athletes'}
+          </button>
+        ))}
+      </div>
+
+      {view === 'RANK' && <RankLeaderboard />}
+
       {/* Role Filter Tabs */}
-      <div className="flex flex-wrap items-center justify-center gap-2 md:gap-3 mb-8">
+      <div className={`${view === 'RANK' ? 'hidden' : 'flex'} flex-wrap items-center justify-center gap-2 md:gap-3 mb-8`}>
         {ROLES.map((role) => (
           <button
             key={role}
@@ -172,7 +195,7 @@ export default function LeaderboardPage() {
       </div>
 
       {/* Leaderboard Table Container */}
-      <div className="max-w-6xl mx-auto border border-[#00D4FF]/20 bg-[#12121A]/80 rounded-xl p-1 shadow-[0_0_30px_rgba(0,212,255,0.05)] backdrop-blur-md">
+      <div className={`${view === 'RANK' ? 'hidden' : ''} max-w-6xl mx-auto border border-[#00D4FF]/20 bg-[#12121A]/80 rounded-xl p-1 shadow-[0_0_30px_rgba(0,212,255,0.05)] backdrop-blur-md`}>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>

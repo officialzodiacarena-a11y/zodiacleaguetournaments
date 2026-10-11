@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { CareerTimeline } from '@/components/profile/CareerTimeline';
 import { GameAccountModal } from '@/components/profile/GameAccountModal';
 import AthleteTelemetryHUD from '@/components/dashboard/AthleteTelemetryHUD';
+import { PlayerLevelPanel } from '@/components/lv/PlayerLevelPanel';
 
 interface PlayerData {
   id: string;
@@ -220,6 +221,9 @@ export default function ProfilePage() {
               <span className="bg-[#1E2035]/80 border border-white/10 text-neutral-300 px-3 py-1 rounded">🎯 VALORANT</span>
               <span className="bg-[#1E2035]/80 border border-white/10 text-neutral-300 px-3 py-1 rounded">🏆 PRO LEAGUE</span>
               <span className="bg-[#E8B429]/10 border border-[#E8B429]/30 text-[#FFD166] px-3 py-1 rounded">★ TOP 100 TH</span>
+            </div>
+            <div className="mt-4">
+              <PlayerLevelPanel playerId={player?.id} />
             </div>
           </div>
 

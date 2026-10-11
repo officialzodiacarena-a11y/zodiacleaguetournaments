@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Star, TrendingUp, Map, Crosshair, History, Activity } from 'lucide-react';
 import AthleteTelemetryHUD from '@/components/dashboard/AthleteTelemetryHUD';
+import { PlayerLevelPanel } from '@/components/lv/PlayerLevelPanel';
 
 interface PlayerIdentity {
   id: string;
@@ -99,6 +100,9 @@ export default function AthleteProfilePage() {
       </div>
 
       <div className="max-w-[1400px] mx-auto pt-6">
+        <div className="mb-6 px-4 md:px-6">
+          <PlayerLevelPanel playerId={player.id} />
+        </div>
         {/* TOP SECTION: Athlete Telemetry HUD (Overview & KPIs) */}
         <div className="mb-8 border-b border-white/10 pb-8">
           <AthleteTelemetryHUD playerId={player.id} />
