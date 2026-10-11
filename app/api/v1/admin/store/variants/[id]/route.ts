@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdminRole, MARKETPLACE_ADMIN_ROLES } from '@/lib/admin/requireAdminRole';
 import { UpdateStoreVariantSchema } from '@/types/store';
 import { asUpdate } from '@/types/supabase-helpers';
+import { mapGradeDbError } from '@/lib/store/grades';
 
 export async function PATCH(
   req: Request,
@@ -52,6 +53,8 @@ export async function PATCH(
       .single();
 
     if (updateError) {
+      const gradeErr = mapGradeDbError(updateError.message);
+      if (gradeErr) return NextResponse.json({ error: gradeErr }, { status: 409 });
       return NextResponse.json({ error: { code: 'UPDATE_FAILED', message: updateError.message } }, { status: 500 });
     }
 

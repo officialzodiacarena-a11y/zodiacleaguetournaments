@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { StoreCategory } from '@/types/store';
+import { SHOP_GRADES, HIGH_GRADE_MIN } from '@/lib/store/grades';
 
 interface VariantDraft {
   name: string;
@@ -34,6 +35,9 @@ export function CreateItemForm({ categories, onCreated, onCancel }: CreateItemFo
   const [itemType, setItemType] = useState<(typeof ITEM_TYPES)[number]>('PHYSICAL');
   const [partnerBrand, setPartnerBrand] = useState('');
   const [variants, setVariants] = useState<VariantDraft[]>([{ ...EMPTY_VARIANT }]);
+  const [shopGrade, setShopGrade] = useState(1);
+  const [gradeLimit, setGradeLimit] = useState('');
+  const [gradeRef, setGradeRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,7 +53,9 @@ export function CreateItemForm({ categories, onCreated, onCancel }: CreateItemFo
     setVariants((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)));
   }
 
-  const canSubmit = name.trim().length >= 2 && categoryId !== '' && variants.every((v) => v.name.trim().length > 0) && !submitting;
+  const isHigh = shopGrade >= HIGH_GRADE_MIN;
+  const gradeOk = !isHigh || ((Number(gradeLimit) > 0 || gradeRef.trim().length > 0) && variants.length === 1);
+  const canSubmit = name.trim().length >= 2 && categoryId !== '' && variants.every((v) => v.name.trim().length > 0) && gradeOk && !submitting;
 
   async function handleSubmit() {
     if (!canSubmit) return;
@@ -65,6 +71,9 @@ export function CreateItemForm({ categories, onCreated, onCancel }: CreateItemFo
           categoryId,
           itemType,
           partnerBrand: partnerBrand.trim() || null,
+          shopGrade,
+          gradeLimitTotal: isHigh && Number(gradeLimit) > 0 ? Number(gradeLimit) : null,
+          gradeReference: isHigh && gradeRef.trim() ? gradeRef.trim() : null,
           variants: variants.map((v) => ({
             name: v.name.trim(),
             priceAp: Number(v.priceAp) || 0,
@@ -130,6 +139,39 @@ export function CreateItemForm({ categories, onCreated, onCancel }: CreateItemFo
           placeholder="partner_brand (เว้นว่างได้) ชื่อแบรนด์"
           className="w-full rounded-lg bg-[#12142A] px-3 py-2 text-sm text-[#F9EDD8] md:col-span-2"
         />
+        <select
+          value={shopGrade}
+          onChange={(e) => setShopGrade(Number(e.target.value))}
+          className="w-full rounded-lg bg-[#12142A] px-3 py-2 text-sm text-[#F9EDD8] md:col-span-2"
+          aria-label="เกรดสินค้า"
+        >
+          {SHOP_GRADES.map((g) => (
+            <option key={g.grade} value={g.grade}>
+              เกรด {g.grade} · {g.name}
+            </option>
+          ))}
+        </select>
+        {isHigh && (
+          <>
+            <input
+              type="number"
+              min={1}
+              value={gradeLimit}
+              onChange={(e) => setGradeLimit(e.target.value)}
+              placeholder="จำนวนผลิตทั้งหมด (ชิ้น)"
+              className="w-full rounded-lg bg-[#12142A] px-3 py-2 text-sm text-[#F9EDD8]"
+            />
+            <input
+              value={gradeRef}
+              onChange={(e) => setGradeRef(e.target.value)}
+              placeholder="หลักฐาน เช่น ลิงก์ประกาศ / เลขใบรับรอง"
+              className="w-full rounded-lg bg-[#12142A] px-3 py-2 text-sm text-[#F9EDD8]"
+            />
+            <p className="text-[11px] text-[#F59E0B] md:col-span-2">
+              เกรด 6 ขึ้นไปต้องใส่จำนวนผลิตทั้งหมดหรือหลักฐานอย่างน้อยหนึ่งช่อง · สร้างได้รุ่นย่อยเดียว · เติมสต็อกและเพิ่มรุ่นย่อยภายหลังไม่ได้
+            </p>
+          </>
+        )}
       </div>
 
       <div className="mt-4">
@@ -179,7 +221,12 @@ export function CreateItemForm({ categories, onCreated, onCancel }: CreateItemFo
           stock = 0 หมายถึง &quot;ไม่จำกัด&quot; ตาม spec สำหรับ DIGITAL แต่ checkout RPC (checkout_order) ปัจจุบันยังไม่รองรับค่านี้เป็นพิเศษ —
           ใส่จำนวนจริงไปก่อนจนกว่าจะแก้ RPC
         </p>
-        <button type="button" onClick={addVariantRow} className="mt-2 rounded bg-white/10 px-3 py-1.5 text-xs text-[#F9EDD8]">
+        <button
+          type="button"
+          onClick={addVariantRow}
+          disabled={isHigh}
+          className="mt-2 rounded bg-white/10 px-3 py-1.5 text-xs text-[#F9EDD8] disabled:opacity-30"
+        >
           + เพิ่ม variant อีก
         </button>
       </div>

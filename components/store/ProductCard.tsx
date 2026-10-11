@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { ExternalLink, Sparkles } from 'lucide-react';
 import { ShippingAddressPicker } from './ShippingAddressPicker';
 import { brandBadge, brandPageHref, type StoreBrand } from '@/lib/store/brand-display';
+import { gradeBadge } from '@/lib/store/grades';
 
 interface Variant {
   id: string;
@@ -22,6 +23,8 @@ interface StoreItem {
   partner_brand: string | null;
   brand?: StoreBrand | null;
   image_url: string | null;
+  shop_grade?: number | null;
+  grade_limit_total?: number | null;
   variants: Variant[];
 }
 
@@ -68,6 +71,7 @@ export function ProductCard({ item }: { item: StoreItem }) {
   }
 
   const badge = brandBadge(item.brand, item.partner_brand);
+  const grade = gradeBadge(item.shop_grade, item.grade_limit_total);
   const brandHref = brandPageHref(item.brand);
 
   return (
@@ -96,6 +100,17 @@ export function ProductCard({ item }: { item: StoreItem }) {
             >
               {badge.icon ? `${badge.icon} ` : ''}
               {badge.label}
+            </span>
+          )}
+
+          {grade && (
+            <span
+              data-testid="grade-badge"
+              className="rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider"
+              style={{ color: grade.color, borderColor: `${grade.color}66`, backgroundColor: `${grade.color}1F` }}
+            >
+              {grade.label}
+              {grade.limitText ? ` · ${grade.limitText}` : ''}
             </span>
           )}
 

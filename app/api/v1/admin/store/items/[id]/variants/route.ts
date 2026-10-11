@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdminRole, MARKETPLACE_ADMIN_ROLES } from '@/lib/admin/requireAdminRole';
 import { CreateStoreVariantSchema } from '@/types/store';
+import { mapGradeDbError } from '@/lib/store/grades';
 
 // Adds a variant to an item that already exists — POST /items only accepts
 // variants at creation time (min 1, required), so this is the only way to
@@ -52,6 +53,8 @@ export async function POST(
       .single();
 
     if (insertError) {
+      const gradeErr = mapGradeDbError(insertError.message);
+      if (gradeErr) return NextResponse.json({ error: gradeErr }, { status: 409 });
       // Postgres FK violation (23503) — item_id doesn't match any store_items row.
       if (insertError.code === '23503') {
         return NextResponse.json(

@@ -22,6 +22,8 @@ interface ItemRow {
   item_type: string | null;
   partner_brand: string | null;
   image_url: string | null;
+  shop_grade: number | null;
+  grade_limit_total: number | null;
   brand: { slug: string; name: string; badge_icon: string | null; sponsor_id: string | null } | null;
   store_item_variants: VariantRow[];
 }
@@ -42,7 +44,7 @@ export async function GET(req: Request) {
     let query = supabase
       .from('store_items')
       .select(
-        'id, name, type, description, max_per_player, category_id, item_type, partner_brand, image_url, brand:brand_id(slug, name, badge_icon, sponsor_id), store_item_variants(id, name, price_ap, price_thb, stock, reserved_stock, available_until)'
+        'id, name, type, description, max_per_player, category_id, item_type, partner_brand, image_url, shop_grade, grade_limit_total, brand:brand_id(slug, name, badge_icon, sponsor_id), store_item_variants(id, name, price_ap, price_thb, stock, reserved_stock, available_until)'
       )
       .eq('is_active', true)
       .order('created_at', { ascending: false });
@@ -105,6 +107,8 @@ export async function GET(req: Request) {
         partner_brand: item.partner_brand,
         brand: toStoreBrand(item.brand),
         image_url: item.image_url,
+        shop_grade: item.shop_grade ?? 1,
+        grade_limit_total: item.grade_limit_total,
         variants: (item.store_item_variants ?? [])
           .filter((v) => !v.available_until || new Date(v.available_until).getTime() > now)
           .map((v) => ({
