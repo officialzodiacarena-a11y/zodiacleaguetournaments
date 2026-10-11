@@ -4272,6 +4272,8 @@ export type Database = {
           category_id: string | null
           created_at: string
           description: string | null
+          grade_limit_total: number | null
+          grade_reference: string | null
           id: string
           is_active: boolean
           item_type: string | null
@@ -4280,6 +4282,7 @@ export type Database = {
           partner_brand: string | null
           price_ap: number | null
           price_thb_est: number | null
+          shop_grade: number
           stock_quantity: number | null
           type: string
         }
@@ -4289,6 +4292,8 @@ export type Database = {
           category_id?: string | null
           created_at?: string
           description?: string | null
+          grade_limit_total?: number | null
+          grade_reference?: string | null
           id?: string
           is_active?: boolean
           item_type?: string | null
@@ -4297,6 +4302,7 @@ export type Database = {
           partner_brand?: string | null
           price_ap?: number | null
           price_thb_est?: number | null
+          shop_grade?: number
           stock_quantity?: number | null
           type: string
         }
@@ -4306,6 +4312,8 @@ export type Database = {
           category_id?: string | null
           created_at?: string
           description?: string | null
+          grade_limit_total?: number | null
+          grade_reference?: string | null
           id?: string
           is_active?: boolean
           item_type?: string | null
@@ -4314,6 +4322,7 @@ export type Database = {
           partner_brand?: string | null
           price_ap?: number | null
           price_thb_est?: number | null
+          shop_grade?: number
           stock_quantity?: number | null
           type?: string
         }
