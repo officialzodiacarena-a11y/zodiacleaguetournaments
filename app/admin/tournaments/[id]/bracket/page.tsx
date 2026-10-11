@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireBracketAdminPage } from '@/lib/admin/requireBracketAdminPage';
+import { playerHasAnyRole } from '@/lib/auth/hasAnyRole';
+import { TournamentExpSwitch } from '@/components/admin/bracket/TournamentExpSwitch';
 import { isoToThaiParts } from '@/lib/tournament/bracketBuilder';
 import { BracketBuilder, type BuilderStage, type ApprovedTeam, type SuggestedMapPool, type TournamentSummary } from '@/components/admin/bracket/BracketBuilder';
 import type { BracketMatchNode, BracketTeamParticipant } from '@/types/bracket';
@@ -24,6 +26,8 @@ interface TournamentRecord {
   registration_closes_at: string | null;
   start_at?: string | null;
   starts_at?: string | null;
+  exp_enabled?: boolean | null;
+  roster_check?: string | null;
 }
 
 interface RegistrationRow {
@@ -50,7 +54,7 @@ function teamOf(row: RegistrationRow): { id: string; name: string; tag: string }
 }
 
 export default async function AdminTournamentBracketPage({ params, searchParams }: PageProps) {
-  await requireBracketAdminPage();
+  const { playerId } = await requireBracketAdminPage();
 
   const { id: tournamentId } = await params;
   const { stage: stageParam } = await searchParams;
@@ -63,6 +67,9 @@ export default async function AdminTournamentBracketPage({ params, searchParams 
     .maybeSingle()) as unknown as { data: TournamentRecord | null };
 
   if (!tournament) notFound();
+
+  // สวิตช์ EXP แก้ได้เฉพาะ ADMIN / SUPER_ADMIN (หน้านี้ REFEREE เข้าได้ แต่แก้สวิตช์ไม่ได้)
+  const canEditExpSwitch = await playerHasAnyRole(supabase, playerId, ['ADMIN', 'SUPER_ADMIN']);
 
   const [{ data: registrations }, { data: payments }, { data: stageRows }] = await Promise.all([
     supabase
@@ -183,6 +190,12 @@ export default async function AdminTournamentBracketPage({ params, searchParams 
           <Link href="/admin/tournaments" className="hover:text-white">← เลือกทัวร์อื่น</Link>
           <Link href="/admin" className="hover:text-white">หน้าจัดการ</Link>
         </div>
+        <TournamentExpSwitch
+          tournamentId={tournament.id}
+          initialEnabled={tournament.exp_enabled === true}
+          rosterCheck={tournament.roster_check ?? null}
+          canEdit={canEditExpSwitch}
+        />
         <BracketBuilder
           tournament={summary}
           approvedTeams={approvedTeams}

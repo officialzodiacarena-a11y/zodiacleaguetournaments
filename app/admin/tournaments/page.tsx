@@ -12,6 +12,7 @@ interface TournamentRow {
   status: string;
   max_teams: number | null;
   registration_closes_at: string | null;
+  exp_enabled: boolean | null;
 }
 
 function formatThai(iso: string | null): string {
@@ -25,7 +26,7 @@ export default async function AdminTournamentsPage() {
   const supabase = await createClient();
   const { data } = (await supabase
     .from('tournaments')
-    .select('id, name, status, max_teams, registration_closes_at')
+    .select('id, name, status, max_teams, registration_closes_at, exp_enabled')
     .order('created_at', { ascending: false })) as unknown as { data: TournamentRow[] | null };
 
   const tournaments = data ?? [];
@@ -51,8 +52,20 @@ export default async function AdminTournamentsPage() {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-extrabold text-white">{t.name}</span>
-                    <span className="rounded-full border border-white/15 px-2.5 py-0.5 text-[10px] font-mono font-bold text-[#9397ab]">
-                      {t.status}
+                    <span className="flex items-center gap-2">
+                      <span
+                        data-testid="exp-flag"
+                        className={`rounded-full border px-2.5 py-0.5 text-[10px] font-mono font-bold ${
+                          t.exp_enabled
+                            ? 'border-[#9184D9]/50 bg-[#9184D9]/10 text-[#9184D9]'
+                            : 'border-white/15 text-[#9397ab]'
+                        }`}
+                      >
+                        EXP {t.exp_enabled ? 'เปิด' : 'ปิด'}
+                      </span>
+                      <span className="rounded-full border border-white/15 px-2.5 py-0.5 text-[10px] font-mono font-bold text-[#9397ab]">
+                        {t.status}
+                      </span>
                     </span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-[#9397ab]">
