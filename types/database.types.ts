@@ -369,6 +369,142 @@ export type Database = {
         }
         Relationships: []
       }
+      lv_rank_tiers: {
+        Row: {
+          exp_bucket: number
+          rank_code: string
+          rank_order: number
+          updated_at: string
+        }
+        Insert: {
+          exp_bucket: number
+          rank_code: string
+          rank_order: number
+          updated_at?: string
+        }
+        Update: {
+          exp_bucket?: number
+          rank_code?: string
+          rank_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      player_lv_state: {
+        Row: {
+          exp_in_rank: number
+          player_id: string
+          rank_order: number
+          season_year: number
+          updated_at: string
+        }
+        Insert: {
+          exp_in_rank?: number
+          player_id: string
+          rank_order?: number
+          season_year: number
+          updated_at?: string
+        }
+        Update: {
+          exp_in_rank?: number
+          player_id?: string
+          rank_order?: number
+          season_year?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_lv_state_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_lv_state_rank_order_fkey"
+            columns: ["rank_order"]
+            isOneToOne: false
+            referencedRelation: "lv_rank_tiers"
+            referencedColumns: ["rank_order"]
+          },
+        ]
+      }
+      player_exp_ledger: {
+        Row: {
+          amount: number
+          applied_amount: number
+          created_at: string
+          created_by: string | null
+          decay_week_start: string | null
+          exp_in_rank_after: number
+          id: string
+          idempotency_key: string | null
+          placement: number | null
+          player_id: string
+          rank_order_after: number
+          reason: string | null
+          season_year: number
+          source: string
+          tournament_id: string | null
+        }
+        Insert: {
+          amount: number
+          applied_amount: number
+          created_at?: string
+          created_by?: string | null
+          decay_week_start?: string | null
+          exp_in_rank_after: number
+          id?: string
+          idempotency_key?: string | null
+          placement?: number | null
+          player_id: string
+          rank_order_after: number
+          reason?: string | null
+          season_year: number
+          source: string
+          tournament_id?: string | null
+        }
+        Update: {
+          amount?: number
+          applied_amount?: number
+          created_at?: string
+          created_by?: string | null
+          decay_week_start?: string | null
+          exp_in_rank_after?: number
+          id?: string
+          idempotency_key?: string | null
+          placement?: number | null
+          player_id?: string
+          rank_order_after?: number
+          reason?: string | null
+          season_year?: number
+          source?: string
+          tournament_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_exp_ledger_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_exp_ledger_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_exp_ledger_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       player_daily_quests: {
         Row: {
           claimed_at: string | null
@@ -5133,6 +5269,8 @@ export type Database = {
           division_tier: string | null
           entry_fee_ap: number
           entry_fee_thb: number
+          exp_config: Json
+          exp_enabled: boolean
           format: string
           id: string
           max_teams: number
@@ -5151,6 +5289,8 @@ export type Database = {
           division_tier?: string | null
           entry_fee_ap?: number
           entry_fee_thb?: number
+          exp_config?: Json
+          exp_enabled?: boolean
           format: string
           id?: string
           max_teams?: number
@@ -5169,6 +5309,8 @@ export type Database = {
           division_tier?: string | null
           entry_fee_ap?: number
           entry_fee_thb?: number
+          exp_config?: Json
+          exp_enabled?: boolean
           format?: string
           id?: string
           max_teams?: number
@@ -5443,6 +5585,17 @@ export type Database = {
       }
     }
     Views: {
+      player_lv_current: {
+        Row: {
+          exp_bucket: number | null
+          exp_in_rank: number | null
+          player_id: string | null
+          rank_code: string | null
+          rank_order: number | null
+          season_year: number | null
+        }
+        Relationships: []
+      }
       mv_team_analytics: {
         Row: {
           adr_metrics: number | null
@@ -5470,6 +5623,26 @@ export type Database = {
       }
     }
     Functions: {
+      grant_player_exp: {
+        Args: {
+          p_player_id: string
+          p_amount: number
+          p_source: string
+          p_tournament_id?: string
+          p_placement?: number
+          p_reason?: string
+          p_idempotency_key?: string
+        }
+        Returns: Database["public"]["Tables"]["player_exp_ledger"]["Row"]
+      }
+      apply_inactivity_decay: {
+        Args: {
+          p_player_id: string
+          p_amount: number
+          p_week_start: string
+        }
+        Returns: Database["public"]["Tables"]["player_exp_ledger"]["Row"]
+      }
       award_league_tournament_points: {
         Args: {
           p_tournament_id: string
